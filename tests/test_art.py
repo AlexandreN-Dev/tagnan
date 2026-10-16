@@ -115,3 +115,58 @@ def test_the_icon_is_the_inkwell_drawn_for_small_sizes() -> None:
     assert root.get("viewBox") == "14 42 92 92"  # square, tight around the inkwell
     assert art.ICON_RIM in art.icon_svg()
     assert art.quill() == art.quill(*art.QUILL)  # the window's quill is unchanged
+
+
+def test_the_gascon_is_lit_and_shaded_along_his_ripple() -> None:
+    cx, cy = art.SPLASH.cx, art.SPLASH.cy
+
+    def middle(d: str) -> tuple[float, float]:
+        words = d.replace("M", " ").replace("L", " ").replace("Z", " ").split()
+        numbers = [float(v) for v in words]
+        xs, ys = numbers[0::2], numbers[1::2]
+        return sum(xs) / len(xs), sum(ys) / len(ys)
+
+    seen = set()
+    for k in range(0, 15, 3):
+        shading = art.splash_shading(2 * math.pi * k / 15)
+        for d in shading.values():
+            assert d.startswith("M")
+            assert d.endswith("Z")
+        x, y = middle(shading["shade"])
+        assert x > cx  # the shade on the lower right
+        assert y > cy
+        for name in ("light", "rim"):
+            x, y = middle(shading[name])
+            assert x < cx + 5  # the light on the upper left
+            assert y < cy
+        seen.add(shading["shade"])
+    assert len(seen) > 1  # it follows the ripple
+
+
+def test_the_gascon_drips_hang_from_his_rippling_edge() -> None:
+    for k in range(15):
+        phase = 2 * math.pi * k / 15
+        samples = art.curve_samples(art.blob_points(art.SPLASH, phase), per=60)
+        for (x, _), top in zip(art.GASCON_DRIPS, art.drip_tops(1, phase), strict=True):
+            edge = max(y for px, y in samples if abs(px - x) < 0.6 and y > art.SPLASH.cy)
+            assert top + art.DRIP_DEPTH == pytest.approx(edge, abs=0.3)
+    spec = art.figure(1)
+    assert spec["dripsUnder"]
+    assert [spec["staticDrips"][0][1], spec["drip"][1]] == art.drip_tops(1, 0.0)
+    assert art.drip_tops(5, 1.0) == [art.figure(5)["drip"][1]]  # the others stay put
+
+
+def test_the_knocked_over_inkwell_lies_on_the_desk_in_the_frame() -> None:
+    points = [art.fallen_point(x, y) for x, y in art.path_points(art.INKWELL) + list(art.LIP)]
+    assert min(x for x, _ in points) == pytest.approx(art.FALLEN[2])
+    assert max(y for _, y in points) == pytest.approx(130)
+    assert all(0 <= x <= art.WIDTH and 0 <= y <= 130.01 for x, y in points)
+    assert "clip-path" not in art.ground(1)  # QtSvg would ignore it
+
+
+def test_only_the_gascon_drops_are_finished() -> None:
+    spec = art.figure(1)
+    assert len(spec["dropShades"]) == len(spec["dropLights"]) == len(spec["drops"])
+    assert all(d.startswith("M") and d.endswith("Z") for d in spec["dropShades"])
+    assert not art.figure(2)["dropShades"]
+    assert not art.figure(0)["dropLights"]

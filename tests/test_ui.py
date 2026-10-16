@@ -113,11 +113,17 @@ def test_animator_hands_the_outline_to_qml() -> None:
     animator.advance(0.5)
     assert animator.property("inkPath") != first
     assert animator.property("inkPath").startswith("M")
-    shading = ("inkwellShade", "inkwellLight", "meniscus")
-    assert not any(animator.property(name) for name in shading)  # only the inkwell's ink has it
+    shading = ("inkShade", "inkLight", "inkEdge")
+    assert not any(animator.property(name) for name in shading)  # the inkwell and the Gascon only
     animator.setProperty("stage", 0)
     assert "L95 122" in animator.property("inkPath")  # the inkwell's ink
     assert all(animator.property(name).startswith("M") for name in shading)
+    animator.setProperty("stage", 1)
+    assert all(animator.property(name).startswith("M") for name in shading)
+    tops = animator.property("dripTops")
+    animator.advance(0.2)
+    assert len(tops) == 2
+    assert animator.property("dripTops") != tops  # his drips ride his rippling edge
 
 
 # --- The game in the window -------------------------------------------------------------------

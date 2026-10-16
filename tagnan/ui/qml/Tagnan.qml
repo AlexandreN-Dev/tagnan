@@ -61,6 +61,11 @@ Item {
         const v = Math.pow((u - 0.55) / 0.45, 2)
         return { x: d[2] + (d[4] - d[2]) * v, y: d[3] + (d[5] - d[3]) * v, s: 1 - 0.6 * v, o: 1 - v }
     }
+    // Where a drip hangs from: the Gascon's follow his rippling edge (tagnan.art.drip_tops).
+    function dripTop(i, fallback) {
+        const tops = root.animator.dripTops
+        return tops && i < tops.length ? tops[i] : fallback
+    }
     // Between his eyes, on the screen: where the pointer is looked at from.
     function eyesOnScreen() {
         const eyes = root.spec.eyes
@@ -133,12 +138,16 @@ Item {
                 // Dartt's glow: a blurred silhouette that breathes in and out.
                 Layer { name: "glow"; opacity: Math.min(1, root.animator.glow * 1.25) }
 
-                // Droplets floating around him.
+                // Droplets floating around him; the Gascon's have their shade and point of light
+                // (tagnan.art.drop_shade, drop_light).
                 Repeater {
                     model: root.spec.drops
                     Shape {
+                        id: drop
                         required property var modelData
                         required property int index
+                        readonly property bool finished: root.spec.dropShades.length > index
+                        readonly property var light: finished ? root.spec.dropLights[index] : [0, 0, 0]
                         anchors.fill: parent
                         preferredRendererType: Shape.CurveRenderer
                         transform: Translate {
@@ -148,7 +157,17 @@ Item {
                         ShapePath {
                             fillColor: root.spec.ink
                             strokeColor: "transparent"
-                            PathSvg { path: root.ellipse(modelData[0], modelData[1], modelData[2], modelData[2]) }
+                            PathSvg { path: root.ellipse(drop.modelData[0], drop.modelData[1], drop.modelData[2], drop.modelData[2]) }
+                        }
+                        ShapePath {
+                            fillColor: root.spec.shade
+                            strokeColor: "transparent"
+                            PathSvg { path: drop.finished ? root.spec.dropShades[drop.index] : "" }
+                        }
+                        ShapePath {
+                            fillColor: root.spec.dropLight
+                            strokeColor: "transparent"
+                            PathSvg { path: drop.light[2] > 0 ? root.ellipse(drop.light[0], drop.light[1], drop.light[2], drop.light[2]) : "" }
                         }
                     }
                 }
@@ -168,48 +187,59 @@ Item {
                     Ink { d: root.animator.inkPath }
                     // Grade 0: the inkwell's ink, shaded on the right, lit under its surface, with
                     // its meniscus; all three follow the slosh (tagnan.art.inkwell_shading).
+                    // Grade 1: the Gascon's, shaded on the lower right, lit on the upper left, with
+                    // a rim of light; all three follow the ripple (tagnan.art.splash_shading).
                     Shape {
-                        visible: root.stage === 0
+                        visible: root.stage <= 1
                         anchors.fill: parent
                         preferredRendererType: Shape.CurveRenderer
                         ShapePath {
                             fillColor: root.spec.shade
                             strokeColor: "transparent"
-                            PathSvg { path: root.animator.inkwellShade }
+                            PathSvg { path: root.animator.inkShade }
                         }
                         ShapePath {
                             fillColor: root.spec.inkLight
                             strokeColor: "transparent"
-                            PathSvg { path: root.animator.inkwellLight }
+                            PathSvg { path: root.animator.inkLight }
                         }
                         ShapePath {
-                            fillColor: "transparent"
-                            strokeColor: root.spec.meniscus
+                            fillColor: root.stage === 1 ? root.spec.inkEdge : "transparent"
+                            strokeColor: root.stage === 0 ? root.spec.inkEdge : "transparent"
                             strokeWidth: root.spec.meniscusWidth
                             capStyle: ShapePath.RoundCap
-                            PathSvg { path: root.animator.meniscus }
+                            PathSvg { path: root.animator.inkEdge }
                         }
                     }
+                    // The drips; the Gascon's hang under his ink, from his rippling edge.
                     Repeater {
                         model: root.spec.staticDrips
                         Ink {
                             required property var modelData
-                            d: root.teardrop(modelData[0], modelData[1], modelData[2])
+                            required property int index
+                            z: root.spec.dripsUnder ? -1 : 0
+                            d: root.teardrop(modelData[0], root.dripTop(index, modelData[1]), modelData[2])
                         }
                     }
                     Ink {
+                        id: drip
+                        readonly property real hangs: root.spec.drip.length
+                            ? root.dripTop(root.spec.staticDrips.length, root.spec.drip[1]) : 0
                         visible: root.spec.drip.length > 0
-                        d: visible ? root.teardrop(root.spec.drip[0], root.spec.drip[1], root.spec.drip[2]) : ""
+                        z: root.spec.dripsUnder ? -1 : 0
+                        d: visible ? root.teardrop(root.spec.drip[0], hangs, root.spec.drip[2]) : ""
                         transform: Scale {
                             origin.x: root.spec.drip.length ? root.spec.drip[0] : 0
-                            origin.y: root.spec.drip.length ? root.spec.drip[1] : 0
+                            origin.y: drip.hangs
                             yScale: root.dripScale
                         }
                     }
                     Ink {
                         visible: root.spec.fall.length > 0 && root.fallT >= 0
                         opacity: 1 - Math.max(0, root.fallT)
-                        d: root.spec.fall.length ? root.ellipse(root.spec.fall[0], root.spec.fall[1], root.spec.fall[2], root.spec.fall[2]) : ""
+                        d: root.spec.fall.length
+                            ? root.ellipse(root.spec.fall[0], drip.hangs + root.spec.fall[1] - root.spec.drip[1], root.spec.fall[2], root.spec.fall[2])
+                            : ""
                         transform: Translate { y: 16 * Math.pow(Math.max(0, root.fallT), 2) }
                     }
                 }

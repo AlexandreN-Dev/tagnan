@@ -1,5 +1,6 @@
 """Runs Tagnan's rig 30 times a second and hands the pose to QML, as Dartt's animator does."""
 
+import math
 import time
 from functools import lru_cache
 from typing import Any
@@ -14,6 +15,12 @@ FRAME_MS = 33  # about 30 frames per second
 POINTER_JITTER_PX = 2
 
 
+def ripple(wobble: float) -> float:
+    """The ripple's phase, brought back within one turn: the rig steps it 15 times a turn, so the
+    caches below hold every outline after the first second."""
+    return round(wobble % (2 * math.pi), 4)
+
+
 @lru_cache(maxsize=512)
 def outline(stage: int, phase: float) -> str:
     return art.blob_path(stage, phase)
@@ -21,11 +28,21 @@ def outline(stage: int, phase: float) -> str:
 
 @lru_cache(maxsize=512)
 def shading(stage: int, phase: float) -> tuple[str, str, str]:
-    """The inkwell's shaded side, lit band and meniscus (grade 0; nothing at the others)."""
-    if stage != 0:
-        return "", "", ""
-    paths = art.inkwell_shading(phase)
-    return paths["shade"], paths["light"], paths["meniscus"]
+    """The ink's shaded side, lit band and lit edge: the inkwell's (its meniscus, a line to
+    stroke) at grade 0, the Gascon's (his rim of light, a crescent to fill) at grade 1; none at
+    the others."""
+    if stage == 0:
+        paths = art.inkwell_shading(phase)
+        return paths["shade"], paths["light"], paths["meniscus"]
+    if stage == 1:
+        paths = art.splash_shading(phase)
+        return paths["shade"], paths["light"], paths["rim"]
+    return "", "", ""
+
+
+@lru_cache(maxsize=512)
+def drip_tops(stage: int, phase: float) -> list[float]:
+    return art.drip_tops(stage, phase)
 
 
 def _pose_property(name: str, kind: type, notify: Signal) -> Any:
@@ -49,6 +66,7 @@ class Animator(QObject):
         self._pose: Pose = REST_POSE
         self._outline = outline(stage, 0.0)
         self._shading = shading(stage, 0.0)
+        self._drip_tops = drip_tops(stage, 0.0)
         self._eyes: QPointF | None = None
         self._cursor: QPointF | None = None
         self._last = time.monotonic()
@@ -87,8 +105,9 @@ class Animator(QObject):
     def _set_stage(self, stage: int) -> None:
         if stage != self._rig.stage:
             self._rig.set_stage(stage)
-            self._outline = outline(stage, self._pose.wobble)
-            self._shading = shading(stage, self._pose.wobble)
+            self._outline = outline(stage, ripple(self._pose.wobble))
+            self._shading = shading(stage, ripple(self._pose.wobble))
+            self._drip_tops = drip_tops(stage, ripple(self._pose.wobble))
             self.stageChanged.emit()
             self.outlineChanged.emit()
 
@@ -137,8 +156,10 @@ class Animator(QObject):
         self._pose = pose
         self.poseChanged.emit()
         if wobble_changed:
-            self._outline = outline(self._rig.stage, round(pose.wobble, 4))
-            self._shading = shading(self._rig.stage, round(pose.wobble, 4))
+            phase = ripple(pose.wobble)
+            self._outline = outline(self._rig.stage, phase)
+            self._shading = shading(self._rig.stage, phase)
+            self._drip_tops = drip_tops(self._rig.stage, phase)
             self.outlineChanged.emit()
 
     @Property(str, notify=outlineChanged)
@@ -146,16 +167,21 @@ class Animator(QObject):
         return self._outline
 
     @Property(str, notify=outlineChanged)
-    def inkwellShade(self) -> str:
+    def inkShade(self) -> str:
         return self._shading[0]
 
     @Property(str, notify=outlineChanged)
-    def inkwellLight(self) -> str:
+    def inkLight(self) -> str:
         return self._shading[1]
 
     @Property(str, notify=outlineChanged)
-    def meniscus(self) -> str:
+    def inkEdge(self) -> str:
         return self._shading[2]
+
+    @Property(list, notify=outlineChanged)
+    def dripTops(self) -> list[float]:
+        """Where each drip hangs from, the falling one last (tagnan.art.drip_tops)."""
+        return self._drip_tops
 
     expression = _pose_property("expression", str, poseChanged)
     bodySx = _pose_property("body_sx", float, poseChanged)

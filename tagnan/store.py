@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS questions (
     why_wrong TEXT NOT NULL,
     reference TEXT NOT NULL,
     created_at REAL NOT NULL,
-    flagged INTEGER NOT NULL DEFAULT 0
+    flagged INTEGER NOT NULL DEFAULT 0,
+    lang TEXT NOT NULL DEFAULT 'fr'
 );
 CREATE TABLE IF NOT EXISTS answers (
     id INTEGER PRIMARY KEY,
@@ -49,12 +50,20 @@ CREATE INDEX IF NOT EXISTS answers_by_question ON answers(question_id);
 
 
 class Store:
-    def __init__(self, path: Path | str) -> None:
+    """lang: the language Tagnan speaks; questions written in another one are set aside (kept,
+    never asked), so that switching languages loses nothing."""
+
+    def __init__(self, path: Path | str, lang: str = "en") -> None:
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.lang = lang
         self._db = sqlite3.connect(str(path))
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(questions)")}
+        if "lang" not in columns:  # a database from before Tagnan spoke English
+            with self._db:
+                self._db.execute("ALTER TABLE questions ADD COLUMN lang TEXT NOT NULL DEFAULT 'fr'")
 
     def close(self) -> None:
         self._db.close()
@@ -67,8 +76,8 @@ class Store:
             for q in questions:
                 cursor = self._db.execute(
                     "INSERT INTO questions (exam, domain, task, topic, difficulty, kind, stem,"
-                    " choices, answers, explanation, why_wrong, reference, created_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " choices, answers, explanation, why_wrong, reference, created_at, lang)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         exam,
                         q.domain,
@@ -83,6 +92,7 @@ class Store:
                         json.dumps(q.why_wrong, ensure_ascii=False),
                         q.reference,
                         now,
+                        self.lang,
                     ),
                 )
                 ids.append(int(cursor.lastrowid or 0))
@@ -97,17 +107,17 @@ class Store:
     def fresh(self, exam: str) -> list[Question]:
         """Questions never asked, and not flagged as wrong."""
         rows = self._db.execute(
-            "SELECT * FROM questions q WHERE exam = ? AND flagged = 0"
+            "SELECT * FROM questions q WHERE exam = ? AND lang = ? AND flagged = 0"
             " AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.question_id = q.id) ORDER BY id",
-            (exam,),
+            (exam, self.lang),
         )
         return [_question(r) for r in rows]
 
     def fresh_count(self, exam: str) -> int:
         row = self._db.execute(
-            "SELECT COUNT(*) FROM questions q WHERE exam = ? AND flagged = 0"
+            "SELECT COUNT(*) FROM questions q WHERE exam = ? AND lang = ? AND flagged = 0"
             " AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.question_id = q.id)",
-            (exam,),
+            (exam, self.lang),
         ).fetchone()
         return int(row[0])
 
@@ -119,7 +129,8 @@ class Store:
 
     def recent_topics(self, exam: str, limit: int) -> list[str]:
         rows = self._db.execute(
-            "SELECT topic FROM questions WHERE exam = ? ORDER BY id DESC LIMIT ?", (exam, limit)
+            "SELECT topic FROM questions WHERE exam = ? AND lang = ? ORDER BY id DESC LIMIT ?",
+            (exam, self.lang, limit),
         )
         return [str(r[0]) for r in rows]
 
@@ -128,8 +139,9 @@ class Store:
     def due_reviews(self, exam: str, now: float) -> list[Question]:
         rows = self._db.execute(
             "SELECT q.* FROM questions q JOIN reviews r ON r.question_id = q.id"
-            " WHERE q.exam = ? AND q.flagged = 0 AND r.due_at <= ? ORDER BY r.due_at",
-            (exam, now),
+            " WHERE q.exam = ? AND q.lang = ? AND q.flagged = 0 AND r.due_at <= ?"
+            " ORDER BY r.due_at",
+            (exam, self.lang, now),
         )
         return [_question(r) for r in rows]
 
@@ -189,8 +201,8 @@ class Store:
     def reviews_pending(self, exam: str) -> int:
         row = self._db.execute(
             "SELECT COUNT(*) FROM reviews r JOIN questions q ON q.id = r.question_id"
-            " WHERE q.exam = ? AND q.flagged = 0",
-            (exam,),
+            " WHERE q.exam = ? AND q.lang = ? AND q.flagged = 0",
+            (exam, self.lang),
         ).fetchone()
         return int(row[0])
 

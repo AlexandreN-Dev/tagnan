@@ -18,7 +18,7 @@ LOW_WATER = 5
 BATCH = 10
 # Each grade asks questions of its own level: easy ones in the inkwell only, then the exam's
 # usual level, hard ones for the last two grades; multiple-answer questions from the Gascon on.
-DIFFICULTY_BY_GRADE = ("facile", "moyen", "moyen", "moyen", "difficile", "difficile")
+DIFFICULTY_BY_GRADE = ("easy", "medium", "medium", "medium", "hard", "hard")
 MULTIPLE_SHARE_BY_GRADE = (0.0, 0.1, 0.15, 0.2, 0.25, 0.3)
 REVIEW_SHARE = 0.5  # when reviews are due, half the questions are reviews
 AVOID_TOPICS = 60

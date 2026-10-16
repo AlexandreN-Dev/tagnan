@@ -29,149 +29,150 @@ services = [
 
 [[domains]]
 id = 1
-name = "Fondamentaux de l'IA et du ML"
+name = "Fundamentals of AI and ML"
 weight = 20
 
 [[domains.tasks]]
 id = "1.1"
-title = "Expliquer les concepts et la terminologie de base de l'IA"
-notions = """IA, ML, deep learning, réseaux de neurones, vision par ordinateur, NLP, modèle, \
-algorithme, entraînement et inférence, biais, équité, surapprentissage et sous-apprentissage, LLM ; \
-apprentissage supervisé, non supervisé, par renforcement ; données étiquetées ou non, tabulaires, \
-séries temporelles, images, texte, structurées ou non ; inférence par lots ou en temps réel."""
+title = "Explain basic AI concepts and terminologies"
+notions = """AI, ML, deep learning, neural networks, computer vision, natural language \
+processing (NLP), model, algorithm, training and inferencing, bias, fairness, fit, large language \
+model (LLM); how AI, ML and deep learning relate; batch and real-time inferencing; labeled and \
+unlabeled, tabular, time-series, image, text, structured and unstructured data; supervised, \
+unsupervised and reinforcement learning."""
 
 [[domains.tasks]]
 id = "1.2"
-title = "Identifier des cas d'usage concrets de l'IA"
-notions = """Quand l'IA apporte de la valeur et quand elle n'en apporte pas (coût, besoin d'un \
-résultat exact plutôt que d'une prédiction) ; régression, classification, clustering ; vision, NLP, \
-reconnaissance vocale, recommandation, détection de fraude, prévision ; ce que font les services \
-gérés : SageMaker, Transcribe, Translate, Comprehend, Lex, Polly."""
+title = "Identify practical use cases for AI"
+notions = """Where AI/ML adds value (assisting human decisions, scalability, automation) and \
+where it does not (cost-benefit, a specific outcome needed rather than a prediction); choosing \
+regression, classification or clustering; computer vision, NLP, speech recognition, \
+recommendation systems, fraud detection, forecasting; what AWS managed AI/ML services do: \
+SageMaker, Amazon Transcribe, Amazon Translate, Amazon Comprehend, Amazon Lex, Amazon Polly."""
 
 [[domains.tasks]]
 id = "1.3"
-title = "Décrire le cycle de vie du développement ML"
-notions = """Collecte, analyse exploratoire, préparation des données, ingénierie des \
-caractéristiques, entraînement, réglage des hyperparamètres, évaluation, déploiement, surveillance ; \
-modèles pré-entraînés open source ou entraînement sur mesure ; API gérée ou auto-hébergée ; \
-SageMaker, Data Wrangler, Feature Store, Model Monitor ; MLOps (expérimentation, répétabilité, \
-dette technique, ré-entraînement) ; métriques de modèle (exactitude, AUC, F1) et métriques métier \
-(coût par utilisateur, coût de développement, retours clients, ROI)."""
+title = "Describe the ML development lifecycle"
+notions = """Data collection, exploratory data analysis (EDA), data pre-processing, feature \
+engineering, model training, hyperparameter tuning, evaluation, deployment, monitoring; open \
+source pre-trained models or custom training; managed API service or self-hosted API; \
+SageMaker, SageMaker Data Wrangler, SageMaker Feature Store, SageMaker Model Monitor; MLOps \
+(experimentation, repeatable processes, scalable systems, technical debt, production \
+readiness, monitoring, re-training); model metrics (accuracy, AUC, F1 score) and business \
+metrics (cost per user, development costs, customer feedback, ROI)."""
 
 [[domains]]
 id = 2
-name = "Fondamentaux de l'IA générative"
+name = "Fundamentals of Generative AI"
 weight = 24
 
 [[domains.tasks]]
 id = "2.1"
-title = "Expliquer les concepts de base de l'IA générative"
-notions = """Tokens, découpage en morceaux (chunking), embeddings, vecteurs, ingénierie de prompt, \
-LLM à base de transformeurs, modèles de fondation, modèles multimodaux, modèles de diffusion ; \
-usages (génération d'images, de vidéo, d'audio, résumé, chatbots, traduction, génération de code, \
-agents de service client, recherche, recommandation) ; cycle de vie d'un modèle de fondation \
-(sélection des données et du modèle, pré-entraînement, ajustement fin, évaluation, déploiement, \
-retours)."""
+title = "Explain the basic concepts of generative AI"
+notions = """Tokens, chunking, embeddings, vectors, prompt engineering, transformer-based LLMs, \
+foundation models, multi-modal models, diffusion models; use cases (image, video and audio \
+generation, summarization, chatbots, translation, code generation, customer service agents, \
+search, recommendation engines); the foundation model lifecycle (data selection, model \
+selection, pre-training, fine-tuning, evaluation, deployment, feedback)."""
 
 [[domains.tasks]]
 id = "2.2"
-title = "Comprendre les capacités et les limites de l'IA générative pour des problèmes métier"
-notions = """Avantages (adaptabilité, réactivité, simplicité) ; limites (hallucinations, \
-interprétabilité, inexactitude, non-déterminisme) ; critères de choix d'un modèle (type, \
-performances, capacités, contraintes, conformité) ; valeur métier et indicateurs (performance \
-inter-domaines, efficacité, taux de conversion, revenu moyen par utilisateur, exactitude, valeur \
-vie client)."""
+title = "Understand the capabilities and limitations of generative AI for solving business problems"
+notions = """Advantages (adaptability, responsiveness, simplicity); disadvantages \
+(hallucinations, interpretability, inaccuracy, nondeterminism); choosing a model (model types, \
+performance requirements, capabilities, constraints, compliance); business value and metrics \
+(cross-domain performance, efficiency, conversion rate, average revenue per user, accuracy, \
+customer lifetime value)."""
 
 [[domains.tasks]]
 id = "2.3"
-title = "Décrire l'infrastructure et les technologies AWS pour construire des applications d'IA générative"
-notions = """SageMaker JumpStart, Amazon Bedrock, PartyRock, Amazon Q ; avantages des services \
-d'IA générative d'AWS (accessibilité, barrière d'entrée basse, efficacité, coût, délai de mise sur \
-le marché) ; bénéfices de l'infrastructure AWS (sécurité, conformité, responsabilité, sûreté) ; \
-arbitrages de coût (réactivité, disponibilité, redondance, performance, couverture régionale, \
-tarification au token, débit provisionné, modèles personnalisés)."""
+title = "Describe AWS infrastructure and technologies for building generative AI applications"
+notions = """Amazon SageMaker JumpStart, Amazon Bedrock, PartyRock, Amazon Q; advantages of AWS \
+generative AI services (accessibility, lower barrier to entry, efficiency, cost-effectiveness, \
+speed to market); benefits of AWS infrastructure (security, compliance, responsibility, \
+safety); cost tradeoffs (responsiveness, availability, redundancy, performance, regional \
+coverage, token-based pricing, provisioned throughput, custom models)."""
 
 [[domains]]
 id = 3
-name = "Applications des modèles de fondation"
+name = "Applications of Foundation Models"
 weight = 28
 
 [[domains.tasks]]
 id = "3.1"
-title = "Décrire les choix de conception des applications qui utilisent des modèles de fondation"
-notions = """Critères de choix d'un modèle pré-entraîné (coût, modalité, latence, multilinguisme, \
-taille, complexité, personnalisation, longueur d'entrée et de sortie) ; effet des paramètres \
-d'inférence (température, longueur d'entrée et de sortie) ; RAG et ses usages métier (Amazon \
-Bedrock, bases de connaissances) ; stockage des embeddings dans des bases vectorielles (OpenSearch \
-Service, Aurora, Neptune, DocumentDB, RDS for PostgreSQL) ; coût des approches de personnalisation \
-(pré-entraînement, ajustement fin, apprentissage en contexte, RAG) ; rôle des agents dans les \
-tâches en plusieurs étapes (Amazon Bedrock Agents)."""
+title = "Describe design considerations for applications that use foundation models"
+notions = """Choosing a pre-trained model (cost, modality, latency, multi-lingual, model size, \
+complexity, customization, input/output length); inference parameters (temperature, \
+input/output length); Retrieval Augmented Generation (RAG) and its business uses (Amazon \
+Bedrock, knowledge bases); storing embeddings in vector databases (OpenSearch Service, Aurora, \
+Neptune, DocumentDB, RDS for PostgreSQL); cost tradeoffs of customization (pre-training, \
+fine-tuning, in-context learning, RAG); agents for multi-step tasks (Amazon Bedrock Agents)."""
 
 [[domains.tasks]]
 id = "3.2"
-title = "Choisir des techniques d'ingénierie de prompt efficaces"
-notions = """Contexte, instruction, prompts négatifs, espace latent du modèle ; chaîne de pensée, \
-zero-shot, one-shot, few-shot, modèles de prompt ; bonnes pratiques (qualité des réponses, \
-expérimentation, garde-fous, précision et concision) ; risques (exposition, empoisonnement, \
-détournement, jailbreak, injection de prompt)."""
+title = "Choose effective prompt engineering techniques"
+notions = """Context, instruction, negative prompts, model latent space; chain-of-thought, \
+zero-shot, single-shot, few-shot, prompt templates; best practices (response quality, \
+experimentation, guardrails, discovery, specificity and concision); risks (exposure, \
+poisoning, hijacking, jailbreaking, prompt injection)."""
 
 [[domains.tasks]]
 id = "3.3"
-title = "Décrire l'entraînement et l'ajustement fin des modèles de fondation"
-notions = """Pré-entraînement, ajustement fin, pré-entraînement continu ; ajustement par \
-instructions, adaptation à un domaine, apprentissage par transfert ; préparation des données \
-(curation, gouvernance, taille, étiquetage, représentativité, RLHF)."""
+title = "Describe the training and fine-tuning process for foundation models"
+notions = """Pre-training, fine-tuning, continuous pre-training; instruction tuning, domain \
+adaptation, transfer learning; preparing data (curation, governance, size, labeling, \
+representativeness, reinforcement learning from human feedback (RLHF))."""
 
 [[domains.tasks]]
 id = "3.4"
-title = "Décrire les méthodes d'évaluation des modèles de fondation"
-notions = """Évaluation humaine, jeux de données de référence (benchmarks), évaluation de modèles \
-dans Amazon Bedrock ; métriques ROUGE, BLEU, BERTScore ; vérifier qu'un modèle sert les objectifs \
-métier (productivité, engagement, ingénierie des tâches)."""
+title = "Describe methods to evaluate foundation model performance"
+notions = """Human evaluation, benchmark datasets, model evaluation in Amazon Bedrock; ROUGE, \
+BLEU, BERTScore; whether a model meets business objectives (productivity, user engagement, \
+task engineering)."""
 
 [[domains]]
 id = 4
-name = "Lignes directrices pour une IA responsable"
+name = "Guidelines for Responsible AI"
 weight = 14
 
 [[domains.tasks]]
 id = "4.1"
-title = "Expliquer le développement de systèmes d'IA responsables"
-notions = """Biais, équité, inclusivité, robustesse, sûreté, véracité ; Amazon Bedrock Guardrails ; \
-choix responsable d'un modèle (environnement, durabilité) ; risques juridiques (propriété \
-intellectuelle, sorties biaisées, perte de confiance, hallucinations) ; jeux de données inclusifs, \
-diversifiés, équilibrés, sources curées ; effets du biais et de la variance (groupes \
-démographiques, surapprentissage, sous-apprentissage) ; détection et suivi (qualité des \
-étiquettes, audits humains, analyse par sous-groupe, SageMaker Clarify, SageMaker Model Monitor, \
-Amazon A2I)."""
+title = "Explain the development of AI systems that are responsible"
+notions = """Bias, fairness, inclusivity, robustness, safety, veracity; Amazon Bedrock \
+Guardrails; responsible model selection (environmental considerations, sustainability); legal \
+risks (intellectual property infringement, biased outputs, loss of customer trust, end user \
+risk, hallucinations); inclusive, diverse, curated, balanced datasets; effects of bias and \
+variance (demographic groups, inaccuracy, overfitting, underfitting); detecting and \
+monitoring (label quality, human audits, subgroup analysis, SageMaker Clarify, SageMaker Model \
+Monitor, Amazon A2I)."""
 
 [[domains.tasks]]
 id = "4.2"
-title = "Reconnaître l'importance de modèles transparents et explicables"
-notions = """Modèles transparents et explicables ou non ; SageMaker Model Cards, modèles et \
-données open source, licences ; arbitrage entre sûreté et transparence (interprétabilité contre \
-performance) ; conception centrée sur l'humain pour une IA explicable."""
+title = "Recognize the importance of transparent and explainable models"
+notions = """Transparent and explainable models versus those that are not; SageMaker Model \
+Cards, open source models, data and licensing; tradeoffs between safety and transparency \
+(interpretability versus performance); human-centered design for explainable AI."""
 
 [[domains]]
 id = 5
-name = "Sécurité, conformité et gouvernance des solutions d'IA"
+name = "Security, Compliance, and Governance for AI Solutions"
 weight = 14
 
 [[domains.tasks]]
 id = "5.1"
-title = "Expliquer comment sécuriser les systèmes d'IA"
-notions = """Rôles, politiques et permissions IAM, chiffrement, Amazon Macie, AWS PrivateLink, \
-modèle de responsabilité partagée ; citer les sources et documenter l'origine des données (lignage, \
-catalogue, SageMaker Model Cards) ; ingénierie des données sécurisée (qualité, technologies de \
-protection de la vie privée, contrôle d'accès, intégrité) ; sécurité applicative, détection des \
-menaces, gestion des vulnérabilités, protection de l'infrastructure, injection de prompt, \
-chiffrement au repos et en transit."""
+title = "Explain methods to secure AI systems"
+notions = """IAM roles, policies and permissions, encryption, Amazon Macie, AWS PrivateLink, \
+the AWS shared responsibility model; source citation and data origins (data lineage, data \
+cataloging, SageMaker Model Cards); secure data engineering (data quality, privacy-enhancing \
+technologies, access control, data integrity); application security, threat detection, \
+vulnerability management, infrastructure protection, prompt injection, encryption at rest and \
+in transit."""
 
 [[domains.tasks]]
 id = "5.2"
-title = "Reconnaître les règles de gouvernance et de conformité des systèmes d'IA"
-notions = """Normes (ISO, SOC, lois sur la responsabilité algorithmique) ; AWS Config, Amazon \
-Inspector, AWS Audit Manager, AWS Artifact, AWS CloudTrail, AWS Trusted Advisor ; gouvernance des \
-données (cycle de vie, journalisation, résidence, surveillance, conservation) ; protocoles de \
-gouvernance (politiques, revues, cadres comme la Generative AI Security Scoping Matrix, normes de \
-transparence, formation des équipes)."""
+title = "Recognize governance and compliance regulations for AI systems"
+notions = """Standards (ISO, SOC, algorithm accountability laws); AWS Config, Amazon Inspector, \
+AWS Audit Manager, AWS Artifact, AWS CloudTrail, AWS Trusted Advisor; data governance (data \
+lifecycles, logging, residency, monitoring, observation, retention); governance protocols \
+(policies, review cadence and strategies, frameworks such as the Generative AI Security \
+Scoping Matrix, transparency standards, team training)."""

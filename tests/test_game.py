@@ -82,11 +82,11 @@ def test_batch_request_follows_the_grade(game: Game) -> None:
     request = game.batch_request()
     assert request["exam"] == "aif-c01"
     assert len(request["slots"]) == 10
-    assert {s["difficulty"] for s in request["slots"]} == {"facile"}
+    assert {s["difficulty"] for s in request["slots"]} == {"easy"}
     assert {s["kind"] for s in request["slots"]} == {"single"}
     game.store.save_progress(game.exam, Progress(points=3700, grade=4))
     slots = game.batch_request()["slots"]
-    assert {s["difficulty"] for s in slots} == {"difficile"}
+    assert {s["difficulty"] for s in slots} == {"hard"}
     assert sum(s["kind"] == "multiple" for s in slots) == 2  # a quarter of ten, rounded
 
 

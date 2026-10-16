@@ -30,17 +30,17 @@ def test_question_is_checked(bp: Blueprint) -> None:
 @pytest.mark.parametrize(
     ("changes", "reason"),
     [
-        ({"domain": 9}, "domaine"),
-        ({"task": "1.1"}, "tâche"),
-        ({"answers": [0, 1]}, "exactement une"),
+        ({"domain": 9}, "unknown domain"),
+        ({"task": "1.1"}, "not in domain"),
+        ({"answers": [0, 1]}, "exactly one"),
         ({"answers": [4]}, "indices"),
-        ({"choices": ["a", "b", "c"]}, "4 à 6"),
-        ({"choices": ["a", "b", "A", "c"]}, "identiques"),
-        ({"why_wrong": ["", "x"]}, "un texte par choix"),
-        ({"why_wrong": ["", "", "x", "y"]}, "pourquoi"),
-        ({"kind": "multiple"}, "deux ou trois"),
-        ({"difficulty": "extrême"}, "difficulté"),
-        ({"stem": "x" * 1000}, "trop long"),
+        ({"choices": ["a", "b", "c"]}, "4 to 6"),
+        ({"choices": ["a", "b", "A", "c"]}, "identical"),
+        ({"why_wrong": ["", "x"]}, "one text per choice"),
+        ({"why_wrong": ["", "", "x", "y"]}, "why_wrong: empty"),
+        ({"kind": "multiple"}, "two or three"),
+        ({"difficulty": "extreme"}, "unknown difficulty"),
+        ({"stem": "x" * 1000}, "too long"),
     ],
 )
 def test_bad_questions_are_refused(bp: Blueprint, changes: dict[str, object], reason: str) -> None:

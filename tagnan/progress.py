@@ -13,16 +13,16 @@ class Grade:
 
 
 # A long road, on purpose: about 100 answers a week (twenty a working day) at 80 % right make
-# Tagnan Gascon in two days, Cadet in a week, Mousquetaire in two and a half, Lieutenant in four
-# and Capitaine in seven; at 70 % right, ten weeks; at 60 %, four months. Simulated in
+# Tagnan Gascon in two days, Cadet in a week, Musketeer in two and a half, Lieutenant in four
+# and Captain in seven; at 70 % right, ten weeks; at 60 %, four months. Simulated in
 # tests/test_rules.py.
 GRADES = (
-    Grade("Encrier", 0, "de l'encre dans son encrier"),
-    Grade("Gascon", 250, "il s'échappe de l'encrier"),
-    Grade("Cadet", 900, "un feutre"),
-    Grade("Mousquetaire", 2000, "la casaque à croix et la plume blanche"),
-    Grade("Lieutenant", 3600, "la rapière et la moustache en croc"),
-    Grade("Capitaine", 6000, "le chapeau à cocarde, la royale et l'or"),
+    Grade("Inkwell", 0, "ink in an inkwell, with a quill dipped in it"),
+    Grade("Gascon", 250, "he escapes from the inkwell"),
+    Grade("Cadet", 900, "a felt hat"),
+    Grade("Musketeer", 2000, "the musketeers' cross and a white plume"),
+    Grade("Lieutenant", 3600, "the rapier and a hooked moustache"),
+    Grade("Captain", 6000, "the cockaded hat, the goatee and the gold"),
 )
 
 RIGHT, STREAK_BONUS, MAX_BONUS, WRONG = 10, 1, 5, -8

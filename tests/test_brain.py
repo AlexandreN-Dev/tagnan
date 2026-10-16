@@ -57,7 +57,7 @@ def test_generate_runs_claude_isolated(fake_claude: Path) -> None:
     answer(fake_claude, {"questions": [good, bad]})
     request = {
         "exam": "aif-c01",
-        "slots": [{"domain": 3, "difficulty": "moyen", "kind": "single"}],
+        "slots": [{"domain": 3, "difficulty": "medium", "kind": "single"}],
         "avoid": ["Bedrock Guardrails"],
     }
     result = brain.generate(request, config.Config())
@@ -79,20 +79,20 @@ def test_generate_runs_claude_isolated(fake_claude: Path) -> None:
     assert "AWS_PROFILE" not in env
     assert "tagnan-brain-" in str(log["cwd"])
     prompt = str(log["stdin"])
-    assert "domaine 3 (Applications des modèles de fondation)" in prompt
+    assert "from domain 3 (Applications of Foundation Models)" in prompt
     assert "- Bedrock Guardrails" in prompt
     assert "$" not in prompt  # every placeholder filled
 
 
 def test_explain_returns_text(fake_claude: Path) -> None:
-    answer(fake_claude, {"text": "  Mordieu ! Guardrails,\n c'est le garde-fou. "})
+    answer(fake_claude, {"text": "  Sacrebleu! Guardrails,\n is the guard rail. "})
     request = {"exam": "aif-c01", "question": question_data(), "chosen": [3]}
     assert brain.explain(request, config.Config()) == {
-        "text": "Mordieu ! Guardrails, c'est le garde-fou."
+        "text": "Sacrebleu! Guardrails, is the guard rail."
     }
     prompt = str(call_log(fake_claude)["stdin"])
-    assert "Réponse donnée : D (Amazon SageMaker Clarify)" in prompt
-    assert "Bonne réponse : A (Amazon Bedrock Guardrails)" in prompt
+    assert "Answer given: D (Amazon SageMaker Clarify)" in prompt
+    assert "Right answer: A (Amazon Bedrock Guardrails)" in prompt
 
 
 def test_claude_errors_become_messages(fake_claude: Path) -> None:
@@ -100,26 +100,25 @@ def test_claude_errors_become_messages(fake_claude: Path) -> None:
     with pytest.raises(brain.BrainError, match="usage limit"):
         brain.explain({"question": question_data(), "chosen": [1]}, config.Config())
     answer(fake_claude, {"questions": [question_data(kind="poème")]})
-    with pytest.raises(brain.BrainError, match="aucune question utilisable"):
+    with pytest.raises(brain.BrainError, match="no usable question"):
         brain.generate(
-            {"slots": [{"domain": 1, "difficulty": "facile", "kind": "single"}]}, config.Config()
+            {"slots": [{"domain": 1, "difficulty": "easy", "kind": "single"}]}, config.Config()
         )
 
 
 def test_prompt_lists_slots_and_only_their_domains(bp: Blueprint) -> None:
-    slots = [{"domain": 2, "difficulty": "facile", "kind": "single"}] * 3 + [
-        {"domain": 5, "difficulty": "facile", "kind": "multiple"}
+    slots = [{"domain": 2, "difficulty": "easy", "kind": "single"}] * 3 + [
+        {"domain": 5, "difficulty": "easy", "kind": "multiple"}
     ]
     prompt = brain.generate_prompt(bp, slots, [])
-    assert "Écris 4 questions" in prompt
+    assert "Write 4 practice questions" in prompt
     assert (
-        "- 3 questions du domaine 2 (Fondamentaux de l'IA générative), faciles, à réponse unique"
-        in prompt
+        "- 3 easy single-answer questions from domain 2 (Fundamentals of Generative AI)" in prompt
     )
-    assert "à réponses multiples" in prompt
-    assert "5.2 Reconnaître" in prompt
-    assert "3.2 Choisir" not in prompt
-    assert "déjà été posées" not in prompt
+    assert "multiple-answer" in prompt
+    assert "5.2 Recognize governance" in prompt
+    assert "3.2 Choose effective" not in prompt
+    assert "asked recently" not in prompt
 
 
 def test_script_runs_the_brain_end_to_end(fake_claude: Path) -> None:
@@ -156,7 +155,7 @@ def test_live_generation_writes_usable_questions(bp: Blueprint) -> None:
     """Calls the real claude CLI with Sonnet: a few cents of quota."""
     request = {
         "exam": "aif-c01",
-        "slots": [{"domain": 3, "difficulty": "moyen", "kind": "single"}],
+        "slots": [{"domain": 3, "difficulty": "medium", "kind": "single"}],
         "avoid": [],
     }
     done = subprocess.run(

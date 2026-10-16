@@ -18,12 +18,12 @@ def question_data(**changes: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "domain": 3,
         "task": "3.1",
-        "topic": "Bedrock Guardrails, sujets refusés",
-        "difficulty": "moyen",
+        "topic": "Bedrock Guardrails, denied topics",
+        "difficulty": "medium",
         "kind": "single",
         "stem": (
-            "Une équipe veut que son assistant bâti sur Amazon Bedrock refuse les sujets hors"
-            " périmètre. Quelle fonctionnalité utiliser ?"
+            "A team wants its assistant built on Amazon Bedrock to refuse requests outside its"
+            " scope. Which feature should it use?"
         ),
         "choices": [
             "Amazon Bedrock Guardrails",
@@ -32,12 +32,12 @@ def question_data(**changes: Any) -> dict[str, Any]:
             "Amazon SageMaker Clarify",
         ],
         "answers": [0],
-        "explanation": "Guardrails applique des sujets refusés aux entrées et aux sorties.",
+        "explanation": "Guardrails applies denied topics to inputs and outputs.",
         "why_wrong": [
             "",
-            "Comprehend analyse du texte, il ne bloque pas un assistant.",
-            "Kendra est un moteur de recherche.",
-            "Clarify mesure les biais d'un modèle.",
+            "Comprehend analyzes text; it does not block an assistant.",
+            "Kendra is a search engine.",
+            "Clarify measures a model's bias.",
         ],
         "reference": "Amazon Bedrock User Guide, Guardrails",
     }

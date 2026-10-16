@@ -26,8 +26,8 @@ from tagnan.paths import config_file, state_dir
 from tagnan.store import Store
 
 LETTERS = "ABCDEF"
-CHEERS = ("Touché !", "Bien paré !", "Une botte imparable !", "Par ma rapière, c'est juste !")
-SCOLDS = ("Mordieu !", "Ventre-saint-gris !", "Palsambleu !", "Sang-Dieu, non !")
+CHEERS = ("Touché!", "Well parried!", "An unstoppable thrust!", "By my rapier, that's right!")
+SCOLDS = ("Zounds!", "Sacrebleu!", "Blast it, no!", "By my sword, no!")
 
 
 def show(question: Question) -> None:
@@ -39,7 +39,7 @@ def show(question: Question) -> None:
 
 def read_choice(question: Question) -> list[int] | None:
     wanted = len(question.answers)
-    prompt = "Ta réponse (lettre) : " if wanted == 1 else f"Tes {wanted} réponses (ex. AC) : "
+    prompt = "Your answer (letter): " if wanted == 1 else f"Your {wanted} answers (e.g. AC): "
     while True:
         try:
             text = input(prompt).strip().upper().replace(" ", "").replace(",", "")
@@ -49,7 +49,7 @@ def read_choice(question: Question) -> list[int] | None:
         if len(set(picked)) == wanted and len(picked) == len(text):
             return picked
         last = LETTERS[len(question.choices) - 1]
-        print(f"  Il faut {wanted} lettre{'s' if wanted > 1 else ''} parmi A à {last}.")
+        print(f"  {wanted} letter{'s' if wanted > 1 else ''} from A to {last}, please.")
 
 
 def tell(outcome: Outcome, rng: random.Random) -> None:
@@ -61,44 +61,46 @@ def tell(outcome: Outcome, rng: random.Random) -> None:
         print(f"\n{rng.choice(SCOLDS)}")
         for i in outcome.chosen:
             if q.why_wrong[i]:
-                print(f"  {LETTERS[i]} : {q.why_wrong[i]}")
-        print(f"  La bonne réponse : {right}. {q.explanation}")
+                print(f"  {LETTERS[i]}: {q.why_wrong[i]}")
+        print(f"  The right answer: {right}. {q.explanation}")
     if q.reference:
-        print(f"  À relire : {q.reference}")
+        print(f"  Read again: {q.reference}")
     after = outcome.after
     sign = "+" if outcome.delta >= 0 else ""
-    print(f"  {sign}{outcome.delta} points · {after.points} points · série {after.streak}")
+    print(f"  {sign}{outcome.delta} points · {after.points} in all · streak {after.streak}")
     if outcome.promoted:
         grade = rules.GRADES[after.grade]
-        print(f"  Promotion ! Tagnan passe {grade.name} : {grade.look}.")
+        print(f"  Promotion! Tagnan is now a {grade.name}: {grade.look}.")
     elif outcome.demoted:
-        print(f"  Tagnan redescend {rules.GRADES[after.grade].name}.")
+        print(f"  Tagnan falls back to {rules.GRADES[after.grade].name}.")
 
 
 def refill(game: Game, brain: BrainClient) -> None:
-    print("Tagnan prépare de nouvelles questions (une minute environ)…", flush=True)
+    print("Tagnan is writing new questions (a few minutes)…", flush=True)
     answer = brain.generate(game.batch_request())
     ids, rejected = game.add_batch(answer.get("questions", []), time.time())
-    print(f"{len(ids)} questions prêtes" + (f", {len(rejected)} écartées." if rejected else "."))
+    print(f"{len(ids)} questions ready" + (f", {len(rejected)} set aside." if rejected else "."))
 
 
 def stats(game: Game) -> None:
     s = game.summary()
-    nxt = f", {s['next_threshold']} pour {s['next_name']}" if s["next_name"] else ""
-    print(f"Tagnan est {s['grade_name']} : {s['points']} points{nxt}.")
-    print(f"Série : {s['streak']} (record {s['best_streak']}).", end=" ")
-    print(f"Réponses : {s['right']}/{s['answered']}.")
+    nxt = f", {s['next_threshold']} for {s['next_name']}" if s["next_name"] else ""
+    print(f"Tagnan is {s['grade_name']}: {s['points']} points{nxt}.")
+    print(f"Streak: {s['streak']} (best {s['best_streak']}).", end=" ")
+    print(f"Answers: {s['right']}/{s['answered']}.")
     for d in s["domains"]:
-        rate = f"{100 * d['right'] // d['answered']} %" if d["answered"] else "—"
-        print(f"  {d['id']}. {d['name']} : {d['right']}/{d['answered']} ({rate})")
-    print(f"En réserve : {s['fresh']} questions neuves, {s['reviews']} à revoir.")
+        rate = f"{100 * d['right'] // d['answered']}%" if d["answered"] else "—"
+        print(f"  {d['id']}. {d['name']}: {d['right']}/{d['answered']} ({rate})")
+    print(f"In store: {s['fresh']} new questions, {s['reviews']} to review.")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="tagnan", description="Tagnan dans le terminal")
-    parser.add_argument("-n", "--count", type=int, default=1, help="questions d'affilée")
-    parser.add_argument("--stats", action="store_true", help="la progression, sans question")
-    parser.add_argument("--import", dest="import_file", type=Path, help="ajouter un lot du cerveau")
+    parser = argparse.ArgumentParser(prog="tagnan", description="Tagnan in the terminal")
+    parser.add_argument("-n", "--count", type=int, default=1, help="questions in a row")
+    parser.add_argument("--stats", action="store_true", help="the progress, no question")
+    parser.add_argument(
+        "--import", dest="import_file", type=Path, help="add a batch from the brain"
+    )
     parser.add_argument("--db", type=Path, default=state_dir() / "tagnan.db")
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
@@ -109,7 +111,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         batch = json.loads(args.import_file.read_text(encoding="utf-8"))
         ids, rejected = game.add_batch(batch.get("questions", []), time.time())
         print(
-            f"{len(ids)} questions ajoutées" + (f", {len(rejected)} écartées." if rejected else ".")
+            f"{len(ids)} questions added" + (f", {len(rejected)} set aside." if rejected else ".")
         )
         return 0
     if args.stats:
@@ -122,12 +124,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 refill(game, brain)
             except BrainError as error:
-                print(f"Le cerveau n'a pas pu écrire de questions : {error}", file=sys.stderr)
+                print(f"The brain could not write questions: {error}", file=sys.stderr)
                 if question is None:
                     return 1
             question = question or game.next_question(time.time())
         if question is None:
-            print("Aucune question disponible.", file=sys.stderr)
+            print("No question available.", file=sys.stderr)
             return 1
         show(question)
         chosen = read_choice(question)
@@ -136,7 +138,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         outcome = game.answer(question, chosen, time.time())
         tell(outcome, rng)
         if not outcome.correct and sys.stdin.isatty():
-            more = input("  Entrée pour continuer, « e » pour une explication plus longue : ")
+            more = input("  Enter to go on, « e » for a longer explanation: ")
             if more.strip().lower() == "e":
                 try:
                     print(
@@ -150,7 +152,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         )
                     )
                 except BrainError as error:
-                    print(f"Pas d'explication : {error}", file=sys.stderr)
+                    print(f"No explanation: {error}", file=sys.stderr)
     return 0
 
 

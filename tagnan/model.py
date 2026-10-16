@@ -7,7 +7,7 @@ from typing import Any
 
 from tagnan.blueprint import Blueprint
 
-DIFFICULTIES = ("facile", "moyen", "difficile")
+DIFFICULTIES = ("easy", "medium", "hard")
 KINDS = ("single", "multiple")
 MAX_STEM, MAX_CHOICE, MAX_TEXT = 900, 220, 700
 
@@ -60,12 +60,12 @@ class Question:
 def _text(data: Mapping[str, Any], key: str, limit: int, required: bool = True) -> str:
     value = data.get(key, "")
     if not isinstance(value, str):
-        raise ValueError(f"{key} : texte attendu")
+        raise ValueError(f"{key}: text expected")
     value = " ".join(value.split())
     if required and not value:
-        raise ValueError(f"{key} : vide")
+        raise ValueError(f"{key}: empty")
     if len(value) > limit:
-        raise ValueError(f"{key} : trop long ({len(value)} caractères)")
+        raise ValueError(f"{key}: too long ({len(value)} characters)")
     return value
 
 
@@ -73,37 +73,37 @@ def parse_question(data: Mapping[str, Any], blueprint: Blueprint) -> Question:
     """Check a question as the brain wrote it; ValueError says what is wrong."""
     domain = data.get("domain")
     if not isinstance(domain, int) or domain not in {d.id for d in blueprint.domains}:
-        raise ValueError(f"domaine inconnu : {domain!r}")
+        raise ValueError(f"unknown domain: {domain!r}")
     task = _text(data, "task", 10)
     if task not in blueprint.task_ids(domain):
-        raise ValueError(f"tâche {task} hors du domaine {domain}")
+        raise ValueError(f"task {task} is not in domain {domain}")
     kind = data.get("kind")
     if kind not in KINDS or kind not in blueprint.kinds:
-        raise ValueError(f"type de question inconnu : {kind!r}")
+        raise ValueError(f"unknown question kind: {kind!r}")
     difficulty = data.get("difficulty")
     if difficulty not in DIFFICULTIES:
-        raise ValueError(f"difficulté inconnue : {difficulty!r}")
+        raise ValueError(f"unknown difficulty: {difficulty!r}")
     raw_choices = data.get("choices")
     if not isinstance(raw_choices, list) or not 4 <= len(raw_choices) <= 6:
-        raise ValueError("il faut de 4 à 6 choix")
-    choices = tuple(_text({"choix": c}, "choix", MAX_CHOICE) for c in raw_choices)
+        raise ValueError("4 to 6 choices are needed")
+    choices = tuple(_text({"choice": c}, "choice", MAX_CHOICE) for c in raw_choices)
     if len({c.casefold() for c in choices}) != len(choices):
-        raise ValueError("deux choix identiques")
+        raise ValueError("two identical choices")
     raw_answers = data.get("answers")
     if not isinstance(raw_answers, list) or not all(isinstance(a, int) for a in raw_answers):
-        raise ValueError("answers : liste d'indices attendue")
+        raise ValueError("answers: a list of indices expected")
     answers = tuple(sorted(set(raw_answers)))
     if len(answers) != len(raw_answers) or any(not 0 <= a < len(choices) for a in answers):
-        raise ValueError(f"indices de réponse invalides : {raw_answers}")
+        raise ValueError(f"invalid answer indices: {raw_answers}")
     if kind == "single" and len(answers) != 1:
-        raise ValueError("une question à réponse unique a exactement une bonne réponse")
+        raise ValueError("a single-answer question has exactly one right answer")
     if kind == "multiple" and not 2 <= len(answers) <= 3:
-        raise ValueError("une question à réponses multiples en a deux ou trois")
+        raise ValueError("a multiple-answer question has two or three")
     raw_why = data.get("why_wrong")
     if not isinstance(raw_why, list) or len(raw_why) != len(choices):
-        raise ValueError("why_wrong : un texte par choix")
+        raise ValueError("why_wrong: one text per choice")
     why_wrong = tuple(
-        "" if i in answers else _text({"pourquoi": w}, "pourquoi", MAX_TEXT)
+        "" if i in answers else _text({"why_wrong": w}, "why_wrong", MAX_TEXT)
         for i, w in enumerate(raw_why)
     )
     return Question(

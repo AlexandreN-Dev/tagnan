@@ -1,27 +1,27 @@
-Écris $count questions d'entraînement pour l'examen $exam_code, réparties ainsi :
+Write $count practice questions for the $exam_code exam, as follows:
 
 $slots
 
-Voici les domaines concernés, avec leurs tâches et les notions de chaque tâche. Chaque question porte sur une seule tâche de son domaine ; varie les tâches et les notions d'une question à l'autre.
+Here are the domains involved, with their tasks and each task's notions. Each question is about a single task of its domain; vary the tasks and the notions from one question to the next.
 
 $domains
 
-Niveaux de difficulté :
-- facile : une définition, ou le lien direct entre un besoin et un service ou une notion.
-- moyen : une courte mise en situation où deux réponses semblent plausibles.
-- difficile : une mise en situation avec des contraintes (coût, latence, sécurité, gouvernance, effort) à arbitrer, et des distracteurs très proches.
+Difficulty levels:
+- easy: a definition, or the direct link between a need and a service or a notion.
+- medium: a short scenario where two answers look plausible.
+- hard: a scenario with constraints to weigh (cost, latency, security, governance, effort) and very close distractors.
 
-Format de chaque question :
-- stem : une mise en situation de une à trois phrases, 450 caractères au plus, qui se termine par la question. Pour une question à réponses multiples, termine par « (Choisissez-en DEUX.) » ou « (Choisissez-en TROIS.) ».
-- choices : 4 choix pour une question à réponse unique, 5 pour une question à réponses multiples. Des distracteurs plausibles, de la même famille que la bonne réponse et de longueur comparable. Jamais « toutes les réponses » ni « aucune ».
-- answers : les indices (à partir de 0) des bonnes réponses : un seul pour « single », deux ou trois pour « multiple », comme annoncé dans le stem.
-- explanation : deux phrases au plus, qui disent pourquoi la ou les bonnes réponses conviennent.
-- why_wrong : un texte par choix, dans l'ordre des choix : une phrase qui dit pourquoi ce choix ne convient pas à cette situation précise ; une chaîne vide pour les bonnes réponses.
-- topic : trois à six mots qui nomment la notion testée, par exemple « Bedrock Guardrails, sujets refusés ».
-- task : l'identifiant de la tâche, par exemple « 3.1 ».
-- reference : le document AWS à relire, par exemple « Amazon Bedrock User Guide, Guardrails ».
-- domain, difficulty, kind : ceux du créneau de la question.
+Each question:
+- stem: a scenario of one to three sentences, 450 characters at most, ending with the question. For a multiple-answer question, end with "(Choose TWO.)" or "(Choose THREE.)".
+- choices: 4 choices for a single-answer question, 5 for a multiple-answer question. Plausible distractors, of the same family as the right answer and of similar length. Never "all of the above" or "none of the above".
+- answers: the indices (from 0) of the right answers: one for "single", two or three for "multiple", as the stem says.
+- explanation: two sentences at most, saying why the right answer or answers fit.
+- why_wrong: one text per choice, in the order of the choices: one sentence saying why that choice does not fit this very scenario; an empty string for the right answers.
+- topic: three to six words naming the notion tested, for example "Bedrock Guardrails, denied topics".
+- task: the task's identifier, for example "3.1".
+- reference: the AWS document to read again, for example "Amazon Bedrock User Guide, Guardrails".
+- domain, difficulty, kind: those of the question's slot.
 
-Services et fonctionnalités dans le périmètre de l'examen : $services.
+Services and features in the exam's scope: $services.
 
 $avoid

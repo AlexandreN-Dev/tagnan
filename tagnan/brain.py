@@ -42,7 +42,7 @@ ISOLATION_FLAGS = (
 )
 # Opus at max effort thinks long: a batch of ten can take minutes, an explanation a minute.
 GENERATE_TIMEOUT, EXPLAIN_TIMEOUT = 600.0, 240.0
-DIFFICULTY_NAMES = {"facile": "faciles", "moyen": "moyennes", "difficile": "difficiles"}
+DIFFICULTIES = ("easy", "medium", "hard")
 
 QUESTION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -50,7 +50,7 @@ QUESTION_SCHEMA: dict[str, Any] = {
         "domain": {"type": "integer"},
         "task": {"type": "string"},
         "topic": {"type": "string"},
-        "difficulty": {"type": "string", "enum": ["facile", "moyen", "difficile"]},
+        "difficulty": {"type": "string", "enum": list(DIFFICULTIES)},
         "kind": {"type": "string", "enum": ["single", "multiple"]},
         "stem": {"type": "string"},
         "choices": {"type": "array", "items": {"type": "string"}, "minItems": 4, "maxItems": 6},
@@ -108,7 +108,7 @@ def claude_binary() -> str:
     default = Path.home() / ".local" / "bin" / "claude"
     if default.exists():
         return str(default)
-    raise BrainError("claude introuvable : installe Claude Code, ou définis TAGNAN_CLAUDE")
+    raise BrainError("claude not found: install Claude Code, or set TAGNAN_CLAUDE")
 
 
 def run_claude(
@@ -153,19 +153,19 @@ def run_claude(
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            raise BrainError(f"claude n'a pas répondu en {timeout:.0f} s") from None
+            raise BrainError(f"claude did not answer within {timeout:.0f} s") from None
     try:
         result = json.loads(done.stdout)
     except json.JSONDecodeError:
         detail = (done.stderr or done.stdout).strip().splitlines()
         raise BrainError(
-            f"claude a échoué (code {done.returncode}) : {detail[-1] if detail else 'sans message'}"
+            f"claude failed (code {done.returncode}): {detail[-1] if detail else 'no message'}"
         ) from None
     if result.get("is_error") or result.get("subtype") != "success":
-        raise BrainError(f"claude a échoué : {str(result.get('result', ''))[:300]}")
+        raise BrainError(f"claude failed: {str(result.get('result', ''))[:300]}")
     structured = result.get("structured_output")
     if not isinstance(structured, dict):
-        raise BrainError("claude n'a pas rendu d'objet structuré")
+        raise BrainError("claude gave no structured answer")
     return structured
 
 
@@ -185,20 +185,19 @@ def generate_prompt(bp: Blueprint, slots: Sequence[Mapping[str, Any]], avoid: Se
         counts[key] = counts.get(key, 0) + 1
     lines = []
     for (domain_id, difficulty, kind), count in sorted(counts.items()):
-        kind_text = "à réponses multiples" if kind == "multiple" else "à réponse unique"
+        kind_text = "multiple-answer" if kind == "multiple" else "single-answer"
         lines.append(
-            f"- {count} question{'s' if count > 1 else ''} du domaine {domain_id}"
-            f" ({bp.domain(domain_id).name}), "
-            f"{DIFFICULTY_NAMES.get(difficulty, difficulty)}, {kind_text}"
+            f"- {count} {difficulty} {kind_text} question{'s' if count > 1 else ''}"
+            f" from domain {domain_id} ({bp.domain(domain_id).name})"
         )
     domains = []
     for domain_id in sorted({d for d, _, _ in counts}):
         domain = bp.domain(domain_id)
-        tasks = "\n".join(f"  - {t.id} {t.title} : {t.notions}" for t in domain.tasks)
-        domains.append(f"Domaine {domain.id}, {domain.name} :\n{tasks}")
+        tasks = "\n".join(f"  - {t.id} {t.title}: {t.notions}" for t in domain.tasks)
+        domains.append(f"Domain {domain.id}, {domain.name}:\n{tasks}")
     avoid_text = (
-        "Ces notions ont déjà été posées récemment : choisis-en d'autres, ou un angle "
-        "nettement différent.\n" + "\n".join(f"- {t}" for t in avoid)
+        "These notions were asked recently: choose others, or a clearly different angle.\n"
+        + "\n".join(f"- {t}" for t in avoid)
         if avoid
         else ""
     )
@@ -218,7 +217,7 @@ def explain_prompt(bp: Blueprint, question: Mapping[str, Any], chosen: Sequence[
     letters = "ABCDEF"
 
     def named(indices: Sequence[int]) -> str:
-        return " et ".join(f"{letters[i]} ({choices[i]})" for i in indices)
+        return " and ".join(f"{letters[i]} ({choices[i]})" for i in indices)
 
     return _template(
         "explain.md",
@@ -226,7 +225,7 @@ def explain_prompt(bp: Blueprint, question: Mapping[str, Any], chosen: Sequence[
         stem=question["stem"],
         choices="\n".join(f"{letters[i]}. {c}" for i, c in enumerate(choices)),
         right=named([int(a) for a in question["answers"]]),
-        chosen=named([int(c) for c in chosen]) or "aucune",
+        chosen=named([int(c) for c in chosen]) or "none",
         explanation=question.get("explanation", ""),
     )
 
@@ -235,7 +234,7 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     bp = blueprints.load(str(request.get("exam", cfg.exam)))
     slots = request.get("slots") or []
     if not slots:
-        raise BrainError("requête sans créneau de question")
+        raise BrainError("request without question slots")
     structured = run_claude(
         generate_prompt(bp, slots, request.get("avoid") or []),
         system=system_prompt(bp),
@@ -253,7 +252,7 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
             continue
         questions.append(data)
     if not questions:
-        raise BrainError("aucune question utilisable : " + "; ".join(rejected[:3]))
+        raise BrainError("no usable question: " + "; ".join(rejected[:3]))
     return {"questions": questions, "rejected": rejected}
 
 
@@ -261,7 +260,7 @@ def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     bp = blueprints.load(str(request.get("exam", cfg.exam)))
     question = request.get("question")
     if not isinstance(question, Mapping):
-        raise BrainError("requête sans question")
+        raise BrainError("request without a question")
     structured = run_claude(
         explain_prompt(bp, question, [int(c) for c in request.get("chosen", [])]),
         system=system_prompt(bp),
@@ -272,12 +271,12 @@ def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     )
     text = " ".join(str(structured.get("text", "")).split())
     if not text:
-        raise BrainError("explication vide")
+        raise BrainError("empty explanation")
     return {"text": text}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="brain", description="Le cerveau de Tagnan")
+    parser = argparse.ArgumentParser(prog="brain", description="Tagnan's brain")
     parser.add_argument("action", choices=["generate", "explain"])
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
@@ -286,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         request = json.loads(sys.stdin.read() or "{}")
         result = generate(request, cfg) if args.action == "generate" else explain(request, cfg)
     except (BrainError, ValueError, KeyError) as error:
-        print(f"cerveau : {error}", file=sys.stderr)
+        print(f"brain: {error}", file=sys.stderr)
         return 1
     sys.stdout.write(json.dumps(result, ensure_ascii=False))
     return 0

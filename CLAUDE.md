@@ -1,4 +1,4 @@
-Tagnan: an ink musketeer who asks AWS certification questions on the Windows desktop (window on Windows, brain in WSL) or on macOS (all on the Mac). Architecture and game rules: README.md.
+Tagnan: an ink musketeer who asks questions on whatever one learns (an AWS certification at first, or any subject: the brain draws up its course) on the Windows desktop (window on Windows, brain in WSL) or on macOS (all on the Mac). Architecture and game rules: README.md.
 
 Conventions: talk with the user in French; everything in the repository is in English (code, identifiers, comments, README, script and setup messages, error messages). Tagnan speaks English too: questions, explanations, bubble, menus and terminal quiz. Small atomic commits, Conventional Commits messages. Public repository: https://github.com/AlexandreN-Dev/tagnan (push only when the user asks).
 
@@ -16,8 +16,8 @@ Commands, from the repository root:
 - Real test against `claude` (uses a little quota, only on request): `uv run pytest -m live`
 - Start Tagnan (detached window, log in `~/.local/state/tagnan/ui.log`): `scripts/tagnan`; in the foreground: `scripts/tagnan-ui`
 - Start menu icon: `scripts/install-shortcut`; start with Windows: `--startup`; `--dry-run`, `--remove` (on a Mac: `~/Applications/Tagnan.app` and the LaunchAgent `local.tagnan`, through `scripts/_mac-app`)
-- Terminal quiz (WSL database, separate from the window's; on a Mac, the same database): `uv run python -m tagnan.cli`; `-n 5`, `--stats`, `--import batch.json`
-- Brain by hand: `scripts/brain generate < request.json`, `scripts/brain explain < request.json`, `scripts/brain check` (one tiny call with the configured model)
+- Terminal quiz (WSL database, separate from the window's; on a Mac, the same database): `uv run python -m tagnan.cli`; `-n 5`, `--stats`, `--learn pottery`, `--subject RAG`, `--import batch.json`
+- Brain by hand: `scripts/brain generate < request.json`, `scripts/brain explain < request.json`, `echo '{"words": "pottery"}' | scripts/brain plan` (a new course's outline), `scripts/brain check` (one tiny call with the configured model)
 - Picture of the window without capturing the screen: `scripts/tagnan-ui --demo question --snapshot <Windows path>`; off screen in WSL: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui --demo question --snapshot build/w.png` (software rendering: no glow)
 - Reference sheet (layers rendered by QtSvg): `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.sheet build/sheet.png`
 - Animation frame by frame: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.preview build/frames.png --mood happy --at 0.1 0.3 0.6`

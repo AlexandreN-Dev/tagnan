@@ -22,7 +22,8 @@ def main() -> int:
     painter = QPainter(image)
     painter.drawImage((256 - figure.width()) // 2, 0, figure)
     painter.end()
-    ok = image.save(sys.argv[1], b"ICO")
+    # The format comes from the .ico suffix: PySide6 refuses it as bytes, the stubs as str.
+    ok = image.save(sys.argv[1])
     del app
     return 0 if ok else 1
 

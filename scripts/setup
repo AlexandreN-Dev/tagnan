@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Tagnan's guided setup, the one command after git clone: checks WSL, installs uv if needed, then
+# hands over to tagnan/setup.py (Claude Code and its login, the Windows side, the settings, a real
+# try of the brain, the shortcuts) and starts Tagnan. Safe to run again.
+#   scripts/setup [--yes | --check]
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -z "${WSL_DISTRO_NAME:-}" ]] || ! command -v wslpath >/dev/null; then
+  echo "Tagnan s'installe depuis WSL : ouvre un terminal Ubuntu sous Windows et relance" >&2
+  echo "scripts/setup de là (WSL s'installe avec « wsl --install » dans PowerShell)." >&2
+  exit 1
+fi
+if ! (cd /mnt/c && cmd.exe /c ver) >/dev/null 2>&1; then
+  echo "WSL ne lance pas les programmes Windows ([interop] enabled=false dans /etc/wsl.conf ?)." >&2
+  echo "Tagnan en a besoin pour sa fenêtre : réactive-le, lance « wsl --shutdown », puis relance." >&2
+  exit 1
+fi
+
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v uv >/dev/null; then
+  installer="curl -LsSf https://astral.sh/uv/install.sh | sh"
+  if [[ " $* " == *" --check "* ]]; then
+    echo "✗ uv absent : scripts/setup l'installe." >&2
+    exit 1
+  fi
+  echo "Tagnan a besoin de uv, qui lui fournit Python 3.12."
+  answer=""
+  if [[ " $* " != *" --yes "* ]]; then
+    read -r -p "  L'installer ($installer) ? [O/n] : " answer || true
+  fi
+  if [[ "${answer,,}" == n* ]]; then
+    echo "Sans uv, rien à faire : relance scripts/setup quand tu veux." >&2
+    exit 1
+  fi
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  echo
+fi
+
+cd "$repo"
+# Standard library only, like the brain: a bare Python 3.12 that uv fetches if needed.
+exec uv run --quiet --no-project --python 3.12 python -B -m tagnan.setup "$@"

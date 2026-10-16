@@ -9,13 +9,14 @@ Contraintes non négociables :
 
 Commandes, depuis la racine du dépôt :
 
-- Installation : `uv sync` ; côté Windows : `scripts/ui-setup` (environnement dans `%LOCALAPPDATA%\tagnan\venv`)
+- Installation guidée (ce que fait un nouvel utilisateur après le clone) : `scripts/setup` ; `--check` sans rien changer, `--yes` toutes les valeurs par défaut. Code dans `tagnan/setup.py`, amorce bash (WSL, uv) dans `scripts/setup`. `--check` ne touche à rien et peut se lancer à volonté ; le mode normal réécrit la config, l'allure de la fenêtre, les raccourcis et lance Tagnan : pas sur la machine de l'utilisateur sans son accord.
+- Développement : `uv sync` ; côté Windows : `scripts/ui-setup` (environnement dans `%LOCALAPPDATA%\tagnan\venv`)
 - Vérifications : `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`
 - Test réel contre `claude` (consomme un peu de quota, seulement à la demande) : `uv run pytest -m live`
 - Démarrer Tagnan (fenêtre détachée, journal dans `~/.local/state/tagnan/ui.log`) : `scripts/tagnan` ; au premier plan : `scripts/tagnan-ui`
 - Icône du menu Démarrer : `scripts/install-shortcut` ; démarrage avec Windows : `--startup` ; `--dry-run`, `--remove`
 - Quiz en terminal (base WSL, distincte de celle de la fenêtre) : `uv run python -m tagnan.cli` ; `-n 5`, `--stats`, `--import lot.json`
-- Cerveau à la main : `scripts/brain generate < requete.json`, `scripts/brain explain < requete.json`
+- Cerveau à la main : `scripts/brain generate < requete.json`, `scripts/brain explain < requete.json`, `scripts/brain check` (un appel minuscule avec le modèle configuré)
 - Image de la fenêtre sans capturer l'écran : `scripts/tagnan-ui --demo question --snapshot <chemin Windows>` ; hors écran dans WSL : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui --demo question --snapshot build/w.png` (rendu logiciel : pas de halo)
 - Planche de référence (calques rendus par QtSvg) : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.sheet build/sheet.png`
 - Animation image par image : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.preview build/frames.png --mood happy --at 0.1 0.3 0.6`

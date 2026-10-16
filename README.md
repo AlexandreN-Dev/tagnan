@@ -6,18 +6,34 @@ Tagnan parle anglais, la langue de l'examen : questions, explications, bulle et 
 
 ## Démarrage rapide
 
-Depuis WSL, à la racine du dépôt :
+Il faut Windows 10 ou 11 avec WSL (Ubuntu ; sinon `wsl --install` dans PowerShell) et un abonnement Claude (Pro, Max, Team ou Enterprise). Dans un terminal Ubuntu :
 
 ```bash
-uv sync                      # l'environnement de développement (WSL)
-scripts/ui-setup             # une fois : l'environnement de la fenêtre, côté Windows
-scripts/tagnan               # Tagnan arrive en bas à droite de l'écran
-scripts/install-shortcut --startup   # facultatif : une icône « Tagnan » au menu Démarrer, et au démarrage de Windows
+git clone <url du dépôt> ~/tagnan && cd ~/tagnan && scripts/setup
 ```
 
-Au premier lancement, il écrit ses dix premières questions (une minute environ), puis pose la première peu après. Ensuite il demande toutes les 8 à 25 minutes, de 9 h à 19 h en semaine, et sonne du clairon à chaque question. L'allure et le son se changent dans son menu, les heures dans `config.example.toml`.
+L'installation guidée vérifie chaque prérequis et installe ce qui manque, en demandant d'abord : uv, Claude Code, le Python 3.12 de Windows (par winget, sans droits admin) et l'environnement de la fenêtre. Elle connecte ton compte Claude (une page de connexion s'ouvre), te demande le modèle, tes heures et l'allure de départ, fait un vrai petit appel à Claude pour vérifier le tout, propose une icône au menu Démarrer et le démarrage avec Windows, puis fait venir Tagnan. Entrée garde la valeur proposée entre crochets.
 
-Il faut : Claude Code installé et connecté dans WSL (`~/.local/bin/claude`), uv, et Python 3.12 côté Windows (le même que pour Dartt).
+Elle se relance sans risque, pour changer ses réponses ou après une mise à jour : ce qui est déjà fait est sauté. `scripts/setup --check` dit ce qui est prêt sans rien changer ; `scripts/setup --yes` prend toutes les valeurs par défaut.
+
+Au premier lancement, il écrit ses dix premières questions (quelques minutes), puis pose la première peu après. Ensuite il demande toutes les 8 à 25 minutes, de 9 h à 19 h en semaine, et sonne du clairon à chaque question. L'allure et le son se changent dans son menu, les heures en relançant `scripts/setup` (ou dans `~/.config/tagnan/config.toml`, voir `config.example.toml`).
+
+Pour relancer Tagnan plus tard : son icône du menu Démarrer, ou `scripts/tagnan`.
+
+<details>
+<summary>Les mêmes étapes, à la main</summary>
+
+```bash
+claude auth login            # Claude Code installé dans ~/.local/bin et connecté
+scripts/ui-setup             # l'environnement de la fenêtre, côté Windows (Python 3.12 Windows requis)
+cp config.example.toml ~/.config/tagnan/config.toml   # facultatif
+scripts/brain check          # un petit appel réel à Claude
+scripts/tagnan               # Tagnan arrive en bas à droite de l'écran
+scripts/install-shortcut --startup   # facultatif : menu Démarrer et démarrage avec Windows
+```
+
+Pour développer : `uv sync`, puis les vérifications de `CLAUDE.md`.
+</details>
 
 ## Avec Tagnan
 

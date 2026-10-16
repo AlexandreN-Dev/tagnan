@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Tagnan's updates from GitHub (tagnan/update.py). His menu's Update calls it through wsl.exe
+# (directly on a Mac), as the window calls the brain. By hand, in a clone:
+#   scripts/update                    take what is new, then say how to see it
+#   scripts/update check              what is new (one line of JSON)
+#   scripts/update apply              take it, a fast-forward only (one line of JSON)
+#   scripts/update restart [--setup]  the window has just quit: its environment again when its
+#                                     pins changed, then Tagnan in his new version
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_mac.sh"
+# wsl.exe -e and launchd start us without a login shell: uv lives in ~/.local/bin, or in
+# Homebrew's folder on macOS.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+cd "$repo"
+
+update() {
+  # Standard library only: a bare Python 3.12, outside the project's development environment.
+  uv run --quiet --no-project --python 3.12 python -B -m tagnan.update "$@"
+}
+
+case "${1:-}" in
+  check | apply)
+    update "$1"
+    ;;
+  restart)
+    if is_mac; then
+      state="$(mac_state_dir)"
+    else
+      state="${XDG_STATE_HOME:-$HOME/.local/state}/tagnan"
+    fi
+    mkdir -p "$state"
+    exec >>"$state/update.log" 2>&1
+    echo "--- $(date '+%Y-%m-%d %H:%M:%S') restart ${2:-}"
+    sleep 2  # the window quits as it starts us: let it be gone before its files are touched
+    if [[ "${2:-}" == "--setup" ]]; then
+      "$repo/scripts/ui-setup" || echo "the window's environment could not be made again"
+    fi
+    exec "$repo/scripts/tagnan"
+    ;;
+  "")
+    update
+    ;;
+  *)
+    echo "Usage: scripts/update [check | apply | restart [--setup]]" >&2
+    exit 2
+    ;;
+esac

@@ -1,8 +1,8 @@
 """Start Tagnan's window: python -m tagnan.ui [--distro NAME --repo PATH] [--config PATH].
 
 On Windows, scripts/tagnan-ui launches it from WSL and tells it where the brain lives (the WSL
-distribution and the repository's path inside it); in WSL itself, for development, the brain
-is called directly.
+distribution and the repository's path inside it); on macOS, and in WSL itself for
+development, the brain is called directly.
 """
 
 import argparse
@@ -176,6 +176,10 @@ def main() -> int:
     app = QApplication(sys.argv[:1])
     app.setApplicationName("Tagnan")
     app.setQuitOnLastWindowClosed(False)
+    if sys.platform == "darwin":
+        from tagnan.ui import macos
+
+        macos.hide_from_dock()
     development = bool(args.snapshot or args.measure_cpu or args.demo)
     lock = QLockFile(str(Path(tempfile.gettempdir()) / "tagnan-ui.lock"))
     if not development and not lock.tryLock(0):
@@ -237,6 +241,9 @@ def main() -> int:
         window.resize(*args.window_size)
     place(window, settings)
     window.show()
+    if sys.platform == "darwin":
+        for each in (window, *window.findChildren(QQuickWindow)):
+            macos.join_all_spaces(int(each.winId()))
 
     # A click outside Tagnan and his bubble closes the bubble (not a question).
     def inside(point: QPoint) -> bool:

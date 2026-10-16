@@ -1,4 +1,4 @@
-"""Tagnan in the terminal (WSL): the same game as the window, one question after another.
+"""Tagnan in the terminal (WSL or macOS): the same game as the window, one question after another.
 
     uv run python -m tagnan.cli            # one question (a batch is written first if needed)
     uv run python -m tagnan.cli -n 5       # five in a row
@@ -6,7 +6,8 @@
     uv run python -m tagnan.cli --subject RAG   # questions on RAG from now on ("all": the exam)
     uv run python -m tagnan.cli --import batch.json   # questions written by scripts/brain
 
-Its database is WSL's (~/.local/state/tagnan), not the window's (on Windows).
+Its database is WSL's (~/.local/state/tagnan), not the window's (on Windows); on macOS both
+share ~/Library/Application Support/tagnan.
 """
 
 import argparse

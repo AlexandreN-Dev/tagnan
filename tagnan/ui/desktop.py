@@ -1,4 +1,4 @@
-"""What the window asks of Windows: is now a good time to pop up? Where is he kept?"""
+"""What the window asks of Windows or macOS: is now a good time to pop up? Where is he kept?"""
 
 import json
 import logging
@@ -15,7 +15,11 @@ WELCOME_STATES = frozenset({5, 6})
 
 def busy() -> bool:
     """True when Windows would hold a notification back: locked session, full-screen
-    application or game, presentation. Never on other systems."""
+    application or game, presentation. On macOS, only a locked screen. Never on other systems."""
+    if sys.platform == "darwin":
+        from tagnan.ui import macos
+
+        return macos.screen_locked()
     if sys.platform == "win32":
         import ctypes
 
@@ -32,6 +36,10 @@ VK_LBUTTON, VK_RBUTTON = 0x01, 0x02
 
 def mouse_down() -> bool:
     """Whether a mouse button is down now, wherever the pointer is. Never on other systems."""
+    if sys.platform == "darwin":
+        from tagnan.ui import macos
+
+        return macos.mouse_down()
     if sys.platform == "win32":
         import ctypes
 

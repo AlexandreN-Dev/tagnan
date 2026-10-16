@@ -1,12 +1,14 @@
 """Tagnan's call: the sound he makes when he asks a question of his own accord, to be heard
 away from the screen. A few to choose from in his menu, or none.
 
-Played with winsound (Python's own, on Windows), as Dartt's sounds are: no Qt Multimedia to
-install. Asynchronous: a new sound cuts the one still playing. The files are synthesized by
+Played with winsound (Python's own, on Windows), as Dartt's sounds are, and with afplay (the
+system's own) on macOS: no Qt Multimedia to install. Asynchronous: a new sound cuts the one
+still playing. The files are synthesized by
 scripts/make-sounds into assets/sounds.
 """
 
 import logging
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -28,7 +30,14 @@ DEFAULT = "bugle"
 CHOICES = frozenset([*(key for key, _ in CALLS), SILENT])
 
 
+AFPLAY = "/usr/bin/afplay"
+_playing: list[subprocess.Popen[bytes]] = []  # macOS: the afplay still playing, if any
+
+
 def play_wav(path: Path) -> None:
+    if sys.platform == "darwin":
+        play_with_afplay(path)
+        return
     if sys.platform != "win32":
         return
     import winsound
@@ -37,6 +46,22 @@ def play_wav(path: Path) -> None:
     winsound.PlaySound(
         str(path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT
     )
+
+
+def play_with_afplay(path: Path) -> None:
+    """macOS: afplay in the background, after silencing the call before it; a missing file stays
+    silent, as on Windows."""
+    while _playing:
+        _playing.pop().terminate()
+    if path.is_file():
+        _playing.append(
+            subprocess.Popen(  # noqa: S603 - fixed program, a path of ours
+                [AFPLAY, str(path)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        )
 
 
 class Sounds:

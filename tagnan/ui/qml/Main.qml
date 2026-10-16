@@ -18,7 +18,11 @@ Window {
     width: figure.width + 2 * figureLeft
     height: figure.height + figureTop
     color: "transparent"
-    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
+    // Out of the taskbar on Windows (a tool window). On macOS a tool window hides whenever
+    // another application is in front, so a plain one: the Dock icon goes otherwise (macos.py).
+    readonly property int kind: Qt.platform.os === "osx" || Qt.platform.os === "macos" ? Qt.Window : Qt.Tool
+
+    flags: kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
            | Qt.NoDropShadowWindowHint
     title: "Tagnan"
 
@@ -86,7 +90,7 @@ Window {
         height: bubble.height + 14
         color: "transparent"
         // It never takes the keyboard, but for a break or a subject typed in words.
-        flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.NoDropShadowWindowHint
+        flags: win.kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.NoDropShadowWindowHint
                | (bubble.mode === "pause" || bubble.mode === "subject" ? 0 : Qt.WindowDoesNotAcceptFocus)
         title: "Tagnan — bubble"
 

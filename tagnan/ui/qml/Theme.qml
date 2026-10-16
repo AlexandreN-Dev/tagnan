@@ -1,4 +1,4 @@
-// The bubble's colours, after Windows' light or dark mode.
+// The bubble's colours, after the system's light or dark mode.
 import QtQuick
 
 QtObject {
@@ -18,5 +18,6 @@ QtObject {
     readonly property color shadow: dark ? "#66000000" : "#33152040"
 
     readonly property string display: "Georgia"
-    readonly property string body: "Segoe UI"
+    // Each system's own interface font (Georgia comes with both).
+    readonly property string body: Qt.platform.os === "osx" || Qt.platform.os === "macos" ? "Helvetica Neue" : "Segoe UI"
 }

@@ -1,4 +1,5 @@
-"""Write Tagnan's icon (the Mousquetaire, 256 px) as an .ico file: python -m tagnan.ui.icon PATH"""
+"""Write Tagnan's icon (the Mousquetaire, 256 px), as .ico for Windows or .png for macOS (the
+format follows the suffix): python -m tagnan.ui.icon PATH"""
 
 import sys
 
@@ -13,7 +14,7 @@ GRADE = 3  # the Mousquetaire: casaque, cross and plume
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("Usage: python -m tagnan.ui.icon PATH.ico", file=sys.stderr)
+        print("Usage: python -m tagnan.ui.icon PATH.ico|PATH.png", file=sys.stderr)
         return 2
     app = QGuiApplication(sys.argv[:1])
     figure = render_svg(art.still_svg(GRADE, glow=False), round(256 * 120 / 140), 256)

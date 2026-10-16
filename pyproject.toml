@@ -1,0 +1,44 @@
+[project]
+name = "tagnan"
+version = "0.1.0"
+description = "Tagnan, a desktop musketeer that quizzes you for an AWS certification through the Claude Code CLI"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# The game, the store and the brain use the standard library only: the same code runs in WSL
+# (brain, terminal quiz, tests) and in the Windows Python of the window (with PySide6).
+dependencies = []
+
+[tool.uv]
+# Not an installable package: modules run from the repository root.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Live tests call the real claude CLI and use quota: opt in with `pytest -m live`.
+addopts = "-ra -m 'not live'"
+markers = ["live: calls the real claude CLI (uses a little quota)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "PT", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use assert, fake programs and subprocess on purpose.
+"tests/**" = ["S101", "S105", "S106", "S311", "S603", "S607"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["tagnan", "tests"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pyside6-essentials==6.12.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]

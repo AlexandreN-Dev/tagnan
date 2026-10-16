@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The brain: writes questions and explanations with the claude CLI (tagnan/brain.py).
+# The window calls it through wsl.exe, the terminal quiz directly:
+#   scripts/brain generate < request.json
+#   scripts/brain explain < request.json
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# wsl.exe -e starts us without a login shell: uv and claude live in ~/.local/bin.
+export PATH="$HOME/.local/bin:$PATH"
+cd "$repo"
+# Standard library only: a bare Python 3.12, outside the project's development environment.
+exec uv run --quiet --no-project --python 3.12 python -B -m tagnan.brain "$@"

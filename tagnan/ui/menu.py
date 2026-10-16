@@ -94,6 +94,11 @@ class Menu(QObject):
     def y(self) -> int:
         return self._y
 
+    @Property(list, notify=changed)
+    def anchor(self) -> list[int]:
+        """The pointer it opened at: the panel grows out of it as it opens."""
+        return list(self._anchor)
+
     @Property(bool, notify=changed)
     def subLeft(self) -> bool:
         """The pace's and the call's lists open on the left: no room on the right."""

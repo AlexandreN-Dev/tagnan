@@ -375,6 +375,7 @@ def test_his_menu_says_where_he_stands(game: Game) -> None:
     menu.changed.connect(lambda: changes.append(1))
     controller.menuRequested.emit(300, 200)
     assert menu.property("shown") is True
+    assert menu.property("anchor") == [300, 200]  # the panel grows out of the pointer
     c = menu.property("content")
     assert (c["grade"], c["stage"], c["share"]) == ("Inkwell", 0, 0.0)
     assert c["points"] == "0 of 250 points to Gascon"
@@ -707,10 +708,17 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         QApplication.processEvents()
         assert popup.isVisible()
         assert popup.property("current") == 0
+        # It grows in frame by frame, from unseen, once placed.
+        from PySide6.QtTest import QTest
+
+        assert popup.property("panelOpacity") < 1
+        QTest.qWait(400)
+        assert popup.property("phase") == 1
+        assert popup.property("panelOpacity") == 1
+        assert popup.property("panelScale") == 1
         # The mouse takes the row it moves onto; only one row is lit, and the highlight goes
         # with it.
         from PySide6.QtCore import QPoint
-        from PySide6.QtTest import QTest
 
         def items(item: QQuickItem) -> list[QQuickItem]:
             return [item] + [d for child in item.childItems() for d in items(child)]
@@ -770,8 +778,12 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         assert [r["action"] for r in popup.property("rows").toVariant()] == ["call:bell"]
         popup.activate(0)
         assert controller.property("call") == "bell"
+        # Closed, it fades out first, then its window goes.
         menu.close()
         QApplication.processEvents()
+        assert popup.isVisible()
+        assert popup.property("closing") is True
+        QTest.qWait(400)
         assert not popup.isVisible()
         window.close()
         del engine  # before the objects it shows

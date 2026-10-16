@@ -2,7 +2,8 @@
 // grade and points at the top, a field to type a command ("break 45", "often", "learn pottery"),
 // then his commands. How often and Sound open their lists beside it. Arrows, Enter and Esc work
 // throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
-// while it is open and never moves: only the panels move within it, so nothing jumps.
+// while it is open and never moves: only the panels move within it, so nothing jumps. It grows
+// out of the pointer as it opens, its shadow with it, and fades as it closes.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
@@ -35,7 +36,7 @@ Window {
     flags: Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
     color: "transparent"
     title: "Tagnan — menu"
-    visible: menu.shown
+    visible: false  // shown by `wanted`, hidden once it has faded out
     x: menu.area[0]
     y: menu.area[1]
     width: menu.area[2]
@@ -142,7 +143,9 @@ Window {
         const chosen = which === "pace" ? c.paceKey : c.callKey
         subCurrent = Math.max(0, choices.findIndex(function(x) { return x.key === chosen }))
         sub = which
-        subIn.restart()
+        subPhase = 0
+        subSpeed = 1 / 0.16
+        update()
     }
     function choose(index) {
         const list = sub === "pace" ? c.paces : c.calls
@@ -152,24 +155,100 @@ Window {
         menu.run(sub + ":" + list[index].key)
     }
 
+    // --- Opening and closing -------------------------------------------------------------------
+    // How far the panel has come in, or gone out: 0 to 1, a step per frame drawn.
+    property real phase: 0
+    property bool closing: false
+    readonly property bool wanted: menu.shown
+    function outQuad(t) { return 1 - Math.pow(1 - t, 2) }
+    function outCubic(t) { return 1 - Math.pow(1 - t, 3) }
+    function outQuint(t) { return 1 - Math.pow(1 - t, 5) }
+    // In: it fades in quickly and grows from 96 % out of the pointer, slowing down to rest.
+    // Out: it fades and shrinks a little, faster.
+    readonly property real panelOpacity: closing ? 1 - phase : outQuad(Math.min(1, phase / 0.7))
+    readonly property real panelScale: closing ? 1 - 0.02 * outCubic(phase) : 0.96 + 0.04 * outQuint(phase)
+
+    function opening() {
+        gone.stop()
+        phaseSpeed = 0
+        closing = false
+        phase = 0
+        sub = ""
+        hover.stop()
+        field.text = ""
+        suggestions = []
+        current = 0
+        keyboard = false
+        pointer = Qt.point(-1, -1)
+        visible = true
+        // Placed with its real size first, still unseen; only then does it grow in.
+        Qt.callLater(function() {
+            if (!win.wanted)
+                return  // closed meanwhile
+            win.menu.place(panel.width, panel.height, 230)
+            win.requestActivate()
+            field.forceActiveFocus()
+            win.phaseSpeed = 1 / 0.2  // in 0.2 s
+            win.update()
+        })
+    }
+    onWantedChanged: {
+        if (wanted) {
+            opening()
+        } else if (visible && !closing) {
+            closing = true
+            phase = 0
+            phaseSpeed = 1 / 0.12
+            update()
+            gone.restart()
+        }
+    }
     onVisibleChanged: {
-        if (visible) {
-            sub = ""
-            hover.stop()
-            field.text = ""
-            suggestions = []
-            current = 0
-            keyboard = false
-            pointer = Qt.point(-1, -1)
-            Qt.callLater(function() {
-                win.menu.place(panel.width, panel.height, 230)
-                win.requestActivate()
-                field.forceActiveFocus()
-            })
-            openIn.restart()
-        } else {
+        if (!visible) {
+            gone.stop()
+            phaseSpeed = 0
+            closing = false
+            phase = 0
             menu.close()  // Qt closed it: a click elsewhere
         }
+    }
+
+    // The menu and its list move by the window's own frames, not by the clock: each frame drawn
+    // takes them a 50th of a second further at most. When Windows is slow to show the window or
+    // to draw a frame, every step still reaches the screen, rather than the panel popping up.
+    property real phaseSpeed: 0  // phase per second, 0 at rest
+    property real subPhase: 1  // the list beside's
+    property real subSpeed: 0
+    property real lastFrame: 0  // ms, 0 at rest
+    onAfterAnimating: {
+        if (phaseSpeed === 0 && subSpeed === 0) {
+            lastFrame = 0
+            return
+        }
+        const now = Date.now()
+        const seconds = lastFrame === 0 ? 1 / 60 : Math.min((now - lastFrame) / 1000, 1 / 50)
+        lastFrame = now
+        if (subSpeed !== 0) {
+            subPhase = Math.min(1, subPhase + seconds * subSpeed)
+            if (subPhase === 1)
+                subSpeed = 0
+        }
+        if (phaseSpeed !== 0) {
+            phase = Math.min(1, phase + seconds * phaseSpeed)
+            if (phase === 1) {
+                phaseSpeed = 0
+                if (closing)
+                    Qt.callLater(function() { if (win.closing) win.visible = false })
+            }
+        }
+        update()
+    }
+    // Should its frames stop as it fades out (a screen asleep), the menu still lets go of the
+    // mouse and the keyboard.
+    Timer {
+        id: gone
+        interval: 500
+        onTriggered: if (win.closing) win.visible = false
     }
     onActiveChanged: if (!active && visible) menu.close()
 
@@ -215,21 +294,16 @@ Window {
         Behavior on height { enabled: placed; NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
     }
 
-    // A soft shadow under each panel, as under the bubble (no effect: it shows everywhere).
+    // A soft shadow under a panel, as under the bubble (no effect: it shows everywhere). Inside
+    // the panel, drawn beneath it, so that it fades and grows with it; it comes in later than
+    // the panel, lest it show through the panel while that is still faint.
     component Shadow: Item {
-        required property Item under
-        x: under.x
-        y: under.y
-        width: under.width
-        height: under.height
-        visible: under.visible
-        opacity: under.opacity
+        z: -1
+        anchors.fill: parent
+        opacity: parent.opacity * parent.opacity
         Rectangle { x: 0; y: 6; width: parent.width; height: parent.height; radius: 16; color: win.theme.shadow; opacity: 0.55 }
         Rectangle { x: 1; y: 3; width: parent.width; height: parent.height; radius: 15; color: win.theme.shadow }
     }
-    Shadow { under: panel }
-    Shadow { under: subPanel }
-
     // --- The menu itself -----------------------------------------------------------------------
     Rectangle {
         id: panel
@@ -240,8 +314,15 @@ Window {
         radius: 14
         color: win.theme.panel
         border.color: win.theme.line
-        opacity: 0
-        transform: Translate { id: panelShift; y: 0 }
+        enabled: !win.closing
+        opacity: win.panelOpacity
+        transform: Scale {
+            origin.x: Math.max(0, Math.min(panel.width, win.menu.anchor[0] - win.menu.x))
+            origin.y: Math.max(0, Math.min(panel.height, win.menu.anchor[1] - win.menu.y))
+            xScale: win.panelScale
+            yScale: win.panelScale
+        }
+        Shadow {}
         // Taller or shorter (a break, words typed): placed again, still on the screen.
         onHeightChanged: if (win.visible) win.menu.place(width, height, subPanel.width)
         // Clicks on the panel itself stay in it (the screen around it closes the menu).
@@ -503,6 +584,10 @@ Window {
         radius: 14
         color: win.theme.panel
         border.color: win.theme.line
+        // It slides out from under the menu as it fades in.
+        opacity: win.outQuad(Math.min(1, win.subPhase / 0.7))
+        transform: Translate { x: (win.subOnLeft ? 6 : -6) * (1 - win.outQuint(win.subPhase)) }
+        Shadow {}
 
         // Clicks on the panel itself stay in it (the screen around it closes the menu).
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
@@ -623,21 +708,5 @@ Window {
             else
                 win.openSub(want, row)
         }
-    }
-
-    // A short fade and rise as it opens, as today's menus do.
-    ParallelAnimation {
-        id: openIn
-        NumberAnimation { target: panel; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.OutCubic }
-        NumberAnimation { target: panelShift; property: "y"; from: 6; to: 0; duration: 160; easing.type: Easing.OutCubic }
-    }
-    NumberAnimation {
-        id: subIn
-        target: subPanel
-        property: "opacity"
-        from: 0
-        to: 1
-        duration: 110
-        easing.type: Easing.OutCubic
     }
 }

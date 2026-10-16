@@ -25,6 +25,11 @@ Window {
     readonly property bool typing: field.text.trim() !== ""
     readonly property var rows: typing ? suggestionRows() : commandRows()
     readonly property bool subOnLeft: sub !== "" && menu.subLeft
+    // Where the list beside starts, from the menu's top: by its row, but kept on the screen,
+    // above the taskbar; when it must start above the menu, the window grows upwards (lift).
+    readonly property real subRel: sub === "" ? 0
+        : Math.max(menu.areaTop - menu.y, Math.min(subTop, menu.areaBottom - menu.y - subPanel.height))
+    readonly property real lift: Math.max(0, -subRel)
 
     // A popup: on top, out of the taskbar, it takes the keyboard and closes on a click elsewhere.
     flags: Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
@@ -32,9 +37,9 @@ Window {
     title: "Tagnan — menu"
     visible: menu.shown
     x: menu.x - pad - (subOnLeft ? subPanel.width + gap : 0)
-    y: menu.y - pad
+    y: menu.y - pad - lift
     width: panel.width + 2 * pad + (sub !== "" ? subPanel.width + gap : 0)
-    height: Math.max(panel.height, sub !== "" ? subPanel.y - pad + subPanel.height : 0) + 2 * pad
+    height: lift + Math.max(panel.height, sub !== "" ? subRel + subPanel.height : 0) + 2 * pad
 
     // Icons, 24 units square, drawn as strokes.
     readonly property var icons: ({
@@ -221,7 +226,7 @@ Window {
     Rectangle {
         id: panel
         x: win.pad + (win.subOnLeft ? subPanel.width + win.gap : 0)
-        y: win.pad
+        y: win.pad + win.lift
         width: 300
         height: column.implicitHeight + 16
         radius: 14
@@ -229,6 +234,8 @@ Window {
         border.color: win.theme.line
         opacity: 0
         transform: Translate { id: panelShift; y: 0 }
+        // Taller or shorter (a break, words typed): placed again, still on the screen.
+        onHeightChanged: if (win.visible) win.menu.place(width, height, subPanel.width)
 
         // One highlight for the whole menu, that slides from row to row: never two rows lit at
         // once, as each row's own fade would leave them for a moment.
@@ -473,9 +480,10 @@ Window {
     // --- How often, or Sound, beside the menu ---------------------------------------------------
     Rectangle {
         id: subPanel
+        objectName: "list"
         visible: win.sub !== ""
         x: win.subOnLeft ? win.pad : panel.x + panel.width + win.gap
-        y: Math.max(win.pad, win.pad + win.subTop)
+        y: win.pad + win.lift + win.subRel
         width: 230
         height: subColumn.implicitHeight + 16
         radius: 14

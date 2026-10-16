@@ -18,7 +18,8 @@ from tagnan.ui.placement import Box, screen_area
 
 logger = logging.getLogger(__name__)
 
-MARGIN = 8  # from the screen's edges
+MARGIN = 16  # from the screen's edges: never against them, let alone past them
+GAP = 6  # between the menu and a list beside it
 MAX_SUGGESTIONS = 6
 COMMANDS = (
     # (action, label, words that find it)
@@ -72,6 +73,7 @@ class Menu(QObject):
         self._anchor = (0, 0)
         self._x = self._y = 0
         self._sub_left = False
+        self._area = Box(0, 0, 1920, 1080)
         controller.menuRequested.connect(self.openAt)
         for signal in (controller.prefsChanged, controller.statusChanged, controller.stageChanged):
             signal.connect(self._refresh)
@@ -94,6 +96,16 @@ class Menu(QObject):
     def subLeft(self) -> bool:
         """The pace's and the call's lists open on the left: no room on the right."""
         return self._sub_left
+
+    @Property(int, notify=changed)
+    def areaTop(self) -> int:
+        """The highest a list beside the menu may start, on the menu's screen."""
+        return self._area.y + MARGIN
+
+    @Property(int, notify=changed)
+    def areaBottom(self) -> int:
+        """The lowest a list beside the menu may end."""
+        return self._area.bottom - MARGIN
 
     @Property(dict, notify=changed)
     def content(self) -> dict[str, Any]:
@@ -153,9 +165,9 @@ class Menu(QObject):
         side."""
         area = screen_area(QPoint(*self._anchor))
         x, y = menu_position(self._anchor, (width, height), area)
-        sub_left = x + width + sub_width > area.right - MARGIN
-        if (x, y, sub_left) != (self._x, self._y, self._sub_left):
-            self._x, self._y, self._sub_left = x, y, sub_left
+        sub_left = x + width + GAP + sub_width > area.right - MARGIN
+        if (x, y, sub_left, area) != (self._x, self._y, self._sub_left, self._area):
+            self._x, self._y, self._sub_left, self._area = x, y, sub_left, area
             self.changed.emit()
 
     def _refresh(self) -> None:

@@ -393,7 +393,7 @@ def test_his_menu_opens_at_the_pointer_and_stays_on_the_screen() -> None:
     assert menu_position((100, 100), (300, 400), area) == (100, 100)
     # Near his corner, bottom right: up and to the left of the pointer.
     assert menu_position((1800, 1000), (300, 400), area) == (1500, 600)
-    assert menu_position((5, 1030), (300, 1200), area) == (8, 8)
+    assert menu_position((5, 1030), (300, 1200), area) == (16, 16)
 
 
 def test_his_menu_runs_its_commands(game: Game) -> None:
@@ -728,6 +728,21 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         popup.findChild(QObject, "field").setProperty("text", "")
         popup.openSub("pace", 4)
         assert popup.property("sub") == "pace"
+        # Opened low on the screen, the list beside stays above its bottom edge, with room.
+        menu.close()
+        bottom = QApplication.primaryScreen().availableGeometry().bottom()
+        menu.openAt(300, bottom - 2)
+        QApplication.processEvents()
+        popup.openSub("pace", 4)
+        QApplication.processEvents()
+        box = popup.findChild(QQuickItem, "list") or next(
+            i for i in items(popup.contentItem()) if i.objectName() == "list"
+        )
+        list_bottom = popup.y() + box.y() + box.height()
+        list_top = popup.y() + box.y()
+        assert list_bottom <= bottom - 15
+        assert list_top >= QApplication.primaryScreen().availableGeometry().top() + 15
+        assert popup.y() + popup.height() <= bottom + 1 + popup.property("pad")
         field = popup.findChild(QObject, "field")
         field.setProperty("text", "bell")
         assert popup.property("sub") == ""  # typing closes the list

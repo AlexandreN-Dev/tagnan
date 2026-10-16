@@ -379,22 +379,34 @@ def eye(cx: float, cy: float, s: float, expression: str, side: int) -> str:
     if expression == "ask" and side == -1:
         ry, y = 10.2 * s, cy - 1.5 * s
     if expression == "angry":
-        ry = 7.4 * s
-    body = f'<ellipse cx="{n(x)}" cy="{n(y)}" rx="{n(4.8 * s)}" ry="{n(ry)}" fill="{CREAM}"/>'
-    if expression == "angry":
         xo, xi = x - side * 5.5 * s, x + side * 5.5 * s
-        body += (
-            f'<path d="M{pt(xo, cy - 9 * s)} L{pt(xi, cy - 9 * s)} L{pt(xi, cy - 1.5 * s)} '
-            f'L{pt(xo, cy - 6.5 * s)} Z" fill="{INK}"/>'
-        )
-    elif expression in ("annoyed", "sulk"):
+        return _lidded(x, cy, 4.8 * s, 7.4 * s, (xi, cy - 1.5 * s), (xo, cy - 6.5 * s))
+    if expression in ("annoyed", "sulk"):
         lid = cy - (1.5 if expression == "annoyed" else 2.5) * s
-        top = cy - 9.5 * s
-        body += (
-            f'<rect x="{n(x - 5.5 * s)}" y="{n(top)}" width="{n(11 * s)}" height="{n(lid - top)}" '
-            f'fill="{INK}"/>'
-        )
-    return body
+        return _lidded(x, cy, 4.8 * s, ry, (x - 5.5 * s, lid), (x + 5.5 * s, lid))
+    return f'<ellipse cx="{n(x)}" cy="{n(y)}" rx="{n(4.8 * s)}" ry="{n(ry)}" fill="{CREAM}"/>'
+
+
+def _lidded(
+    x: float, y: float, rx: float, ry: float, a: tuple[float, float], b: tuple[float, float]
+) -> str:
+    """A capsule eye under its lid: the part of the ellipse below the line through a and b. It is
+    cut out rather than painted over in ink, so that what lies behind the eye shows above the lid
+    (the inkwell's lit band, when he looks up)."""
+    (ax, ay), (bx, by) = a, b
+    px, py, qx, qy = (ax - x) / rx, (ay - y) / ry, (bx - ax) / rx, (by - ay) / ry
+    qa, qb, qc = qx * qx + qy * qy, 2 * (px * qx + py * qy), px * px + py * py - 1
+    disc = qb * qb - 4 * qa * qc
+    if disc <= 0:
+        return f'<ellipse cx="{n(x)}" cy="{n(y)}" rx="{n(rx)}" ry="{n(ry)}" fill="{CREAM}"/>'
+    ends = sorted(
+        (ax + t * (bx - ax), ay + t * (by - ay))
+        for t in ((-qb - math.sqrt(disc)) / (2 * qa), (-qb + math.sqrt(disc)) / (2 * qa))
+    )
+    large = 1 if ay + (by - ay) * (x - ax) / (bx - ax) < y else 0  # the lid is above the middle
+    return (
+        f'<path d="M{pt(*ends[0])} A{n(rx)} {n(ry)} 0 {large} 0 {pt(*ends[1])} Z" fill="{CREAM}"/>'
+    )
 
 
 def _plume(cx: float, yb: float, u: float, fill: str, rib: str) -> str:

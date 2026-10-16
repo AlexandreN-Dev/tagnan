@@ -20,6 +20,18 @@ On his first start he writes his first ten questions (a few minutes), then asks 
 
 To start Tagnan later: his Start menu icon, or `scripts/tagnan`.
 
+### On a Mac
+
+You need macOS 14 (Sonoma) or later, and the same Claude subscription. In Terminal:
+
+```bash
+git clone https://github.com/AlexandreN-Dev/tagnan.git ~/tagnan && cd ~/tagnan && scripts/setup
+```
+
+The same guided setup, without the Windows part: uv, Claude Code, the window's environment (PySide6, in `~/Library/Application Support/tagnan/venv`), your settings, one small real call to Claude, then a "Tagnan" app in `~/Applications` (Launchpad, Spotlight) and, if you like, a start at each sign-in. On a Mac everything runs on the one machine: the window calls the brain directly, and the window and the terminal quiz share one database, in `~/Library/Application Support/tagnan`. Tagnan has no Dock icon: he lives on the desktop and in the menu bar.
+
+What differs from Windows: he holds back only while the screen is locked (not during a presentation), and does not come over a full-screen application; he follows you on every desktop (Spaces). Sounds play through `afplay`, at the Mac's volume.
+
 <details>
 <summary>The same steps, by hand</summary>
 
@@ -42,7 +54,7 @@ To work on the code: `uv sync`, then the checks listed in `CLAUDE.md`.
 - **A dubious question**: "Report" drops it for good, with no points.
 - **A break**: right-click Tagnan (or his tray icon), "A break…". Buttons for 30 min, 1 h, 2 h or until tomorrow, and a field for a duration (`1h`, `1h30`, `45 min`) or a time to come back (`15h30`, `16:45`, `3pm`, `noon`). He shows what he understood before you confirm. A bare time still to come is when he comes back (`15h`), a small number of hours is a duration (`1h`), a time already gone means tomorrow; "for" and "until" settle it.
 - **The pace**: right-click Tagnan, "How often". "Rarely": 2 or 3 questions a day, whatever the working hours; "Now and then": every 45 to 90 min; "Regularly": every 8 to 25 min, the starting pace; "Often": every 5 to 10 min; "Intensive training": every 3 to 5 min. He says so in his bubble, with the time of the next question, and remembers it.
-- **His call**: when he asks a question on his own, he sounds a call, so you hear him away from the screen. Pick one in "Sound": "Bugle call" (the cavalry charge, the default), "Clashing rapiers", "Bell", "Lute", "Kalimba" or "Silent". A click plays the sound and picks it; the menu stays open to hear the others, Esc or a click elsewhere closes it. A question you ask for ("A question now") makes no sound. The volume is Python's, in the Windows volume mixer.
+- **His call**: when he asks a question on his own, he sounds a call, so you hear him away from the screen. Pick one in "Sound": "Bugle call" (the cavalry charge, the default), "Clashing rapiers", "Bell", "Lute", "Kalimba" or "Silent". A click plays the sound and picks it; the menu stays open to hear the others, Esc or a click elsewhere closes it. A question you ask for ("A question now") makes no sound. The volume is Python's, in the Windows volume mixer (on a Mac, the Mac's volume).
 - **Closing a bubble**: a click anywhere else does it, except for a question, which stays until you answer or choose "Later".
 - **Clicking Tagnan**: he winks and splashes (during a break, he tells you until when); three clicks in a row annoy him, six make him sulk. **Drag** him to move him (he remembers his place). **Right-click** him or use the tray icon: a question now, progress, pace, sound, a break, quit.
 - He stays hidden during a full-screen application, a presentation or while the session is locked, and so makes no sound either: if Windows locks the session after a few idle minutes, he keeps quiet until you are back.
@@ -72,10 +84,10 @@ Windows                                          WSL (Ubuntu)
 └──────────────────────────────────────┘   JSON   └──────────────────────────────────┘
 ```
 
-- **The window** (`tagnan/ui/`) runs on Windows' Python and reads this repository's code through `\\wsl.localhost`. It holds all the state: the SQLite database of questions, answers and reviews, and its settings (its place, pace and call, in `settings.json`), in `%LOCALAPPDATA%\tagnan`. The pace chosen in the menu replaces the gaps of the config file.
-- **The brain** (`tagnan/brain.py`, `scripts/brain`) runs in WSL and has no state: a JSON request on stdin, a JSON answer on stdout. It runs `claude -p` isolated from your own Claude Code setup (allowlisted environment variables, `--setting-sources user`, `--strict-mcp-config`, `disableAllHooks`), with `--tools ""` in an empty folder, and validates the output with `--json-schema`. Questions are written ten at a time, in the background, when fewer than five are left: you never wait for Claude to get a question.
+- **The window** (`tagnan/ui/`) runs on Windows' Python and reads this repository's code through `\\wsl.localhost` (on a Mac, on its own Python next to the brain; what it asks of macOS is in `tagnan/ui/macos.py`). It holds all the state: the SQLite database of questions, answers and reviews, and its settings (its place, pace and call, in `settings.json`), in `%LOCALAPPDATA%\tagnan` (on a Mac, `~/Library/Application Support/tagnan`). The pace chosen in the menu replaces the gaps of the config file.
+- **The brain** (`tagnan/brain.py`, `scripts/brain`) runs in WSL (or on the Mac) and has no state: a JSON request on stdin, a JSON answer on stdout. It runs `claude -p` isolated from your own Claude Code setup (allowlisted environment variables, `--setting-sources user`, `--strict-mcp-config`, `disableAllHooks`), with `--tools ""` in an empty folder, and validates the output with `--json-schema`. Questions are written ten at a time, in the background, when fewer than five are left: you never wait for Claude to get a question.
 - **The game** (`tagnan/game.py`, `progress.py`, `scheduler.py`, `pause.py`, `store.py`, `model.py`) uses only the standard library and is tested in WSL. Each generated question is checked (domain, task, number of right answers, one explanation per wrong choice) and its choices are shuffled before it is stored. Each question records its language: those written in French in early versions stay in the database but are no longer asked.
-- **The sounds** (`assets/sounds/`) are synthesized by `scripts/make-sounds`: standard library, no sound bank, the same loudness for all (−16 LUFS). The window plays them with `winsound`, without Qt Multimedia.
+- **The sounds** (`assets/sounds/`) are synthesized by `scripts/make-sounds`: standard library, no sound bank, the same loudness for all (−16 LUFS). The window plays them with `winsound` (on a Mac, `afplay`), without Qt Multimedia.
 - **The exam outline** (`exam/aif-c01.toml`) gives the five domains, their weights and the notions of each task, from the official exam guide. For another exam, add another file and set `exam = "…"` in the config.
 - **Tagnan** (`tagnan/art.py`) is drawn flat and cut into layers: the window draws the rippling ink and the drops, and animates the SVG layers (eyes, mouth, hat, plumes, rapier…) with a rig (`tagnan/ui/animation/`): springs, blinks, eyes that follow the mouse, random gestures, taps.
 

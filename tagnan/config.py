@@ -16,14 +16,14 @@ EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")  # claude --effort
 @dataclass(frozen=True)
 class Brain:
     model: str = "claude-opus-5-5"  # writes the questions
-    explain_model: str = "claude-opus-5-5"  # « Explique-moi plus »
+    explain_model: str = "claude-opus-5-5"  # "Tell me more"
     effort: str = "max"
     explain_effort: str = "max"
 
     def __post_init__(self) -> None:
         for name in ("effort", "explain_effort"):
             if getattr(self, name) not in EFFORT_LEVELS:
-                raise ValueError(f"{name} doit être l'un de : {', '.join(EFFORT_LEVELS)}")
+                raise ValueError(f"{name} must be one of: {', '.join(EFFORT_LEVELS)}")
 
 
 @dataclass(frozen=True)
@@ -35,15 +35,15 @@ class Config:
 
 def _section(cls: type[Any], data: object, name: str) -> Any:
     if not isinstance(data, dict):
-        raise ValueError(f"config : [{name}] doit être une section")
+        raise ValueError(f"config: [{name}] must be a section")
     known = {f.name: f.type for f in fields(cls)}
     unknown = sorted(set(data) - set(known))
     if unknown:
-        raise ValueError(f"config : clé inconnue dans [{name}] : {', '.join(unknown)}")
+        raise ValueError(f"config: unknown key in [{name}]: {', '.join(unknown)}")
     try:
         return cls(**data)
     except (TypeError, ValueError) as error:
-        raise ValueError(f"config : [{name}] : {error}") from None
+        raise ValueError(f"config: [{name}]: {error}") from None
 
 
 def load(path: Path) -> Config:
@@ -52,13 +52,13 @@ def load(path: Path) -> Config:
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as error:
-        raise ValueError(f"config : {path} illisible : {error}") from None
+        raise ValueError(f"config: cannot read {path}: {error}") from None
     unknown = sorted(set(data) - {"exam", "rhythm", "brain"})
     if unknown:
-        raise ValueError(f"config : clé inconnue : {', '.join(unknown)}")
+        raise ValueError(f"config: unknown key: {', '.join(unknown)}")
     exam = data.get("exam", Config.exam)
     if not isinstance(exam, str):
-        raise ValueError("config : exam doit être un nom de fichier de exam/, sans .toml")
+        raise ValueError("config: exam must be the name of a file in exam/, without .toml")
     return Config(
         exam=exam,
         rhythm=_section(Rhythm, data.get("rhythm", {}), "rhythm"),

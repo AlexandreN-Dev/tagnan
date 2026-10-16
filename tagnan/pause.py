@@ -1,8 +1,8 @@
 """What a break can be: for a while (1h, 1h30, 45 min) or until a time (15:30, 3pm, noon).
 
-A bare hour is read the way one says it: a time still to come today (« 15h », « 15:30 ») is
-when he comes back; a small number of hours (« 1h », « 2h30 ») is how long he waits; a time
-already gone (« 10h » in the afternoon) is tomorrow morning's. « for » or « until » settle it
+A bare hour is read the way one says it: a time still to come today ("15h", "15:30") is
+when he comes back; a small number of hours ("1h", "2h30") is how long he waits; a time
+already gone ("10h" in the afternoon) is tomorrow morning's. "for" or "until" settle it
 either way, and the bubble shows what he understood before it is confirmed. English and French
 words both work: Tagnan speaks English, the one who types may not.
 """
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 MAX_MINUTES = 7 * 24 * 60
-SHORT_HOURS = 5  # « 1h » to « 5h »: a while, not a time of night
+SHORT_HOURS = 5  # "1h" to "5h": a while, not a time of night
 
 FOR_A_WHILE = r"^(for|in|pendant|pour|\+)\s*"
 UNTIL = r"^(until|till|til|at|to|jusqu'?a|a)\s+|^(jusqu'?a)"
@@ -71,7 +71,7 @@ def parse(text: str, now: float, morning_hour: int = 9) -> Pause | None:
         minutes = int(match[1])
     elif match := re.fullmatch(r"(\d{1,3})", body):
         value = int(match[1])
-        minutes = value * 60 if value < 10 else value  # « 2 » is two hours, « 30 » half an hour
+        minutes = value * 60 if value < 10 else value  # "2" is two hours, "30" half an hour
     elif match := re.fullmatch(rf"(\d{{1,2}})(?:{HOURS}|:)(\d{{1,2}})?{MINUTES}?", body):
         hour, minute = int(match[1]), int(match[2] or 0)
         if minute >= 60:
@@ -89,7 +89,7 @@ def parse(text: str, now: float, morning_hour: int = 9) -> Pause | None:
 
 
 def clock(when: float, now: float) -> str:
-    """« 15:30 », « tomorrow at 9:00 », « Monday at 9:00 »."""
+    """Like "15:30", "tomorrow at 9:00" or "Monday at 9:00"."""
     moment, today = datetime.fromtimestamp(when), datetime.fromtimestamp(now)
     hour = f"{moment.hour}:{moment.minute:02d}"
     days = (moment.date() - today.date()).days
@@ -101,7 +101,7 @@ def clock(when: float, now: float) -> str:
 
 
 def duration(minutes: float) -> str:
-    """« 45 min », « 1 hour », « 1 hour 30 min », « 2 hours »."""
+    """Like "45 min", "1 hour", "1 hour 30 min" or "2 hours"."""
     total = round(minutes)
     hours, rest = divmod(total, 60)
     if not hours:
@@ -111,8 +111,8 @@ def duration(minutes: float) -> str:
 
 
 def describe(pause: Pause, now: float) -> str:
-    """What the bubble says before it is confirmed: « A break of 1 hour 30 min, back at
-    12:50 », « A break until 15:30 », « A break until tomorrow at 9:00 »."""
+    """What the bubble says before it is confirmed: "A break of 1 hour 30 min, back at
+    12:50", "A break until 15:30", "A break until tomorrow at 9:00"."""
     back = clock(pause.until, now)
     if pause.minutes is not None:
         when = f"at {back}" if back[0].isdigit() else back

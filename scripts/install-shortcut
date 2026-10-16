@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A « Tagnan » entry in the Windows Start menu, and with --startup one in the Startup folder too
+# A "Tagnan" entry in the Windows Start menu, and with --startup one in the Startup folder too
 # (he then comes along at each logon). The shortcut starts the window's pythonw.exe (no console)
 # on this repository, read through \\wsl.localhost; it calls the brain back through wsl.exe.
 #   scripts/install-shortcut [--startup]   create them (or update them)
@@ -17,7 +17,7 @@ for arg in "$@"; do
     --dry-run) mode="dry-run" ;;
     --remove) mode="remove" ;;
     --startup) startup=true ;;
-    *) echo "Usage : scripts/install-shortcut [--startup] [--dry-run | --remove]" >&2; exit 2 ;;
+    *) echo "Usage: scripts/install-shortcut [--startup] [--dry-run | --remove]" >&2; exit 2 ;;
   esac
 done
 
@@ -32,7 +32,7 @@ icon="$(windows_localappdata)\\tagnan\\tagnan.ico"
 if [[ "$mode" == "remove" ]]; then
   for link in "${links[@]}"; do rm -f "$(wslpath -u "$link")"; done
   rm -f "$(wslpath -u "$icon")"
-  echo "Raccourcis retirés."
+  echo "Shortcuts removed."
   exit 0
 fi
 
@@ -43,13 +43,13 @@ arguments="-B -m tagnan.ui"
 for value in "${where[@]}"; do arguments+=" \"$value\""; done
 workdir="$(wslpath -w "$repo")"
 
-for link in "${links[@]}"; do echo "Raccourci : $link"; done
-echo "  cible     : $pythonw"
+for link in "${links[@]}"; do echo "Shortcut: $link"; done
+echo "  target    : $pythonw"
 echo "  arguments : $arguments"
-echo "  dossier   : $workdir"
-echo "  icône     : $icon"
+echo "  folder    : $workdir"
+echo "  icon      : $icon"
 if [[ "$mode" == "dry-run" ]]; then
-  echo "(--dry-run : rien n'est écrit)"
+  echo "(--dry-run: nothing written)"
   exit 0
 fi
 
@@ -70,10 +70,10 @@ trap 'rm -f "$script"' EXIT
 \$shortcut.Arguments = $(quote "$arguments")
 \$shortcut.WorkingDirectory = $(quote "$workdir")
 \$shortcut.IconLocation = $(quote "$icon")
-\$shortcut.Description = 'Tagnan, ton mousquetaire de révision AWS'
+\$shortcut.Description = 'Tagnan, your AWS revision musketeer'
 \$shortcut.Save()
 EOF
   done
 } >"$script"
 (cd /mnt/c && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$(wslpath -w "$script")")
-echo "C'est fait : « Tagnan » est dans le menu Démarrer$([[ "$startup" == true ]] && echo ", et démarre avec Windows")."
+echo "Done: \"Tagnan\" is in the Start menu$([[ "$startup" == true ]] && echo ", and starts with Windows")."

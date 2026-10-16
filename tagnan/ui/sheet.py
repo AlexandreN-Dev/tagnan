@@ -46,7 +46,7 @@ def sheet(grade: int, background: QColor) -> QImage:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Planche de référence de Tagnan")
+    parser = argparse.ArgumentParser(description="Tagnan's reference sheet")
     parser.add_argument("out", type=Path)
     parser.add_argument("--grade", type=int, default=5, choices=range(6))
     parser.add_argument("--light", action="store_true", help="fond clair")

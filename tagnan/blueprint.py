@@ -46,7 +46,7 @@ def load(key: str, directory: Path = EXAMS_DIR) -> Blueprint:
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise ValueError(f"examen inconnu : {key} (pas de fichier {path})") from None
+        raise ValueError(f"unknown exam: {key} (no file {path})") from None
     domains = tuple(
         Domain(
             id=int(d["id"]),
@@ -64,7 +64,7 @@ def load(key: str, directory: Path = EXAMS_DIR) -> Blueprint:
         for d in data["domains"]
     )
     if not domains or any(not d.tasks or d.weight <= 0 for d in domains):
-        raise ValueError(f"{path} : chaque domaine doit avoir un poids et au moins une tâche")
+        raise ValueError(f"{path}: each domain needs a weight and at least one task")
     return Blueprint(
         key=key,
         code=str(data["code"]),

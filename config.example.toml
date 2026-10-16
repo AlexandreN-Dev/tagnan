@@ -6,10 +6,10 @@ exam = "aif-c01"
 
 [rhythm]
 # A question every 8 to 25 minutes, at random, from 9:00 to 19:00, weekdays only. Once a pace
-# is chosen in his menu (« How often »), it takes the place of these two gaps.
+# is chosen in his menu ("How often"), it takes the place of these two gaps.
 min_minutes = 8
 max_minutes = 25
-snooze_minutes = 10  # « Plus tard »
+snooze_minutes = 10  # "Later"
 start_hour = 9
 end_hour = 19
 weekends = false
@@ -17,7 +17,7 @@ weekends = false
 [brain]
 # A model's full name, or one of Claude Code's aliases (claude --help): sonnet, opus, fable, haiku.
 model = "claude-opus-5-5"  # writes the questions, ten at a time
-explain_model = "claude-opus-5-5"  # « Explique-moi plus »
+explain_model = "claude-opus-5-5"  # "Tell me more"
 # How long the model thinks (claude --effort): low, medium, high, xhigh, max.
 effort = "max"
 explain_effort = "max"

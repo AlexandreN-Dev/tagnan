@@ -27,7 +27,7 @@ class Pace:
 
     @property
     def hint(self) -> str:
-        """« 2 or 3 a day », « every 3 to 5 min »: beside its name, in his menu."""
+        """Like "2 or 3 a day" or "every 3 to 5 min": beside its name, in his menu."""
         if self.per_day is not None:
             return f"{self.per_day[0]} or {self.per_day[1]} a day"
         return f"every {self.every[0]:g} to {self.every[1]:g} min"

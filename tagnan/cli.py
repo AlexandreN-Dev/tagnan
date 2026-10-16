@@ -153,7 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         outcome = game.answer(question, chosen, time.time())
         tell(outcome, rng)
         if not outcome.correct and sys.stdin.isatty():
-            more = input("  Enter to go on, « e » for a longer explanation: ")
+            more = input("  Enter to go on, 'e' for a longer explanation: ")
             if more.strip().lower() == "e":
                 try:
                     print(

@@ -25,7 +25,7 @@ FIGURE_W, FIGURE_H = 180, 210
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Aperçu de la figure QML")
+    parser = argparse.ArgumentParser(description="Preview of the QML figure")
     parser.add_argument("out", type=Path)
     parser.add_argument("--grades", type=int, nargs="+", default=list(range(6)))
     parser.add_argument("--mood", default="idle", choices=["idle", "ask", "happy", "angry"])

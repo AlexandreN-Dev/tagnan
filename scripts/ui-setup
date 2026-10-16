@@ -8,15 +8,15 @@ source "$repo/scripts/_windows.sh"
 base="$(windows_base_python)"
 venv_dir="$(windows_venv_dir)"
 if [[ ! -x "$base" ]]; then
-  echo "Python Windows introuvable : $base (définis TAGNAN_WIN_PYTHON pour un autre chemin)." >&2
+  echo "Windows Python not found: $base (set TAGNAN_WIN_PYTHON for another path)." >&2
   exit 1
 fi
 cd /mnt/c
 if [[ ! -x "$venv_dir/Scripts/python.exe" ]]; then
-  echo "Création de l'environnement Windows dans $(wslpath -w "$venv_dir")"
+  echo "Creating the Windows environment in $(wslpath -w "$venv_dir")"
   "$base" -m venv "$(wslpath -w "$venv_dir")"
 fi
-echo "Installation des dépendances (versions et empreintes vérifiées)…"
+echo "Installing the dependencies (versions and hashes checked)…"
 "$venv_dir/Scripts/python.exe" -m pip install --quiet --disable-pip-version-check --require-hashes \
   --no-deps -r "$(wslpath -w "$repo/tagnan/ui/requirements.txt")"
-echo "Environnement Windows prêt. Lance Tagnan avec scripts/tagnan."
+echo "Windows environment ready. Start Tagnan with scripts/tagnan."

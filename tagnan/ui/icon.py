@@ -13,7 +13,7 @@ GRADE = 3  # the Mousquetaire: casaque, cross and plume
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("Usage : python -m tagnan.ui.icon CHEMIN.ico", file=sys.stderr)
+        print("Usage: python -m tagnan.ui.icon PATH.ico", file=sys.stderr)
         return 2
     app = QGuiApplication(sys.argv[:1])
     figure = render_svg(art.still_svg(GRADE, glow=False), round(256 * 120 / 140), 256)

@@ -45,10 +45,10 @@ def test_offered_models_start_with_the_default() -> None:
 
 
 def test_account_tells_subscription_from_api_billing() -> None:
-    assert setup.account({}) == (False, "pas connecté")
+    assert setup.account({}) == (False, "not signed in")
     assert setup.account({"loggedIn": False, "authMethod": "claude.ai"})[0] is False
     team = {"loggedIn": True, "authMethod": "claude.ai", "subscriptionType": "team"}
-    assert setup.account(team) == (True, "abonnement team")
+    assert setup.account(team) == (True, "team subscription")
     signed_in, detail = setup.account({"loggedIn": True, "authMethod": "console"})
     assert signed_in
     assert "API" in detail
@@ -66,14 +66,14 @@ def test_questions_take_the_default_on_enter_yes_or_end_of_input() -> None:
 
 
 def test_questions_insist_until_the_answer_makes_sense() -> None:
-    term, out = terminal("peut-être", "n", "7", "2", "25", "18h")
+    term, out = terminal("maybe", "n", "7", "2", "25", "18h")
     assert term.yes("Go?") is False
     assert term.choose("Which?", [("a", ""), ("b", "")]) == 1
     assert term.hour("Until?", 19) == 18
     text = out.getvalue()
-    assert "Réponds o ou n." in text
-    assert "Un nombre de 1 à 2." in text
-    assert "Une heure de 0 à 24" in text
+    assert "Answer y or n." in text
+    assert "A number from 1 to 2." in text
+    assert "An hour from 0 to 24" in text
 
 
 def test_no_colour_outside_a_terminal() -> None:

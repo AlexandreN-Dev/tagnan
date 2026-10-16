@@ -112,7 +112,7 @@ class Game:
 
     def answer(self, question: Question, chosen: Iterable[int], now: float) -> Outcome:
         if question.id is None:
-            raise ValueError("question absente de la base")
+            raise ValueError("question not in the database")
         picked = tuple(sorted(set(chosen)))
         correct = question.is_correct(picked)
         before = self.progress

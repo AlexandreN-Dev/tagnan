@@ -7,13 +7,13 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -z "${WSL_DISTRO_NAME:-}" ]] || ! command -v wslpath >/dev/null; then
-  echo "Tagnan s'installe depuis WSL : ouvre un terminal Ubuntu sous Windows et relance" >&2
-  echo "scripts/setup de là (WSL s'installe avec « wsl --install » dans PowerShell)." >&2
+  echo "Tagnan is set up from WSL: open an Ubuntu terminal on Windows and run scripts/setup" >&2
+  echo "from there (install WSL with \"wsl --install\" in PowerShell)." >&2
   exit 1
 fi
 if ! (cd /mnt/c && cmd.exe /c ver) >/dev/null 2>&1; then
-  echo "WSL ne lance pas les programmes Windows ([interop] enabled=false dans /etc/wsl.conf ?)." >&2
-  echo "Tagnan en a besoin pour sa fenêtre : réactive-le, lance « wsl --shutdown », puis relance." >&2
+  echo "WSL cannot start Windows programs ([interop] enabled=false in /etc/wsl.conf?)." >&2
+  echo "Tagnan's window needs it: turn it back on, run \"wsl --shutdown\", then try again." >&2
   exit 1
 fi
 
@@ -21,16 +21,16 @@ export PATH="$HOME/.local/bin:$PATH"
 if ! command -v uv >/dev/null; then
   installer="curl -LsSf https://astral.sh/uv/install.sh | sh"
   if [[ " $* " == *" --check "* ]]; then
-    echo "✗ uv absent : scripts/setup l'installe." >&2
+    echo "✗ uv is missing: scripts/setup installs it." >&2
     exit 1
   fi
-  echo "Tagnan a besoin de uv, qui lui fournit Python 3.12."
+  echo "Tagnan needs uv, which provides his Python 3.12."
   answer=""
   if [[ " $* " != *" --yes "* ]]; then
-    read -r -p "  L'installer ($installer) ? [O/n] : " answer || true
+    read -r -p "  Install it ($installer)? [Y/n]: " answer || true
   fi
   if [[ "${answer,,}" == n* ]]; then
-    echo "Sans uv, rien à faire : relance scripts/setup quand tu veux." >&2
+    echo "Nothing to do without uv: run scripts/setup again whenever you like." >&2
     exit 1
   fi
   curl -LsSf https://astral.sh/uv/install.sh | sh

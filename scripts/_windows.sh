@@ -46,7 +46,7 @@ require_windows_venv() {
   local python
   python="$(windows_venv_python)"
   if [[ ! -x "$python" ]]; then
-    echo "Environnement Windows absent : lance d'abord scripts/ui-setup." >&2
+    echo "No Windows environment: run scripts/setup (or scripts/ui-setup) first." >&2
     exit 1
   fi
   echo "$python"
@@ -56,6 +56,6 @@ require_windows_venv() {
 window_arguments() {
   local repo="$1"
   local config="${XDG_CONFIG_HOME:-$HOME/.config}/tagnan/config.toml"
-  printf '%s\n' --distro "${WSL_DISTRO_NAME:?lance ce script depuis WSL}" --repo "$repo" \
+  printf '%s\n' --distro "${WSL_DISTRO_NAME:?run this script from WSL}" --repo "$repo" \
     --config "$(wslpath -w "$config")"
 }

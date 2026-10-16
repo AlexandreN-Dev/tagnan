@@ -99,7 +99,7 @@ def test_claude_errors_become_messages(fake_claude: Path) -> None:
     answer(fake_claude, None, is_error=True, subtype="error", result="usage limit reached")
     with pytest.raises(brain.BrainError, match="usage limit"):
         brain.explain({"question": question_data(), "chosen": [1]}, config.Config())
-    answer(fake_claude, {"questions": [question_data(kind="poème")]})
+    answer(fake_claude, {"questions": [question_data(kind="poem")]})
     with pytest.raises(brain.BrainError, match="no usable question"):
         brain.generate(
             {"slots": [{"domain": 1, "difficulty": "easy", "kind": "single"}]}, config.Config()
@@ -161,16 +161,16 @@ def test_script_runs_the_brain_end_to_end(fake_claude: Path) -> None:
 
 def test_client_reports_the_brain_error(tmp_path: Path) -> None:
     script = tmp_path / "brain"
-    script.write_text("#!/bin/sh\necho 'cerveau : claude introuvable' >&2\nexit 1\n")
+    script.write_text("#!/bin/sh\necho 'brain: claude not found' >&2\nexit 1\n")
     script.chmod(0o755)
-    with pytest.raises(BrainError, match="claude introuvable"):
+    with pytest.raises(BrainError, match="claude not found"):
         BrainClient((str(script),)).explain({}, timeout=10)
 
 
 def test_wsl_command_and_utf16_messages() -> None:
     client = BrainClient.through_wsl("Ubuntu", "/home/me/tagnan/")
     assert client.command == ("wsl.exe", "-d", "Ubuntu", "-e", "/home/me/tagnan/scripts/brain")
-    assert decode("Distribution introuvable".encode("utf-16-le")) == "Distribution introuvable"
+    assert decode("Distribution not found".encode("utf-16-le")) == "Distribution not found"
     assert decode("é".encode()) == "é"
 
 

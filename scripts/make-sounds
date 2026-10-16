@@ -65,7 +65,7 @@ def brass(freq: float, seconds: float, vibrato: float = 0.0) -> Samples:
 
 
 def bugle() -> Samples:
-    """The cavalry's « Charge! » on a natural bugle in C: G C E G, E G."""
+    """The cavalry's "Charge!" on a natural bugle in C: G C E G, E G."""
     c3 = 130.8128
     g4, c5, e5, g5 = 3 * c3, 4 * c3, 5 * c3, 6 * c3  # harmonics: its E is a little flat
     notes = [

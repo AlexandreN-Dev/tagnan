@@ -142,36 +142,32 @@ def demo(controller: Controller, what: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Fenêtre de Tagnan")
-    parser.add_argument("--distro", help="distribution WSL du cerveau (depuis Windows)")
-    parser.add_argument("--repo", help="chemin du dépôt dans WSL (depuis Windows)")
+    parser = argparse.ArgumentParser(description="Tagnan's window")
+    parser.add_argument("--distro", help="the brain's WSL distribution (from Windows)")
+    parser.add_argument("--repo", help="the repository's path in WSL (from Windows)")
     parser.add_argument("--config", type=Path, default=config_file())
     parser.add_argument("--db", type=Path, default=state_dir() / "tagnan.db")
-    parser.add_argument("--reduced-motion", action="store_true", help="mouvements réduits")
+    parser.add_argument("--reduced-motion", action="store_true", help="reduced motion")
     parser.add_argument(
-        "--snapshot", type=Path, help="développement : image de la fenêtre, puis quitter"
+        "--snapshot", type=Path, help="development: picture of the window, then quit"
     )
-    parser.add_argument("--snapshot-delay", type=int, default=2500, help="en millisecondes")
+    parser.add_argument("--snapshot-delay", type=int, default=2500, help="in milliseconds")
     parser.add_argument(
         "--demo",
         choices=["question", "result-right", "result-wrong", "stats", "quip", "pause", "subject"],
-        help="développement : afficher tout de suite une bulle",
+        help="development: show a bubble right away",
     )
+    parser.add_argument("--grade", type=int, choices=range(6), help="development: force a grade")
     parser.add_argument(
-        "--grade", type=int, choices=range(6), help="développement : forcer un grade"
+        "--measure-cpu", type=float, metavar="SECONDS", help="measure the CPU, then quit"
     )
-    parser.add_argument(
-        "--measure-cpu", type=float, metavar="SECONDES", help="mesurer le CPU, puis quitter"
-    )
-    parser.add_argument("--fps", type=int, default=30, help="développement : images par seconde")
-    parser.add_argument(
-        "--window-size", type=int, nargs=2, help="développement : taille de la fenêtre"
-    )
+    parser.add_argument("--fps", type=int, default=30, help="development: frames per second")
+    parser.add_argument("--window-size", type=int, nargs=2, help="development: window size")
     parser.add_argument(
         "--ripple-rate",
         type=int,
         default=15,
-        help="développement : contours de l'encre par seconde",
+        help="development: ink outlines per second",
     )
     args = parser.parse_args()
 
@@ -298,8 +294,8 @@ def measure(seconds: float, leave: Callable[[int], None]) -> None:
         cpu, wall = time.process_time() - start_cpu, time.monotonic() - start_wall
         cores = os.cpu_count() or 1
         print(
-            f"CPU de la fenêtre sur {wall:.0f} s : {100 * cpu / wall / cores:.2f} % de la machine "
-            f"({100 * cpu / wall:.1f} % d'un cœur)",
+            f"Window CPU over {wall:.0f} s: {100 * cpu / wall / cores:.2f} % of the machine "
+            f"({100 * cpu / wall:.1f} % of one core)",
             flush=True,
         )
         leave(0)

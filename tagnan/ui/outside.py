@@ -1,4 +1,4 @@
-"""A click anywhere else closes the bubble, as « Close » does.
+"""A click anywhere else closes the bubble, as "Close" does.
 
 The bubble never takes the keyboard, so Windows does not tell it when one clicks elsewhere:
 while a bubble that may close is up, the mouse buttons are looked at a few times a second, and

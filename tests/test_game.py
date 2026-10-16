@@ -115,7 +115,7 @@ def test_config_defaults_and_errors(tmp_path: Path) -> None:
     path.write_text('exam = "aif-c01"\n[rhythm]\nmin_minutes = 2\nmax_minutes = 3\n')
     assert config.load(path).rhythm.max_minutes == 3
     path.write_text("[rhythm]\nmin_minute = 2\n")
-    with pytest.raises(ValueError, match="clé inconnue dans \\[rhythm\\] : min_minute"):
+    with pytest.raises(ValueError, match="unknown key in \\[rhythm\\]: min_minute"):
         config.load(path)
     path.write_text("[rhythm]\nmin_minutes = 30\n")
     with pytest.raises(ValueError, match="min_minutes"):
@@ -123,7 +123,7 @@ def test_config_defaults_and_errors(tmp_path: Path) -> None:
     path.write_text('[brain]\nmodel = "sonnet"\nexplain_effort = "low"\n')
     assert config.load(path).brain == config.Brain(model="sonnet", explain_effort="low")
     path.write_text('[brain]\neffort = "maximal"\n')
-    with pytest.raises(ValueError, match="\\[brain\\] : effort doit être l'un de"):
+    with pytest.raises(ValueError, match="\\[brain\\]: effort must be one of"):
         config.load(path)
 
 

@@ -51,18 +51,18 @@ class BrainClient:
                 **extra,
             )
         except subprocess.TimeoutExpired:
-            raise BrainError(f"le cerveau n'a pas répondu en {timeout:.0f} s") from None
+            raise BrainError(f"the brain did not answer within {timeout:.0f} s") from None
         except OSError as error:
-            raise BrainError(f"impossible de lancer le cerveau : {error}") from None
+            raise BrainError(f"cannot start the brain: {error}") from None
         if done.returncode != 0:
             message = decode(done.stderr).strip().splitlines()
-            raise BrainError(message[-1] if message else f"le cerveau a échoué ({done.returncode})")
+            raise BrainError(message[-1] if message else f"the brain failed ({done.returncode})")
         try:
             answer = json.loads(done.stdout.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            raise BrainError("réponse illisible du cerveau") from None
+            raise BrainError("unreadable answer from the brain") from None
         if not isinstance(answer, dict):
-            raise BrainError("réponse inattendue du cerveau")
+            raise BrainError("unexpected answer from the brain")
         return answer
 
     def generate(self, request: Mapping[str, Any], timeout: float = 630.0) -> dict[str, Any]:

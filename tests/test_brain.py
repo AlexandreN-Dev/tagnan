@@ -121,6 +121,30 @@ def test_prompt_lists_slots_and_only_their_domains(bp: Blueprint) -> None:
     assert "asked recently" not in prompt
 
 
+def test_a_subject_of_ones_own_leaves_the_domain_to_the_brain(bp: Blueprint) -> None:
+    slots = [{"domain": None, "difficulty": "medium", "kind": "single"}] * 4
+    prompt = brain.generate_prompt(bp, slots, [], "RAG")
+    assert "- 4 medium single-answer questions, from the domain of your choice" in prompt
+    assert 'the subject the learner chose: "RAG"' in prompt
+    assert "1.1 Explain basic AI concepts" in prompt  # every domain is shown
+    assert "5.2 Recognize governance" in prompt
+    assert "learner chose" not in brain.generate_prompt(bp, slots[:1], [])
+
+
+def test_the_batch_says_which_subject_it_was_written_for(fake_claude: Path) -> None:
+    answer(fake_claude, {"questions": [question_data()]})
+    request = {
+        "exam": "aif-c01",
+        "slots": [{"domain": None, "difficulty": "medium", "kind": "single"}],
+        "subject": "RAG",
+    }
+    assert brain.generate(request, config.Config())["subject"] == "RAG"
+    assert '"RAG"' in str(call_log(fake_claude)["stdin"])
+    request = {**request, "subject": "domain:3"}  # a domain: no subject paragraph
+    assert brain.generate(request, config.Config())["subject"] == "domain:3"
+    assert "learner chose" not in str(call_log(fake_claude)["stdin"])
+
+
 def test_script_runs_the_brain_end_to_end(fake_claude: Path) -> None:
     answer(fake_claude, {"text": "Touché."})
     repo = Path(__file__).resolve().parent.parent

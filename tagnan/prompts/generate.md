@@ -2,6 +2,8 @@ Write $count practice questions for the $exam_code exam, as follows:
 
 $slots
 
+$subject
+
 Here are the domains involved, with their tasks and each task's notions. Each question is about a single task of its domain; vary the tasks and the notions from one question to the next.
 
 $domains
@@ -20,7 +22,7 @@ Each question:
 - topic: three to six words naming the notion tested, for example "Bedrock Guardrails, denied topics".
 - task: the task's identifier, for example "3.1".
 - reference: the AWS document to read again, for example "Amazon Bedrock User Guide, Guardrails".
-- domain, difficulty, kind: those of the question's slot.
+- domain, difficulty, kind: those of the question's slot; when the slot leaves the domain to you, the domain of the task you chose.
 
 Services and features in the exam's scope: $services.
 

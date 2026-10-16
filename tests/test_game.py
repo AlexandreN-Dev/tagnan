@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -6,6 +7,8 @@ from tagnan import config
 from tagnan.game import LOW_WATER, Game
 from tagnan.progress import DAY, Progress
 from tagnan.store import Store
+from tagnan.subject import Subject
+from tagnan.subject import parse as parse_subject
 from tests.conftest import question_data
 
 NOW = 1_800_000_000.0
@@ -122,3 +125,61 @@ def test_config_defaults_and_errors(tmp_path: Path) -> None:
     path.write_text('[brain]\neffort = "maximal"\n')
     with pytest.raises(ValueError, match="\\[brain\\] : effort doit être l'un de"):
         config.load(path)
+
+
+def test_he_keeps_to_the_subject_until_told_otherwise(game: Game) -> None:
+    fill(game, 3)
+    rag = [question_data(topic=f"rag {i}") for i in range(3)]
+    rag_ids, _ = game.add_batch(rag, NOW, "RAG")
+    assert game.subject.whole
+    assert game.fresh_count() == 6
+    game.set_subject(parse_subject("rag", game.blueprint))
+    assert game.subject == Subject(text="rag")
+    assert game.fresh_count() == 3
+    asked = {q.id for q in (game.next_question(NOW) for _ in range(20)) if q}
+    assert asked <= set(rag_ids)
+    # A review of another subject waits for its turn.
+    other = next(q for q in game.store.fresh(game.exam) if q.id not in rag_ids)
+    game.answer(other, [i for i in range(4) if i not in other.answers][:1], NOW)
+    assert all(q and q.id in rag_ids for q in (game.next_question(NOW + DAY) for _ in range(20)))
+    game.set_subject(Subject(domain=1))
+    assert game.next_question(NOW) is None  # every question so far is in domain 3
+    assert game.summary()["subject"] == "Domain 1 · Fundamentals of AI and ML"
+
+
+def test_batches_are_written_for_the_subject(game: Game) -> None:
+    game.add_batch([question_data(topic="chunking")], NOW, "RAG")
+    game.add_batch([question_data(topic="guardrails")], NOW)
+    game.set_subject(Subject(domain=2))
+    request = game.batch_request()
+    assert request["subject"] == "domain:2"
+    assert {s["domain"] for s in request["slots"]} == {2}
+    game.set_subject(Subject(text="RAG"))
+    request = game.batch_request()
+    assert request["subject"] == "RAG"
+    assert {s["domain"] for s in request["slots"]} == {None}
+    assert request["avoid"] == ["chunking"]  # the notions of this subject only
+    game.set_subject(Subject())
+    request = game.batch_request()
+    assert request["subject"] == ""
+    assert None not in {s["domain"] for s in request["slots"]}
+    assert game.store.subjects(game.exam) == ["RAG"]
+
+
+def test_an_older_database_gains_the_subject(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript(
+        "CREATE TABLE questions (id INTEGER PRIMARY KEY, exam TEXT NOT NULL, domain INTEGER"
+        " NOT NULL, task TEXT NOT NULL, topic TEXT NOT NULL, difficulty TEXT NOT NULL, kind TEXT"
+        " NOT NULL, stem TEXT NOT NULL, choices TEXT NOT NULL, answers TEXT NOT NULL,"
+        " explanation TEXT NOT NULL, why_wrong TEXT NOT NULL, reference TEXT NOT NULL,"
+        " created_at REAL NOT NULL, flagged INTEGER NOT NULL DEFAULT 0, lang TEXT NOT NULL"
+        " DEFAULT 'fr');"
+        "INSERT INTO questions VALUES (1, 'aif-c01', 3, '3.1', 't', 'easy', 'single', 's',"
+        ' \'["a","b","c","d"]\', \'[0]\', \'e\', \'["","x","y","z"]\', \'\', 0, 0, \'en\');'
+    )
+    db.commit()
+    db.close()
+    store = Store(path)
+    assert store.question(1).subject == ""

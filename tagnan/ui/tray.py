@@ -55,6 +55,7 @@ class Tray(QObject):
         self.menu = QMenu()
         self._add("A question now", controller.askNow)
         self._add("Progress", controller.showStats)
+        self._subject = self._add("Subject…", controller.showSubject)
         self.menu.addSeparator()
         self.paces = self._choices(
             "How often", [(p.key, f"{p.name}\t{p.hint}") for p in PACES], controller.setPace
@@ -122,6 +123,10 @@ class Tray(QObject):
         paused = bool(self._controller.paused)
         self._pause.setText("Change the break…" if paused else "A break…")
         self._resume.setVisible(paused)
+        subject = str(self._controller.subject)
+        if len(subject) > 40:
+            subject = subject[:39] + "…"
+        self._subject.setText(f"Subject: {subject}…")
         for key, action in self.paces.items():
             action.setChecked(key == str(self._controller.pace))
         for key, action in self.calls.items():

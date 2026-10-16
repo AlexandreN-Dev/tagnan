@@ -1,6 +1,6 @@
 """The brain, in WSL: writes questions and explanations with the claude CLI.
 
-    scripts/brain generate < request.json   # {"exam", "slots": [...], "avoid": [...]}
+    scripts/brain generate < request.json   # {"exam", "slots": [...], "avoid": [...], "subject"}
     scripts/brain explain < request.json    # {"exam", "question": {...}, "chosen": [...]}
     scripts/brain check                     # one tiny call with the configured model
 
@@ -26,6 +26,7 @@ from tagnan import config as configs
 from tagnan.blueprint import Blueprint
 from tagnan.model import parse_question
 from tagnan.paths import PROMPTS_DIR, config_file
+from tagnan.subject import from_key
 
 # Allowlist, not denylist: the brain may run under a Claude Code session (CLAUDECODE,
 # CLAUDE_CODE_*) or a shell holding AWS or Anthropic variables.
@@ -185,20 +186,38 @@ def system_prompt(bp: Blueprint) -> str:
     return _template("system.md", exam_name=bp.name, exam_code=bp.code)
 
 
-def generate_prompt(bp: Blueprint, slots: Sequence[Mapping[str, Any]], avoid: Sequence[str]) -> str:
+def generate_prompt(
+    bp: Blueprint, slots: Sequence[Mapping[str, Any]], avoid: Sequence[str], subject: str = ""
+) -> str:
+    """subject: one's own words for what the questions are about; a slot without a domain
+    leaves it to the brain, and then every domain is shown."""
     counts: dict[tuple[int, str, str], int] = {}
     for slot in slots:
-        key = (int(slot["domain"]), str(slot["difficulty"]), str(slot["kind"]))
+        key = (int(slot.get("domain") or 0), str(slot["difficulty"]), str(slot["kind"]))
         counts[key] = counts.get(key, 0) + 1
     lines = []
     for (domain_id, difficulty, kind), count in sorted(counts.items()):
         kind_text = "multiple-answer" if kind == "multiple" else "single-answer"
-        lines.append(
-            f"- {count} {difficulty} {kind_text} question{'s' if count > 1 else ''}"
+        where = (
             f" from domain {domain_id} ({bp.domain(domain_id).name})"
+            if domain_id
+            else ", from the domain of your choice"
         )
+        lines.append(
+            f"- {count} {difficulty} {kind_text} question{'s' if count > 1 else ''}{where}"
+        )
+    wanted = {d for d, _, _ in counts}
+    shown = sorted(d.id for d in bp.domains) if 0 in wanted else sorted(wanted)
+    subject_text = (
+        f'Every question is about the subject the learner chose: "{subject}". Approach it from'
+        " a different angle each time, and give each question the domain and task of the exam"
+        " that cover that angle. If the subject reaches beyond the exam, keep to what the exam"
+        " covers of it."
+        if subject
+        else ""
+    )
     domains = []
-    for domain_id in sorted({d for d, _, _ in counts}):
+    for domain_id in shown:
         domain = bp.domain(domain_id)
         tasks = "\n".join(f"  - {t.id} {t.title}: {t.notions}" for t in domain.tasks)
         domains.append(f"Domain {domain.id}, {domain.name}:\n{tasks}")
@@ -213,6 +232,7 @@ def generate_prompt(bp: Blueprint, slots: Sequence[Mapping[str, Any]], avoid: Se
         count=len(slots),
         exam_code=bp.code,
         slots="\n".join(lines),
+        subject=subject_text,
         domains="\n\n".join(domains),
         services=", ".join(bp.services),
         avoid=avoid_text,
@@ -242,8 +262,9 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     slots = request.get("slots") or []
     if not slots:
         raise BrainError("request without question slots")
+    subject = str(request.get("subject") or "")
     structured = run_claude(
-        generate_prompt(bp, slots, request.get("avoid") or []),
+        generate_prompt(bp, slots, request.get("avoid") or [], from_key(subject).text),
         system=system_prompt(bp),
         schema=BATCH_SCHEMA,
         model=cfg.brain.model,
@@ -260,7 +281,7 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
         questions.append(data)
     if not questions:
         raise BrainError("no usable question: " + "; ".join(rejected[:3]))
-    return {"questions": questions, "rejected": rejected}
+    return {"questions": questions, "rejected": rejected, "subject": subject}
 
 
 def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:

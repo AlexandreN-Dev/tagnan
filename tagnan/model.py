@@ -25,6 +25,7 @@ class Question:
     explanation: str  # why the right answer is right
     why_wrong: tuple[str, ...]  # one per choice, "" for the right ones
     reference: str = ""  # the AWS document to read
+    subject: str = ""  # the subject it was written for (tagnan.subject's key), "" for the exam
     id: int | None = None
 
     def is_correct(self, chosen: Iterable[int]) -> bool:

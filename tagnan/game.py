@@ -4,7 +4,7 @@ and when to ask the brain for more questions."""
 import random
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from tagnan import progress as rules
@@ -12,6 +12,7 @@ from tagnan.blueprint import Blueprint
 from tagnan.model import Question, parse_question
 from tagnan.progress import Progress
 from tagnan.store import Store
+from tagnan.subject import Subject, from_key
 
 # Ask the brain for a new batch below this many fresh questions; a batch takes a minute or two.
 LOW_WATER = 5
@@ -57,12 +58,32 @@ class Game:
     def progress(self) -> Progress:
         return rules.settle(self.store.progress(self.exam))
 
+    # --- The subject ------------------------------------------------------------------------
+
+    @property
+    def subject(self) -> Subject:
+        """What he asks about, kept until one asks for something else."""
+        return from_key(self.store.setting(f"subject:{self.exam}"))
+
+    def set_subject(self, subject: Subject) -> None:
+        self.store.set_setting(f"subject:{self.exam}", subject.key)
+
+    def fresh(self) -> list[Question]:
+        """The questions never asked, on the subject."""
+        subject = self.subject
+        return [q for q in self.store.fresh(self.exam) if subject.covers(q)]
+
+    def fresh_count(self) -> int:
+        return len(self.fresh())
+
     # --- Asking -----------------------------------------------------------------------------
 
     def next_question(self, now: float) -> Question | None:
-        """A review that is due, or a fresh question from a domain to work on."""
-        due = self.store.due_reviews(self.exam, now)
-        fresh = self.store.fresh(self.exam)
+        """A review that is due, or a fresh question from a domain to work on, both on the
+        subject: the reviews of other subjects wait for their turn."""
+        subject = self.subject
+        due = [q for q in self.store.due_reviews(self.exam, now) if subject.covers(q)]
+        fresh = self.fresh()
         if due and (not fresh or self._rng.random() < REVIEW_SHARE):
             return due[0]
         if not fresh:
@@ -105,14 +126,24 @@ class Game:
     # --- Feeding the bank -------------------------------------------------------------------
 
     def needs_questions(self) -> bool:
-        return self.store.fresh_count(self.exam) < LOW_WATER
+        return self.fresh_count() < LOW_WATER
 
     def batch_request(self, count: int = BATCH) -> dict[str, Any]:
-        """What to ask the brain for: one slot per question, the topics to avoid."""
+        """What to ask the brain for: one slot per question, the topics to avoid, the subject.
+        On a subject in one's own words, the brain picks each question's domain."""
         grade = self.progress.grade
-        weights = self.domain_weights()
-        domains = sorted(weights)
-        picked = self._rng.choices(domains, weights=[weights[d] for d in domains], k=count)
+        subject = self.subject
+        picked: list[int | None]
+        if subject.domain is not None:
+            picked = [subject.domain] * count
+        elif subject.text:
+            picked = [None] * count
+        else:
+            weights = self.domain_weights()
+            domains = sorted(weights)
+            picked = list(
+                self._rng.choices(domains, weights=[weights[d] for d in domains], k=count)
+            )
         multiple = round(count * MULTIPLE_SHARE_BY_GRADE[grade])
         slots = [
             {
@@ -122,22 +153,27 @@ class Game:
                 if i < multiple and "multiple" in self.blueprint.kinds
                 else "single",
             }
-            for i, domain in enumerate(sorted(picked))
+            for i, domain in enumerate(sorted(picked, key=lambda d: d or 0))
         ]
         return {
             "exam": self.exam,
             "slots": slots,
-            "avoid": self.store.recent_topics(self.exam, AVOID_TOPICS),
+            "avoid": self.store.recent_topics(
+                self.exam, AVOID_TOPICS, subject.text if subject.text else None
+            ),
+            "subject": subject.key,
         }
 
     def add_batch(
-        self, raw: Sequence[Mapping[str, Any]], now: float
+        self, raw: Sequence[Mapping[str, Any]], now: float, subject: str = ""
     ) -> tuple[list[int], list[str]]:
-        """Keep the questions that hold up, shuffled; say why the others were dropped."""
+        """Keep the questions that hold up, shuffled; say why the others were dropped.
+        subject: the key of the subject they were written for."""
         kept, rejected = [], []
         for i, data in enumerate(raw, 1):
             try:
-                kept.append(parse_question(data, self.blueprint).shuffled(self._rng))
+                question = parse_question(data, self.blueprint).shuffled(self._rng)
+                kept.append(replace(question, subject=subject))
             except ValueError as error:
                 rejected.append(f"question {i} : {error}")
         return self.store.add_questions(self.exam, kept, now), rejected
@@ -145,6 +181,7 @@ class Game:
     def summary(self) -> dict[str, Any]:
         """What the stats show: grade, points, streaks, accuracy by domain, the bank."""
         p = self.progress
+        subject = self.subject
         stats = self.store.domain_stats(self.exam)
         answered = sum(n for n, _ in stats.values())
         right = sum(r for _, r in stats.values())
@@ -167,10 +204,12 @@ class Game:
                 }
                 for d in self.blueprint.domains
             ],
-            "fresh": self.store.fresh_count(self.exam),
+            "subject": subject.name(self.blueprint),
+            "fresh": self.fresh_count(),
             "reviews": self.store.reviews_pending(self.exam),
         }
 
 
 def slot_summary(slots: Sequence[Mapping[str, Any]]) -> Counter[tuple[int, str, str]]:
-    return Counter((int(s["domain"]), str(s["difficulty"]), str(s["kind"])) for s in slots)
+    """0 for a slot whose domain the brain picks."""
+    return Counter((int(s["domain"] or 0), str(s["difficulty"]), str(s["kind"])) for s in slots)

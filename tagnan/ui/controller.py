@@ -11,6 +11,7 @@ from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from tagnan import art
 from tagnan import pause as pauses
 from tagnan import progress as rules
+from tagnan import subject as subjects
 from tagnan.game import Game, Outcome
 from tagnan.model import Question
 from tagnan.scheduler import Scheduler, find_pace
@@ -50,7 +51,7 @@ class Controller(QObject):
     stageChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
-    prefsChanged = Signal()  # his pace or his call
+    prefsChanged = Signal()  # his pace, his call or his subject
     menuRequested = Signal()
     quitRequested = Signal()
 
@@ -146,6 +147,10 @@ class Controller(QObject):
     def call(self) -> str:
         return self._call
 
+    @Property(str, notify=prefsChanged)
+    def subject(self) -> str:
+        return self.game.subject.name(self.game.blueprint)
+
     @Property(str, notify=statusChanged)
     def status(self) -> str:
         p = self.game.progress
@@ -175,11 +180,14 @@ class Controller(QObject):
         domain = self.game.blueprint.domain(question.domain)
         review = question.id is not None and self.game.store.review_box(question.id) is not None
         need = len(question.answers)
+        meta = f"Domain {domain.id} · {domain.name}"
+        if self.game.subject.text:
+            meta = f"{self.game.subject.text} · Domain {domain.id}"
         self._show(
             {
                 "mode": "question",
                 "title": self._rng.choice(ASKS),
-                "meta": f"Domain {domain.id} · {domain.name}",
+                "meta": meta,
                 "tag": "Review"
                 if review
                 else f"{DIFFICULTY.get(question.difficulty, '')} question",
@@ -310,7 +318,8 @@ class Controller(QObject):
                 {
                     "mode": "message",
                     "title": "Not yet",
-                    "text": "My brain is writing new questions. Come back in a few minutes.",
+                    "text": "My brain is writing questions on "
+                    f"{self.subject}. Come back in a few minutes.",
                 }
             )
             self._hide_timer.start(6000)
@@ -348,7 +357,8 @@ class Controller(QObject):
                     }
                     for i, d in enumerate(s["domains"])
                 ],
-                "bank": f"{s['fresh']} new questions in store, {s['reviews']} to review. {when}",
+                "bank": f"Subject: {s['subject']}. {s['fresh']} new questions on it in store, "
+                f"{s['reviews']} to review in all. {when}",
             }
         )
 
@@ -403,6 +413,70 @@ class Controller(QObject):
         self._hide_timer.start(5000)
         self.statusChanged.emit()
         return True
+
+    @Slot()
+    def showSubject(self) -> None:
+        """The subject bubble: the whole exam, a domain, a subject chosen before, or one's own
+        words."""
+        bp = self.game.blueprint
+        choices = [{"label": "The whole exam", "key": ""}]
+        choices += [{"label": f"{d.id}. {d.name}", "key": f"domain:{d.id}"} for d in bp.domains]
+        choices += [{"label": text, "key": text} for text in self.game.store.subjects(bp.key)]
+        self._show(
+            {
+                "mode": "subject",
+                "title": "What shall we work on?",
+                "choices": choices,
+                "current": self.game.subject.key,
+                "status": f"Now: {self.subject}.",
+            }
+        )
+
+    @Slot(str, result=dict)
+    def previewSubject(self, text: str) -> dict[str, Any]:
+        """What the subject typed so far would be, said before it is confirmed."""
+        if not text.strip():
+            return {"ok": False, "text": ""}
+        try:
+            understood = subjects.parse(text, self.game.blueprint)
+        except ValueError as error:
+            return {"ok": False, "text": str(error)}
+        return {"ok": True, "text": f"Questions on {understood.name(self.game.blueprint)}."}
+
+    @Slot(str, result=bool)
+    def subjectWith(self, text: str) -> bool:
+        try:
+            understood = subjects.parse(text, self.game.blueprint)
+        except ValueError:
+            return False
+        self._change_subject(understood)
+        return True
+
+    @Slot(str)
+    def setSubject(self, key: str) -> None:
+        """A quick choice: its key, as showSubject gives it."""
+        self._change_subject(subjects.from_key(key))
+
+    def _change_subject(self, chosen: subjects.Subject) -> None:
+        name = chosen.name(self.game.blueprint)
+        if chosen.key.casefold() == self.game.subject.key.casefold():
+            text = f"We're already on {self.subject}. I'll keep to it."
+        else:
+            self.game.set_subject(chosen)
+            logger.info("subject: %r", chosen.key)
+            self.prefsChanged.emit()
+            self.statusChanged.emit()
+            if self.game.fresh_count():
+                text = f"From now on, I ask about {name}, until you tell me otherwise."
+            else:
+                text = (
+                    f"From now on, I ask about {name}. Give me a few minutes to write the"
+                    " questions."
+                )
+            self._refill_if_needed(force=True)
+        self._set_mood("idle")
+        self._show({"mode": "message", "title": "As you wish!", "text": text})
+        self._hide_timer.start(7000)
 
     @Slot(str)
     def setPace(self, key: str) -> None:
@@ -485,8 +559,11 @@ class Controller(QObject):
 
     def _on_batch(self, answer: object) -> None:
         questions = answer.get("questions", []) if isinstance(answer, dict) else []
-        ids, rejected = self.game.add_batch(questions, self._clock())
-        logger.info("batch: %d kept, %d dropped %s", len(ids), len(rejected), rejected[:3])
+        subject = str(answer.get("subject") or "") if isinstance(answer, dict) else ""
+        ids, rejected = self.game.add_batch(questions, self._clock(), subject)
+        logger.info(
+            "batch on %r: %d kept, %d dropped %s", subject, len(ids), len(rejected), rejected[:3]
+        )
         if self._first_run and ids:
             self._first_run = False
             self.scheduler.next_at = self._clock() + FIRST_QUESTION_DELAY
@@ -499,10 +576,11 @@ class Controller(QObject):
                     }
                 )
                 self._hide_timer.start(8000)
+        self._refill_if_needed()  # written for a subject left meanwhile: one for the new one
 
     def _on_batch_failed(self, error: str) -> None:
         self._refill_after = self._clock() + REFILL_BACKOFF
-        if self.game.store.fresh_count(self.game.exam) == 0 and self._bubble["mode"] in (
+        if self.game.fresh_count() == 0 and self._bubble["mode"] in (
             "hidden",
             "message",
         ):

@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS questions (
     reference TEXT NOT NULL,
     created_at REAL NOT NULL,
     flagged INTEGER NOT NULL DEFAULT 0,
-    lang TEXT NOT NULL DEFAULT 'fr'
+    lang TEXT NOT NULL DEFAULT 'fr',
+    subject TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS answers (
     id INTEGER PRIMARY KEY,
@@ -64,6 +65,11 @@ class Store:
         if "lang" not in columns:  # a database from before Tagnan spoke English
             with self._db:
                 self._db.execute("ALTER TABLE questions ADD COLUMN lang TEXT NOT NULL DEFAULT 'fr'")
+        if "subject" not in columns:  # a database from before one chose the subject
+            with self._db:
+                self._db.execute(
+                    "ALTER TABLE questions ADD COLUMN subject TEXT NOT NULL DEFAULT ''"
+                )
 
     def close(self) -> None:
         self._db.close()
@@ -76,8 +82,9 @@ class Store:
             for q in questions:
                 cursor = self._db.execute(
                     "INSERT INTO questions (exam, domain, task, topic, difficulty, kind, stem,"
-                    " choices, answers, explanation, why_wrong, reference, created_at, lang)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " choices, answers, explanation, why_wrong, reference, created_at, lang,"
+                    " subject)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         exam,
                         q.domain,
@@ -93,6 +100,7 @@ class Store:
                         q.reference,
                         now,
                         self.lang,
+                        q.subject,
                     ),
                 )
                 ids.append(int(cursor.lastrowid or 0))
@@ -127,9 +135,27 @@ class Store:
             self._db.execute("UPDATE questions SET flagged = 1 WHERE id = ?", (question_id,))
             self._db.execute("DELETE FROM reviews WHERE question_id = ?", (question_id,))
 
-    def recent_topics(self, exam: str, limit: int) -> list[str]:
+    def recent_topics(self, exam: str, limit: int, subject: str | None = None) -> list[str]:
+        """The notions last asked; with `subject`, among the questions written for it only."""
+        if subject is None:
+            rows = self._db.execute(
+                "SELECT topic FROM questions WHERE exam = ? AND lang = ? ORDER BY id DESC LIMIT ?",
+                (exam, self.lang, limit),
+            )
+        else:
+            rows = self._db.execute(
+                "SELECT topic FROM questions WHERE exam = ? AND lang = ? AND subject = ?"
+                " COLLATE NOCASE ORDER BY id DESC LIMIT ?",
+                (exam, self.lang, subject, limit),
+            )
+        return [str(r[0]) for r in rows]
+
+    def subjects(self, exam: str, limit: int = 4) -> list[str]:
+        """The subjects in one's own words, last chosen first."""
         rows = self._db.execute(
-            "SELECT topic FROM questions WHERE exam = ? AND lang = ? ORDER BY id DESC LIMIT ?",
+            "SELECT subject FROM questions WHERE exam = ? AND lang = ? AND subject != ''"
+            " AND subject NOT LIKE 'domain:%' GROUP BY subject COLLATE NOCASE"
+            " ORDER BY MAX(id) DESC LIMIT ?",
             (exam, self.lang, limit),
         )
         return [str(r[0]) for r in rows]
@@ -163,7 +189,7 @@ class Store:
                     (question_id, box, due_at),
                 )
 
-    # --- Answers and progress ---------------------------------------------------------------
+    # --- Answers, progress, choices ---------------------------------------------------------
 
     def record_answer(
         self, question_id: int, chosen: Iterable[int], correct: bool, points: int, now: float
@@ -187,6 +213,18 @@ class Store:
                 "INSERT INTO state (key, value) VALUES (?, ?)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (f"progress:{exam}", json.dumps(asdict(progress))),
+            )
+
+    def setting(self, key: str) -> str:
+        row = self._db.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()
+        return str(row[0]) if row else ""
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT INTO state (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
             )
 
     def domain_stats(self, exam: str) -> dict[int, tuple[int, int]]:
@@ -221,4 +259,5 @@ def _question(row: sqlite3.Row) -> Question:
         explanation=str(row["explanation"]),
         why_wrong=tuple(json.loads(row["why_wrong"])),
         reference=str(row["reference"]),
+        subject=str(row["subject"]),
     )

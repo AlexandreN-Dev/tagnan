@@ -137,6 +137,8 @@ def demo(controller: Controller, what: str) -> None:
         controller.animator.tap()
     elif what == "pause":
         controller.showPause()
+    elif what == "subject":
+        controller.showSubject()
 
 
 def main() -> int:
@@ -152,7 +154,7 @@ def main() -> int:
     parser.add_argument("--snapshot-delay", type=int, default=2500, help="en millisecondes")
     parser.add_argument(
         "--demo",
-        choices=["question", "result-right", "result-wrong", "stats", "quip", "pause"],
+        choices=["question", "result-right", "result-wrong", "stats", "quip", "pause", "subject"],
         help="développement : afficher tout de suite une bulle",
     )
     parser.add_argument(

@@ -1,5 +1,5 @@
 // Tagnan's speech bubble: the question and its choices, his verdict, a longer explanation,
-// his progress, a break, a quip when tapped. What it shows comes from the controller
+// his progress, a break, the subject, a quip when tapped. What it shows comes from the controller
 // (content.mode). Tagnan speaks English.
 import QtQuick
 import QtQuick.Controls
@@ -16,6 +16,7 @@ Item {
     readonly property real maxHeight: 590
     property var picked: []
     property var preview: ({ ok: false, text: "" })
+    property var subjectPreview: ({ ok: false, text: "" })
 
     width: quip ? Math.min(260, quipText.implicitWidth + 28) : 400
     height: quip ? quipText.implicitHeight + 20 : Math.min(maxHeight, column.implicitHeight + 28)
@@ -24,6 +25,8 @@ Item {
         picked = []
         preview = { ok: false, text: "" }
         breakField.text = ""
+        subjectPreview = { ok: false, text: "" }
+        subjectField.text = ""
     }
 
     // The break typed so far: what he understood, said before it is confirmed.
@@ -31,8 +34,16 @@ Item {
         if (!bubble.controller.pauseWith(breakField.text))
             preview = bubble.controller.previewPause(breakField.text)
     }
-    function focusBreak() {
-        breakField.forceActiveFocus()
+    // The subject typed so far, the same way.
+    function confirmSubject() {
+        if (!bubble.controller.subjectWith(subjectField.text))
+            subjectPreview = bubble.controller.previewSubject(subjectField.text)
+    }
+    function focusField() {
+        if (mode === "subject")
+            subjectField.forceActiveFocus()
+        else
+            breakField.forceActiveFocus()
     }
 
     function toggle(index) {
@@ -74,6 +85,8 @@ Item {
         Text {
             id: actionText
             anchors.centerIn: parent
+            width: Math.min(implicitWidth, action.width - 24)
+            elide: Text.ElideRight
             text: action.label
             color: action.primary ? bubble.theme.panel : bubble.theme.text
             font.family: bubble.theme.body
@@ -454,6 +467,78 @@ Item {
                     onActivated: bubble.controller.resume()
                 }
                 Action { label: "Cancel"; onActivated: bubble.controller.dismiss() }
+            }
+
+            // --- Subject ------------------------------------------------------------------
+            Flow {
+                visible: bubble.mode === "subject"
+                width: column.width
+                spacing: 6
+                Repeater {
+                    model: bubble.mode === "subject" ? bubble.content.choices : []
+                    Action {
+                        required property var modelData
+                        width: Math.min(implicitWidth, column.width)
+                        label: modelData.label
+                        primary: modelData.key.toLowerCase() === (bubble.content.current || "").toLowerCase()
+                        onActivated: bubble.controller.setSubject(modelData.key)
+                    }
+                }
+            }
+            Para {
+                visible: bubble.mode === "subject"
+                text: "Or tell me a subject of your own:"
+                color: bubble.theme.muted
+                font.pixelSize: 12
+            }
+            Item {
+                visible: bubble.mode === "subject"
+                width: column.width
+                height: 32
+                TextField {
+                    id: subjectField
+                    width: parent.width - subjectOk.width - 8
+                    height: 32
+                    placeholderText: "RAG, Bedrock Guardrails, prompt engineering…"
+                    color: bubble.theme.text
+                    placeholderTextColor: bubble.theme.muted
+                    font.family: bubble.theme.body
+                    font.pixelSize: 13
+                    leftPadding: 10
+                    background: Rectangle {
+                        radius: 6
+                        color: bubble.theme.choice
+                        border.color: subjectField.activeFocus ? bubble.theme.ink : bubble.theme.line
+                    }
+                    onTextChanged: bubble.subjectPreview = bubble.controller.previewSubject(text)
+                    onAccepted: bubble.confirmSubject()
+                    Keys.onEscapePressed: bubble.controller.dismiss()
+                }
+                Action {
+                    id: subjectOk
+                    anchors.right: parent.right
+                    label: "OK"
+                    primary: true
+                    ready: bubble.subjectPreview.ok === true
+                    onActivated: bubble.confirmSubject()
+                }
+            }
+            Para {
+                visible: bubble.mode === "subject" && bubble.subjectPreview.text !== ""
+                text: bubble.subjectPreview.text
+                color: bubble.subjectPreview.ok ? bubble.theme.text : bubble.theme.bad
+                font.pixelSize: 12
+            }
+            Para {
+                visible: bubble.mode === "subject"
+                text: bubble.content.status || ""
+                color: bubble.theme.gold
+                font.weight: Font.DemiBold
+            }
+            Action {
+                visible: bubble.mode === "subject"
+                label: "Cancel"
+                onActivated: bubble.controller.dismiss()
             }
 
             // --- Progress -----------------------------------------------------------------

@@ -3,6 +3,7 @@
     uv run python -m tagnan.cli            # one question (a batch is written first if needed)
     uv run python -m tagnan.cli -n 5       # five in a row
     uv run python -m tagnan.cli --stats
+    uv run python -m tagnan.cli --subject RAG   # questions on RAG from now on ("all": the exam)
     uv run python -m tagnan.cli --import batch.json   # questions written by scripts/brain
 
 Its database is WSL's (~/.local/state/tagnan), not the window's (on Windows).
@@ -24,6 +25,7 @@ from tagnan.game import Game, Outcome
 from tagnan.model import Question
 from tagnan.paths import config_file, state_dir
 from tagnan.store import Store
+from tagnan.subject import parse as parse_subject
 
 LETTERS = "ABCDEF"
 CHEERS = ("Touché!", "Well parried!", "An unstoppable thrust!", "By my rapier, that's right!")
@@ -78,7 +80,9 @@ def tell(outcome: Outcome, rng: random.Random) -> None:
 def refill(game: Game, brain: BrainClient) -> None:
     print("Tagnan is writing new questions (a few minutes)…", flush=True)
     answer = brain.generate(game.batch_request())
-    ids, rejected = game.add_batch(answer.get("questions", []), time.time())
+    ids, rejected = game.add_batch(
+        answer.get("questions", []), time.time(), str(answer.get("subject") or "")
+    )
     print(f"{len(ids)} questions ready" + (f", {len(rejected)} set aside." if rejected else "."))
 
 
@@ -91,13 +95,15 @@ def stats(game: Game) -> None:
     for d in s["domains"]:
         rate = f"{100 * d['right'] // d['answered']}%" if d["answered"] else "—"
         print(f"  {d['id']}. {d['name']}: {d['right']}/{d['answered']} ({rate})")
-    print(f"In store: {s['fresh']} new questions, {s['reviews']} to review.")
+    print(f"Subject: {s['subject']}, {s['fresh']} new questions on it.", end=" ")
+    print(f"To review in all: {s['reviews']}.")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tagnan", description="Tagnan in the terminal")
     parser.add_argument("-n", "--count", type=int, default=1, help="questions in a row")
     parser.add_argument("--stats", action="store_true", help="the progress, no question")
+    parser.add_argument("--subject", help='what to work on from now on ("all": the whole exam)')
     parser.add_argument(
         "--import", dest="import_file", type=Path, help="add a batch from the brain"
     )
@@ -114,6 +120,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{len(ids)} questions added" + (f", {len(rejected)} set aside." if rejected else ".")
         )
         return 0
+    if args.subject is not None:
+        try:
+            game.set_subject(parse_subject(args.subject, game.blueprint))
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            return 1
+        print(f"From now on, Tagnan asks about {game.subject.name(game.blueprint)}.")
+        if args.count == 1 and not args.stats:
+            return 0
     if args.stats:
         stats(game)
         return 0

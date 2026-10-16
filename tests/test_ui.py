@@ -315,6 +315,55 @@ def test_a_break_for_a_while_or_until_a_time(game: Game) -> None:
     assert controller.property("paused") is False
 
 
+def test_the_subject_is_chosen_kept_and_written_for(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    controller.showSubject()
+    bubble = controller.property("bubble")
+    assert bubble["mode"] == "subject"
+    assert bubble["choices"][0] == {"label": "The whole exam", "key": ""}
+    assert bubble["choices"][3]["key"] == "domain:3"
+    assert bubble["current"] == ""
+    assert controller.previewSubject("domain 9")["ok"] is False
+    assert controller.previewSubject("rag") == {"ok": True, "text": "Questions on rag."}
+    assert controller.subjectWith("  ") is False
+    assert controller.subjectWith("RAG") is True
+    assert controller.property("subject") == "RAG"
+    assert "a few minutes" in controller.property("bubble")["text"]
+    request = worker.requests[-1]
+    assert request["subject"] == "RAG"
+    controller.askNow()  # nothing on RAG yet
+    assert "questions on RAG" in controller.property("bubble")["text"]
+    # A batch written for the subject left behind lands with its own subject.
+    worker.generating = False
+    worker.batchReady.emit({"questions": [question_data(topic="old")], "subject": ""})
+    assert game.fresh_count() == 0
+    worker.generating = False
+    batch = [question_data(topic=f"rag {i}") for i in range(10)]
+    worker.batchReady.emit({"questions": batch, "subject": "RAG"})
+    assert game.fresh_count() == 10
+    controller.askNow()
+    assert controller.property("bubble")["meta"] == "RAG · Domain 3"
+    controller.dismiss()
+    controller.showSubject()
+    assert controller.property("bubble")["choices"][-1] == {"label": "RAG", "key": "RAG"}
+    controller.setSubject("rag")
+    assert controller.property("bubble")["text"].startswith("We're already on RAG")
+    controller.setSubject("")
+    assert game.subject.whole
+    assert game.fresh_count() == 17
+
+
+def test_his_menu_names_the_subject(game: Game) -> None:
+    fill(game)
+    controller, _, _ = make(game)
+    tray = Tray(controller)
+    labels = [a.text() for a in tray.menu.actions()]
+    assert "Subject: the whole exam…" in labels
+    controller.setSubject("domain:2")
+    assert tray._subject.text() == "Subject: Domain 2 · Fundamentals of Generative AI…"
+
+
 def test_every_bubble_but_a_question_closes_on_a_click_elsewhere(game: Game) -> None:
     fill(game)
     controller, _, _ = make(game)
@@ -446,6 +495,7 @@ def test_his_menu_sets_the_pace_and_lets_one_hear_every_call(game: Game) -> None
     assert [a.text() for a in tray.menu.actions()] == [
         "A question now",
         "Progress",
+        "Subject: the whole exam…",
         "",
         "How often",
         "Sound",

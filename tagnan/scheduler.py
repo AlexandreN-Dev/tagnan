@@ -50,8 +50,12 @@ class Scheduler:
         self.next_at = max(self.next_at, now + minutes * 60)
 
     def pause(self, now: float, minutes: float) -> None:
-        self.paused_until = now + minutes * 60
-        self.next_at = max(self.next_at, self._place(self.paused_until + self._gap() / 3))
+        self.pause_until(now + minutes * 60)
+
+    def pause_until(self, until: float) -> None:
+        """No question before then; the first one comes a little after."""
+        self.paused_until = until
+        self.next_at = max(self.next_at, self._place(until + self._gap() / 3))
 
     def resume(self, now: float) -> None:
         self.paused_until = 0.0

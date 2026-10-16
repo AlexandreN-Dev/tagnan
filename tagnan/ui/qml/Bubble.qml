@@ -1,5 +1,6 @@
 // Tagnan's speech bubble: the question and its choices, his verdict, a longer explanation,
-// his progress, a quip when tapped. What it shows comes from the controller (content.mode).
+// his progress, a break, a quip when tapped. What it shows comes from the controller
+// (content.mode). Tagnan speaks English.
 import QtQuick
 import QtQuick.Controls
 
@@ -14,11 +15,25 @@ Item {
     readonly property bool quip: mode === "quip"
     readonly property real maxHeight: 590
     property var picked: []
+    property var preview: ({ ok: false, text: "" })
 
     width: quip ? Math.min(260, quipText.implicitWidth + 28) : 400
     height: quip ? quipText.implicitHeight + 20 : Math.min(maxHeight, column.implicitHeight + 28)
 
-    onContentChanged: picked = []
+    onContentChanged: {
+        picked = []
+        preview = { ok: false, text: "" }
+        breakField.text = ""
+    }
+
+    // The break typed so far: what he understood, said before it is confirmed.
+    function confirmBreak() {
+        if (!bubble.controller.pauseWith(breakField.text))
+            preview = bubble.controller.previewPause(breakField.text)
+    }
+    function focusBreak() {
+        breakField.forceActiveFocus()
+    }
 
     function toggle(index) {
         const at = picked.indexOf(index)
@@ -263,13 +278,13 @@ Item {
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 14
-                    Link { text: "Plus tard"; onActivated: bubble.controller.later() }
-                    Link { text: "Question fausse ? La signaler"; onActivated: bubble.controller.flag() }
+                    Link { text: "Later"; onActivated: bubble.controller.later() }
+                    Link { text: "Wrong question? Report it"; onActivated: bubble.controller.flag() }
                 }
                 Action {
                     visible: bubble.content.need > 1
                     anchors.right: parent.right
-                    label: "Valider"
+                    label: "Confirm"
                     primary: true
                     ready: bubble.picked.length === bubble.content.need
                     onActivated: bubble.controller.answer(bubble.picked)
@@ -282,18 +297,18 @@ Item {
                 Para {
                     required property var modelData
                     textFormat: Text.StyledText
-                    text: "<b>" + modelData.letter + ". " + modelData.text + "</b> : " + modelData.why
+                    text: "<b>" + modelData.letter + ". " + modelData.text + "</b>: " + modelData.why
                 }
             }
             Para {
                 visible: bubble.mode === "result" || bubble.mode === "thinking"
                 textFormat: Text.StyledText
-                text: (bubble.content.correct ? "" : "La bonne réponse : <b>" + (bubble.content.right || "") + "</b>. ")
+                text: (bubble.content.correct ? "" : "The right answer: <b>" + (bubble.content.right || "") + "</b>. ")
                       + (bubble.content.explanation || "")
             }
             Para {
                 visible: (bubble.mode === "result" || bubble.mode === "thinking") && (bubble.content.reference || "") !== ""
-                text: "À relire : " + (bubble.content.reference || "")
+                text: "Read again: " + (bubble.content.reference || "")
                 color: bubble.theme.muted
                 font.pixelSize: 12
                 font.italic: true
@@ -317,19 +332,19 @@ Item {
                 Row {
                     spacing: 8
                     Action {
-                        label: bubble.content.correct ? "Continuer" : "Compris"
+                        label: bubble.content.correct ? "Continue" : "Got it"
                         primary: true
                         onActivated: bubble.controller.dismiss()
                     }
                     Action {
                         visible: bubble.mode === "result" && !bubble.content.correct
-                        label: "Explique-moi plus"
+                        label: "Tell me more"
                         onActivated: bubble.controller.explainMore()
                     }
                     Text {
                         visible: bubble.mode === "thinking"
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Tagnan réfléchit" + ".".repeat(1 + Math.floor(dots.step % 3))
+                        text: "Tagnan is thinking" + ".".repeat(1 + Math.floor(dots.step % 3))
                         color: bubble.theme.muted
                         font.family: bubble.theme.body
                         font.pixelSize: 13
@@ -348,7 +363,7 @@ Item {
                     visible: bubble.mode === "result"
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Signaler"
+                    text: "Report"
                     onActivated: bubble.controller.flag()
                 }
             }
@@ -361,9 +376,84 @@ Item {
             }
             Action {
                 visible: bubble.mode === "explanation"
-                label: "Compris"
+                label: "Got it"
                 primary: true
                 onActivated: bubble.controller.dismiss()
+            }
+
+            // --- Break --------------------------------------------------------------------
+            Flow {
+                visible: bubble.mode === "pause"
+                width: column.width
+                spacing: 6
+                Repeater {
+                    model: bubble.mode === "pause" ? bubble.content.choices : []
+                    Action {
+                        required property var modelData
+                        label: modelData.label
+                        onActivated: bubble.controller.pauseWith(modelData.text)
+                    }
+                }
+            }
+            Para {
+                visible: bubble.mode === "pause"
+                text: "Or tell me how long, or until when:"
+                color: bubble.theme.muted
+                font.pixelSize: 12
+            }
+            Item {
+                visible: bubble.mode === "pause"
+                width: column.width
+                height: 32
+                TextField {
+                    id: breakField
+                    width: parent.width - breakOk.width - 8
+                    height: 32
+                    placeholderText: "1h30, 45 min, 4:45pm, noon…"
+                    color: bubble.theme.text
+                    placeholderTextColor: bubble.theme.muted
+                    font.family: bubble.theme.body
+                    font.pixelSize: 13
+                    leftPadding: 10
+                    background: Rectangle {
+                        radius: 6
+                        color: bubble.theme.choice
+                        border.color: breakField.activeFocus ? bubble.theme.ink : bubble.theme.line
+                    }
+                    onTextChanged: bubble.preview = bubble.controller.previewPause(text)
+                    onAccepted: bubble.confirmBreak()
+                    Keys.onEscapePressed: bubble.controller.dismiss()
+                }
+                Action {
+                    id: breakOk
+                    anchors.right: parent.right
+                    label: "OK"
+                    primary: true
+                    ready: bubble.preview.ok === true
+                    onActivated: bubble.confirmBreak()
+                }
+            }
+            Para {
+                visible: bubble.mode === "pause" && bubble.preview.text !== ""
+                text: bubble.preview.text
+                color: bubble.preview.ok ? bubble.theme.text : bubble.theme.bad
+                font.pixelSize: 12
+            }
+            Para {
+                visible: bubble.mode === "pause" && (bubble.content.status || "") !== ""
+                text: bubble.content.status || ""
+                color: bubble.theme.gold
+                font.weight: Font.DemiBold
+            }
+            Row {
+                visible: bubble.mode === "pause"
+                spacing: 8
+                Action {
+                    visible: bubble.controller.paused
+                    label: "Resume now"
+                    onActivated: bubble.controller.resume()
+                }
+                Action { label: "Cancel"; onActivated: bubble.controller.dismiss() }
             }
 
             // --- Progress -----------------------------------------------------------------
@@ -436,12 +526,12 @@ Item {
             Row {
                 visible: bubble.mode === "stats"
                 spacing: 8
-                Action { label: "Une question"; primary: true; onActivated: bubble.controller.askNow() }
+                Action { label: "A question"; primary: true; onActivated: bubble.controller.askNow() }
                 Action {
-                    label: bubble.controller.paused ? "Reprendre" : "Pause 1 h"
-                    onActivated: bubble.controller.paused ? bubble.controller.resume() : bubble.controller.pause(60)
+                    label: bubble.controller.paused ? "Resume" : "A break…"
+                    onActivated: bubble.controller.paused ? bubble.controller.resume() : bubble.controller.showPause()
                 }
-                Action { label: "Fermer"; onActivated: bubble.controller.dismiss() }
+                Action { label: "Close"; onActivated: bubble.controller.dismiss() }
             }
         }
     }

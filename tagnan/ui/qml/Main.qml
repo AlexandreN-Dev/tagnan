@@ -85,9 +85,10 @@ Window {
         width: bubble.width + 26
         height: bubble.height + 14
         color: "transparent"
-        flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
-               | Qt.NoDropShadowWindowHint
-        title: "Tagnan — bulle"
+        // It never takes the keyboard, but for a break typed in words.
+        flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.NoDropShadowWindowHint
+               | (bubble.mode === "pause" ? 0 : Qt.WindowDoesNotAcceptFocus)
+        title: "Tagnan — bubble"
 
         Bubble {
             id: bubble
@@ -101,6 +102,17 @@ Window {
 
         onWidthChanged: win.place()
         onHeightChanged: win.place()
+
+        Connections {
+            target: bubble
+            function onModeChanged() {
+                if (bubble.mode === "pause")
+                    Qt.callLater(function() {
+                        bubbleWindow.requestActivate()
+                        bubble.focusBreak()
+                    })
+            }
+        }
     }
 
     onBubbleShownChanged: place()

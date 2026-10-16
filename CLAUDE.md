@@ -1,11 +1,11 @@
 Tagnan : un mousquetaire d'encre qui pose des questions de certification AWS sur le bureau Windows. Architecture et règles du jeu : README.md.
 
-Conventions (comme Dartt) : échanges en français ; code, identifiants et commentaires en anglais ; textes de l'interface en français. Petits commits atomiques, messages en anglais au format Conventional Commits. Dépôt git 100 % local.
+Conventions (comme Dartt) : échanges en français ; code, identifiants et commentaires en anglais. Tagnan parle anglais : questions, explications, bulle, menus et quiz en terminal (le README reste en français). Petits commits atomiques, messages en anglais au format Conventional Commits. Dépôt git 100 % local.
 
 Contraintes non négociables :
 - Claude n'est appelé que par le CLI officiel `claude`, lancé par `scripts/brain` avec l'environnement propre et les drapeaux d'isolation de `tagnan/brain.py` (jamais d'API Anthropic directe, jamais les identifiants rangés dans `~/.claude/`).
 - Le jeu, la base et le cerveau n'utilisent que la bibliothèque standard : le même code tourne dans WSL et dans le Python Windows de la fenêtre.
-- Les calques de Tagnan sont dans `tagnan/art.py` ; la fenêtre ne dessine elle-même que l'encre, les bras et les gouttes.
+- Les calques de Tagnan sont dans `tagnan/art.py` ; la fenêtre ne dessine elle-même que l'encre et les gouttes.
 
 Commandes, depuis la racine du dépôt :
 

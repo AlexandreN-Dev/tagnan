@@ -26,6 +26,20 @@ def busy() -> bool:
     return False
 
 
+# GetAsyncKeyState reads the physical buttons: left and right, swapped or not.
+VK_LBUTTON, VK_RBUTTON = 0x01, 0x02
+
+
+def mouse_down() -> bool:
+    """Whether a mouse button is down now, wherever the pointer is. Never on other systems."""
+    if sys.platform == "win32":
+        import ctypes
+
+        state = ctypes.windll.user32.GetAsyncKeyState
+        return bool(state(VK_LBUTTON) & 0x8000 or state(VK_RBUTTON) & 0x8000)
+    return False
+
+
 class Settings:
     """The window's own settings (its place on the screen), as JSON next to the database."""
 

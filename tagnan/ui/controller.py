@@ -4,12 +4,12 @@ import logging
 import random
 import time
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from tagnan import art
+from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan.game import Game, Outcome
 from tagnan.model import Question
@@ -21,16 +21,17 @@ from tagnan.ui.worker import BrainWorker
 logger = logging.getLogger(__name__)
 
 LETTERS = "ABCDEF"
-ASKS = ("En garde !", "Une question, Gascon !", "À toi, mousquetaire !", "Garde-à-vous !")
-CHEERS = ("Touché !", "Bien paré !", "Une botte imparable !", "Par ma rapière, c'est juste !")
-SCOLDS = ("Mordieu !", "Ventre-saint-gris !", "Palsambleu !", "Sang-Dieu, non !")
+# Tagnan speaks English, as a Gascon would: an oath of his own country now and then.
+ASKS = ("En garde!", "A question, Gascon!", "Your turn, musketeer!", "On your guard!")
+CHEERS = ("Touché!", "Well parried!", "An unstoppable thrust!", "By my rapier, that's right!")
+SCOLDS = ("Zounds!", "Sacrebleu!", "Blast it, no!", "By my sword, no!")
 QUIPS = {
-    "wink": ("Hé !", "Ça chatouille !", "Holà, doucement !"),
-    "annoyed": ("Tudieu ! Laisse-moi, j'ai une rapière.",),
+    "wink": ("Hey!", "That tickles!", "Easy there!"),
+    "annoyed": ("Enough! I have a rapier, you know.",),
     "sulk": ("…",),
 }
-DIFFICULTY = {"facile": "facile", "moyen": "moyenne", "difficile": "difficile"}
-REVIEW_WHEN = {1: "demain", 2: "dans 3 jours", 3: "dans une semaine", 4: "dans 3 semaines"}
+DIFFICULTY = {"easy": "Easy", "medium": "Medium", "hard": "Hard"}
+REVIEW_WHEN = {1: "tomorrow", 2: "in 3 days", 3: "in a week", 4: "in 3 weeks"}
 
 TICK_MS = 15_000
 UNANSWERED_MINUTES = 10  # a question left alone goes away, as if put off
@@ -41,19 +42,6 @@ FIRST_QUESTION_DELAY = 20.0  # the very first question comes soon after the firs
 MOOD_SECONDS = {"happy": 4.0, "angry": 6.0}
 RESULT_SECONDS = 15  # a right answer's bubble closes by itself, unless hovered
 QUIP_SECONDS = 1.8
-
-
-def typeset(value: Any) -> Any:
-    """French typography: a no-break space before ! ? : ; so that they never start a line."""
-    if isinstance(value, str):
-        for mark in "!?:;":
-            value = value.replace(f" {mark}", f"\u00a0{mark}")
-        return value
-    if isinstance(value, dict):
-        return {k: typeset(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [typeset(v) for v in value]
-    return value
 
 
 class Controller(QObject):
@@ -110,9 +98,9 @@ class Controller(QObject):
             self._show(
                 {
                     "mode": "message",
-                    "title": "Bonjour !",
-                    "text": "Je prépare mes premières questions, une minute ou deux. "
-                    "Clique sur moi en attendant, si le cœur t'en dit.",
+                    "title": "Hello!",
+                    "text": "I'm writing my first questions: give me a few minutes. "
+                    "Poke me meanwhile, if you like.",
                 }
             )
         self._refill_if_needed()
@@ -138,7 +126,7 @@ class Controller(QObject):
     @Property(str, notify=statusChanged)
     def status(self) -> str:
         p = self.game.progress
-        return f"Tagnan · {rules.GRADES[p.grade].name} · {p.points} points · série {p.streak}"
+        return f"Tagnan · {rules.GRADES[p.grade].name} · {p.points} points · streak {p.streak}"
 
     # --- Ticks: ask when it is time ---------------------------------------------------------
 
@@ -167,16 +155,16 @@ class Controller(QObject):
             {
                 "mode": "question",
                 "title": self._rng.choice(ASKS),
-                "meta": f"Domaine {domain.id} · {domain.name}",
-                "tag": "À revoir"
+                "meta": f"Domain {domain.id} · {domain.name}",
+                "tag": "Review"
                 if review
-                else f"Question {DIFFICULTY.get(question.difficulty, '')}",
+                else f"{DIFFICULTY.get(question.difficulty, '')} question",
                 "stem": question.stem,
                 "choices": [
                     {"letter": LETTERS[i], "text": c} for i, c in enumerate(question.choices)
                 ],
                 "need": need,
-                "hint": "" if need == 1 else f"Choisis-en {need}, puis valide.",
+                "hint": "" if need == 1 else f"Choose {need}, then confirm.",
             }
         )
         self._set_mood("ask")
@@ -211,21 +199,19 @@ class Controller(QObject):
         q = outcome.question
         after = outcome.after
         if outcome.correct:
-            points = f"+{outcome.delta} points · {after.points} au total · série de {after.streak}"
+            points = f"+{outcome.delta} points · {after.points} in all · streak of {after.streak}"
         elif outcome.delta:
             # A real minus sign, as the bubble prints it.
-            points = (
-                f"\u2212{-outcome.delta} points · {after.points} au total · série remise à zéro"
-            )
+            points = f"\u2212{-outcome.delta} points · {after.points} in all · streak reset"
         else:
-            points = f"{after.points} points · série remise à zéro"
+            points = f"{after.points} points · streak reset"
         if outcome.promoted:
             grade = rules.GRADES[after.grade]
-            news = f"Promotion ! Tagnan passe {grade.name} : {grade.look}."
+            news = f"Promotion! Tagnan is now a {grade.name}: {grade.look}."
         elif outcome.demoted:
-            news = f"Tagnan redescend {rules.GRADES[after.grade].name}."
+            news = f"Tagnan falls back to {rules.GRADES[after.grade].name}."
         elif outcome.review_box and not outcome.correct:
-            news = f"Cette question reviendra {REVIEW_WHEN[outcome.review_box]}."
+            news = f"This question will come back {REVIEW_WHEN[outcome.review_box]}."
         else:
             news = ""
         return {
@@ -265,8 +251,8 @@ class Controller(QObject):
         self._show(
             {
                 "mode": "message",
-                "title": "Question écartée",
-                "text": "Merci, je ne la poserai plus. Le cerveau en écrira d'autres.",
+                "title": "Question set aside",
+                "text": "Thank you, I won't ask it again. My brain will write others.",
             }
         )
         self._hide_timer.start(6000)
@@ -299,8 +285,8 @@ class Controller(QObject):
             self._show(
                 {
                     "mode": "message",
-                    "title": "Pas encore",
-                    "text": "Le cerveau écrit de nouvelles questions. Repasse dans une minute.",
+                    "title": "Not yet",
+                    "text": "My brain is writing new questions. Come back in a few minutes.",
                 }
             )
             self._hide_timer.start(6000)
@@ -316,22 +302,20 @@ class Controller(QObject):
         )
         now = self._clock()
         if self.scheduler.paused_until > now:
-            when = f"En pause jusqu'à {datetime.fromtimestamp(self.scheduler.paused_until):%H:%M}."
+            when = f"On a break until {pauses.clock(self.scheduler.paused_until, now)}."
         else:
-            when = (
-                f"Prochaine question vers {datetime.fromtimestamp(self.scheduler.next_at):%H:%M}."
-            )
+            when = f"Next question around {pauses.clock(self.scheduler.next_at, now)}."
         self._show(
             {
                 "mode": "stats",
                 "title": rules.GRADES[s["grade"]].name,
                 "points": s["points"],
-                "next": f"{band_end} pour {s['next_name']}"
+                "next": f"{band_end} for {s['next_name']}"
                 if band_end is not None
-                else "grade le plus haut",
+                else "the highest grade",
                 "share": max(0.0, min(1.0, share)),
-                "streak": f"Série : {s['streak']} · record {s['best_streak']}",
-                "answers": f"{s['right']} bonnes réponses sur {s['answered']}",
+                "streak": f"Streak: {s['streak']} · best {s['best_streak']}",
+                "answers": f"{s['right']} right answers out of {s['answered']}",
                 "domains": [
                     {
                         "name": f"{d['id']}. {low[i].name}",
@@ -340,29 +324,81 @@ class Controller(QObject):
                     }
                     for i, d in enumerate(s["domains"])
                 ],
-                "bank": f"{s['fresh']} questions neuves en réserve, {s['reviews']} à revoir."
-                f" {when}",
+                "bank": f"{s['fresh']} new questions in store, {s['reviews']} to review. {when}",
             }
         )
 
+    @Slot()
+    def showPause(self) -> None:
+        """The pause bubble: quick choices, or a while or a time in his own words."""
+        now = self._clock()
+        paused = self.scheduler.paused_until > now
+        self._show(
+            {
+                "mode": "pause",
+                "title": "A break?",
+                "choices": [
+                    {"label": "30 min", "text": "30 min"},
+                    {"label": "1 hour", "text": "1h"},
+                    {"label": "2 hours", "text": "2h"},
+                    {"label": "Until tomorrow", "text": "tomorrow"},
+                ],
+                "status": f"On a break until {pauses.clock(self.scheduler.paused_until, now)}."
+                if paused
+                else "",
+            }
+        )
+
+    @Slot(str, result=dict)
+    def previewPause(self, text: str) -> dict[str, Any]:
+        """What the pause typed so far would be, said before it is confirmed."""
+        if not text.strip():
+            return {"ok": False, "text": ""}
+        now = self._clock()
+        understood = pauses.parse(text, now, self.scheduler.rhythm.start_hour)
+        if understood is None:
+            return {"ok": False, "text": "I don't follow. Try 1h30, 45 min, 4:45pm or noon."}
+        return {"ok": True, "text": pauses.describe(understood, now) + "."}
+
+    @Slot(str, result=bool)
+    def pauseWith(self, text: str) -> bool:
+        now = self._clock()
+        understood = pauses.parse(text, now, self.scheduler.rhythm.start_hour)
+        if understood is None:
+            return False
+        self.scheduler.pause_until(understood.until)
+        self._current = None
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "At ease!",
+                "text": pauses.describe(understood, now) + ". Not a word from me till then.",
+            }
+        )
+        self._hide_timer.start(5000)
+        self.statusChanged.emit()
+        return True
+
     @Slot(int)
     def pause(self, minutes: int) -> None:
-        self.scheduler.pause(self._clock(), minutes)
-        if self._bubble["mode"] == "question":
-            self._close()
-        self.statusChanged.emit()
+        self.pauseWith(f"{minutes} min")
 
     @Slot()
     def pauseUntilTomorrow(self) -> None:
-        now = datetime.fromtimestamp(self._clock())
-        tomorrow = now.replace(hour=self.scheduler.rhythm.start_hour, minute=0, second=0)
-        minutes = (tomorrow.timestamp() - now.timestamp()) / 60
-        self.pause(int(minutes if minutes > 0 else minutes + 24 * 60))
+        self.pauseWith("tomorrow")
 
     @Slot()
     def resume(self) -> None:
         self.scheduler.resume(self._clock())
         self.statusChanged.emit()
+        if self._bubble["mode"] == "pause":
+            self._close()
+
+    def closes_on_outside(self) -> bool:
+        """Every bubble but a question closes when one clicks elsewhere: a question stays until
+        it is answered or put off, lest a click in another window lose it."""
+        return self._bubble["mode"] not in ("hidden", "question")
 
     @Slot(bool)
     def hold(self, held: bool) -> None:
@@ -400,8 +436,8 @@ class Controller(QObject):
                 self._show(
                     {
                         "mode": "message",
-                        "title": "Prêt !",
-                        "text": "Mes questions sont écrites. En garde, la première arrive.",
+                        "title": "Ready!",
+                        "text": "My questions are written. En garde, the first one is coming.",
                     }
                 )
                 self._hide_timer.start(8000)
@@ -415,9 +451,8 @@ class Controller(QObject):
             self._show(
                 {
                     "mode": "message",
-                    "title": "Le cerveau cale",
-                    "text": f"Je n'ai pas pu écrire de questions : {error}."
-                    " Je réessaie dans dix minutes.",
+                    "title": "My brain stalls",
+                    "text": f"I couldn't write questions: {error}. I'll try again in ten minutes.",
                 }
             )
 
@@ -427,19 +462,22 @@ class Controller(QObject):
             and self._outcome
             and self._outcome.question.id == question_id
         ):
-            self._show({"mode": "explanation", "title": "Écoute bien", "text": text})
+            self._show({"mode": "explanation", "title": "Listen well", "text": text})
 
     def _on_explain_failed(self, question_id: int, error: str) -> None:
         if self._bubble["mode"] == "thinking":
-            self._show(
-                {**self._bubble, "mode": "result", "news": f"Pas d'explication de plus : {error}"}
-            )
+            self._show({**self._bubble, "mode": "result", "news": f"No more explanation: {error}"})
 
     # --- Figure -----------------------------------------------------------------------------
 
     def _on_tapped(self, mood: str) -> None:
         if self._bubble["mode"] in ("hidden", "quip"):
-            self._show({"mode": "quip", "text": self._rng.choice(QUIPS.get(mood, ("Hé !",)))})
+            now = self._clock()
+            if self.scheduler.paused_until > now and mood == "wink":
+                line = f"On a break until {pauses.clock(self.scheduler.paused_until, now)}."
+            else:
+                line = self._rng.choice(QUIPS.get(mood, ("Hey!",)))
+            self._show({"mode": "quip", "text": line})
             self._hide_timer.start(round(QUIP_SECONDS * 1000))
 
     def _set_mood(self, mood: str, seconds: float = 0.0) -> None:
@@ -459,7 +497,7 @@ class Controller(QObject):
 
     def _show(self, bubble: dict[str, Any]) -> None:
         self._hide_timer.stop()
-        self._bubble = typeset(bubble)
+        self._bubble = bubble
         self.bubbleChanged.emit()
 
     def _close(self) -> None:

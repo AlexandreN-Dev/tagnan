@@ -46,6 +46,7 @@ from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
 from tagnan.ui.images import LayerImages
+from tagnan.ui.outside import OutsideClicks
 from tagnan.ui.placement import Placement
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
@@ -133,6 +134,8 @@ def demo(controller: Controller, what: str) -> None:
         controller.showStats()
     elif what == "quip":
         controller.animator.tap()
+    elif what == "pause":
+        controller.showPause()
 
 
 def main() -> int:
@@ -148,7 +151,7 @@ def main() -> int:
     parser.add_argument("--snapshot-delay", type=int, default=2500, help="en millisecondes")
     parser.add_argument(
         "--demo",
-        choices=["question", "result-right", "result-wrong", "stats", "quip"],
+        choices=["question", "result-right", "result-wrong", "stats", "quip", "pause"],
         help="développement : afficher tout de suite une bulle",
     )
     parser.add_argument(
@@ -234,6 +237,15 @@ def main() -> int:
     place(window, settings)
     window.show()
 
+    # A click outside Tagnan and his bubble closes the bubble (not a question).
+    def inside(point: QPoint) -> bool:
+        windows = [window, *window.findChildren(QQuickWindow)]
+        return any(w.isVisible() and w.geometry().contains(point) for w in windows)
+
+    outside = OutsideClicks(inside)
+    outside.clickedOutside.connect(controller.dismiss)
+    controller.bubbleChanged.connect(lambda: outside.watch(controller.closes_on_outside()))
+
     save_timer = QTimer()
     save_timer.setSingleShot(True)
     save_timer.timeout.connect(lambda: settings.set("figure", [window.x(), window.y()]))
@@ -266,7 +278,7 @@ def main() -> int:
     heartbeat = QTimer()  # lets Python see Ctrl+C now and then
     heartbeat.timeout.connect(lambda: None)
     heartbeat.start(250)
-    keep: list[QObject] = [tray, placement, animator, controller, worker]  # alive while QML runs
+    keep: list[QObject] = [tray, placement, outside, animator, controller, worker]  # QML's
     app.exec()
     del keep
     leave()

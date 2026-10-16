@@ -32,14 +32,13 @@ class Tray(QObject):
         super().__init__()
         self._controller = controller
         self.menu = QMenu()
-        self._add("Une question maintenant", controller.askNow)
-        self._add("Progression", controller.showStats)
+        self._add("A question now", controller.askNow)
+        self._add("Progress", controller.showStats)
         self.menu.addSeparator()
-        self._pause_hour = self._add("Pause d'une heure", lambda: controller.pause(60))
-        self._pause_day = self._add("Pause jusqu'à demain", controller.pauseUntilTomorrow)
-        self._resume = self._add("Reprendre", controller.resume)
+        self._pause = self._add("A break…", controller.showPause)
+        self._resume = self._add("Resume", controller.resume)
         self.menu.addSeparator()
-        self._add("Quitter Tagnan", controller.quit)
+        self._add("Quit Tagnan", controller.quit)
         self.icon: QSystemTrayIcon | None = None
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.icon = QSystemTrayIcon(figure_icon(controller.stage))
@@ -62,9 +61,8 @@ class Tray(QObject):
 
     def _restyle(self) -> None:
         paused = bool(self._controller.paused)
-        self._pause_hour.setVisible(not paused)
-        self._pause_day.setVisible(not paused)
+        self._pause.setText("Change the break…" if paused else "A break…")
         self._resume.setVisible(paused)
         if self.icon is not None:
             self.icon.setIcon(figure_icon(self._controller.stage))
-            self.icon.setToolTip(str(self._controller.status) + (" · en pause" if paused else ""))
+            self.icon.setToolTip(str(self._controller.status) + (" · on a break" if paused else ""))

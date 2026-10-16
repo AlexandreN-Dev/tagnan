@@ -301,7 +301,11 @@ Item {
                 Layer {
                     name: "quill"
                     visible: root.stage === 0
-                    transform: Rotation { origin.x: 61; origin.y: 104; angle: root.animator.quill }
+                    transform: Rotation {
+                        origin.x: root.stage === 0 ? root.spec.quill[0] : 0
+                        origin.y: root.stage === 0 ? root.spec.quill[1] : 0
+                        angle: root.animator.quill
+                    }
                 }
                 Layer { name: "glass"; visible: root.stage === 0 }
 

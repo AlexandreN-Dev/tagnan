@@ -34,6 +34,7 @@ TEMPO = 0.9
 DRIP_PERIOD = 7.0
 GLOW_PERIOD = 3.4
 BURST_LENGTH = 1.2
+QUILL_SWAY = 3.0  # degrees each way, around the nib
 DECOR_POP = Spring(260, 0.35)
 
 IDLE_MIN, IDLE_MAX = 7.0, 15.0
@@ -309,7 +310,7 @@ class Rig:
             moustache=moustache,
             plume=plume,
             hat=hat,
-            quill=3.0 * math.sin(2 * math.pi * now / 4.2),
+            quill=QUILL_SWAY * math.sin(2 * math.pi * now / 4.2),
             guard=guard,
             sword=sword,
             sword_y=SWORD_FLOAT[0] * math.sin(2 * math.pi * now / SWORD_FLOAT[1]),

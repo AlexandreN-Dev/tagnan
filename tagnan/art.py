@@ -689,8 +689,11 @@ INKWELL = (
     "M22 122 Q22 130 30 130 L90 130 Q98 130 98 122 L98 97 Q98 80 82 79 "
     "L76 78.5 L76 74 L44 74 L44 78.5 L38 79 Q22 80 22 97 Z"
 )
-# The quill: where it is dipped (the window turns it around that point), and its tip.
-QUILL = ((61.0, 104.0), (92.0, 44.0))
+# The inkwell's mouth: the inner walls of its neck, the top of its lip and the foot of the neck.
+MOUTH = (44.0, 76.0, 66.0, 78.5)
+# The quill: where it is dipped (the window turns it around that point), and its tip. It leans
+# so as to go in through the mouth, clear of the glass whichever way the window sways it.
+QUILL = ((60.0, 99.0), (80.5, 32.0))
 
 
 def open_spline(points: list[tuple[float, float]]) -> str:
@@ -710,9 +713,11 @@ def open_spline(points: list[tuple[float, float]]) -> str:
 def quill() -> str:
     """The goose quill dipped in the inkwell: a vane in two tones (cream towards the light, shaded
     on the other side of the shaft), the shaft, a gold nib in the ink, and a thin dark outline all
-    round, so that the cream stands out on light desktops."""
+    round, so that the cream stands out on light desktops. The vane starts just above the lip, so
+    that only the bare shaft goes down the neck."""
     (x0, y0), (x1, y1) = QUILL
-    width, start, shaft, line = 11.0, 0.4, 2.2, 1.0
+    width, shaft, line = 11.0, 2.2, 1.0
+    start = (y0 - MOUTH[2] + 2) / (y0 - y1)
     length = math.hypot(x1 - x0, y1 - y0)
     ux, uy = (x1 - x0) / length, (y1 - y0) / length
 

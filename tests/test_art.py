@@ -85,3 +85,26 @@ def test_inkwell_shading_follows_the_slosh() -> None:
         assert shading["shade"].endswith("Z")
         assert shading["light"].endswith("Z")
     assert art.inkwell_shading(math.pi / 2) != art.inkwell_shading(3 * math.pi / 2)
+
+
+def test_quill_goes_in_through_the_mouth_never_through_the_glass() -> None:
+    from tagnan.ui.animation.rig import QUILL_SWAY
+
+    left, right, lip, foot = art.MOUTH
+    (x0, y0), (x1, y1) = art.QUILL
+    half = 2.2 / 2 + 1.0  # the shaft and its outline
+    for degrees in (-QUILL_SWAY, 0.0, QUILL_SWAY):
+        a = math.radians(degrees)
+
+        def turned(x: float, y: float, a: float = a) -> tuple[float, float]:
+            dx, dy = x - x0, y - y0
+            cos, sin = math.cos(a), math.sin(a)
+            return x0 + dx * cos - dy * sin, y0 + dx * sin + dy * cos
+
+        tx, ty = turned(x1, y1)
+        for y in (lip - half, lip, (lip + foot) / 2, foot):
+            x = x0 + (tx - x0) * (y - y0) / (ty - y0)
+            assert left + half <= x <= right - half
+        start = (y0 - lip + 2) / (y0 - y1)
+        _, base_y = turned(x0 + (x1 - x0) * start, y0 + (y1 - y0) * start)
+        assert base_y < lip  # the vane stays out of the neck

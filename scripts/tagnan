@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 # Start Tagnan and give the terminal back: the window runs detached, its messages go to
-# ~/.local/state/tagnan/ui.log (and %LOCALAPPDATA%\tagnan\tagnan.log). A second start does
-# nothing: one Tagnan at a time. "Quit Tagnan" in his menu stops him.
+# ~/.local/state/tagnan/ui.log (and %LOCALAPPDATA%\tagnan\tagnan.log); on macOS, to
+# ~/Library/Application Support/tagnan/ui.log. A second start does nothing: one Tagnan at a
+# time. "Quit Tagnan" in his menu stops him.
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$repo/scripts/_windows.sh"
+source "$repo/scripts/_mac.sh"
 
-require_windows_venv >/dev/null
-state="${XDG_STATE_HOME:-$HOME/.local/state}/tagnan"
-mkdir -p "$state"
-setsid nohup "$repo/scripts/tagnan-ui" "$@" >"$state/ui.log" 2>&1 </dev/null &
+if is_mac; then
+  require_mac_venv >/dev/null
+  state="$(mac_state_dir)"
+  mkdir -p "$state"
+  # No setsid on macOS: nohup and disown keep him when the terminal closes.
+  nohup "$repo/scripts/tagnan-ui" "$@" >"$state/ui.log" 2>&1 </dev/null &
+  disown
+else
+  source "$repo/scripts/_windows.sh"
+  require_windows_venv >/dev/null
+  state="${XDG_STATE_HOME:-$HOME/.local/state}/tagnan"
+  mkdir -p "$state"
+  setsid nohup "$repo/scripts/tagnan-ui" "$@" >"$state/ui.log" 2>&1 </dev/null &
+fi
 sleep 1  # let the window's process start before this shell goes
 echo "Tagnan is coming, bottom right of the screen. Log: $state/ui.log"

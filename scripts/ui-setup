@@ -1,8 +1,26 @@
 #!/usr/bin/env bash
 # Create the window's Windows environment (%LOCALAPPDATA%\tagnan\venv) and install its pinned,
 # hashed dependencies (tagnan/ui/requirements.txt). Run it once, and after a version change.
+# On macOS: the environment is ~/Library/Application Support/tagnan/venv, on uv's Python 3.12
+# (the pinned wheels' hashes cover macOS too).
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_mac.sh"
+
+if is_mac; then
+  export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
+  venv_dir="$(mac_state_dir)/venv"
+  if [[ ! -x "$venv_dir/bin/python" ]]; then
+    echo "Creating the window's environment in $venv_dir"
+    uv venv --quiet --python 3.12 "$venv_dir"
+  fi
+  echo "Installing its dependencies (versions and hashes checked)…"
+  uv pip install --quiet --python "$venv_dir/bin/python" --require-hashes --no-deps \
+    -r "$repo/tagnan/ui/requirements.txt"
+  echo "The window's environment is ready. Start Tagnan with scripts/tagnan."
+  exit 0
+fi
+
 source "$repo/scripts/_windows.sh"
 
 base="$(windows_base_python)"

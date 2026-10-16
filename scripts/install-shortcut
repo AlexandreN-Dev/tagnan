@@ -6,9 +6,11 @@
 #   scripts/install-shortcut --dry-run     say what would be written, write nothing
 #   scripts/install-shortcut --remove      remove both shortcuts and the icon
 # Outside the repository it writes only the shortcuts and the icon, all named here.
+# On macOS: a Tagnan.app in ~/Applications (Launchpad, Spotlight), and with --startup a
+# LaunchAgent that opens it at each logon (scripts/_mac-app).
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$repo/scripts/_windows.sh"
+source "$repo/scripts/_mac.sh"
 
 mode="install"
 startup=false
@@ -21,6 +23,11 @@ for arg in "$@"; do
   esac
 done
 
+if is_mac; then
+  exec "$repo/scripts/_mac-app" "$mode" "$startup"
+fi
+
+source "$repo/scripts/_windows.sh"
 appdata="$(windows_env APPDATA)"
 programs="$appdata\\Microsoft\\Windows\\Start Menu\\Programs"
 links=("$programs\\Tagnan.lnk")

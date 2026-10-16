@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 # The window, in the foreground (its messages in this terminal, Ctrl+C quits): Windows Python
-# runs the code of this WSL repository and calls the brain back through wsl.exe.
+# runs the code of this WSL repository and calls the brain back through wsl.exe. On macOS, the
+# window's own Python runs it here and calls the brain directly.
 #   scripts/tagnan-ui [--demo question|result-wrong|stats] [--snapshot WINDOWS_PATH] ...
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_mac.sh"
+
+if is_mac; then
+  python="$(require_mac_venv)"
+  cd "$repo"
+  exec "$python" -B -m tagnan.ui "$@"
+fi
+
 source "$repo/scripts/_windows.sh"
 
 python="$(require_windows_venv)"

@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# macOS side of scripts/install-shortcut (bash 3.2): ~/Applications/Tagnan.app, which starts the
+# window on this repository, and with --startup ~/Library/LaunchAgents/local.tagnan.plist, which
+# opens it at each logon. Outside the repository it writes only these two, named here.
+#   scripts/_mac-app install|dry-run|remove true|false
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_mac.sh"
+
+mode="$1"
+startup="$2"
+app="$HOME/Applications/Tagnan.app"
+agent="$HOME/Library/LaunchAgents/local.tagnan.plist"
+state="$(mac_state_dir)"
+
+if [[ "$mode" == "remove" ]]; then
+  launchctl bootout "gui/$(id -u)" "$agent" 2>/dev/null || true
+  rm -rf "$app"
+  rm -f "$agent"
+  echo "App and sign-in start removed."
+  exit 0
+fi
+
+echo "App: $app"
+echo "  runs : $repo/scripts/tagnan-ui"
+echo "  log  : $state/ui.log"
+if [[ "$startup" == true ]]; then
+  echo "Start at each sign-in: $agent"
+fi
+if [[ "$mode" == "dry-run" ]]; then
+  echo "(--dry-run: nothing written)"
+  exit 0
+fi
+
+python="$(require_mac_venv)"
+rm -rf "$app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$state"
+
+# LSUIElement: no Dock icon, as the window itself asks (tagnan/ui/macos.py).
+cat >"$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Tagnan</string>
+  <key>CFBundleDisplayName</key><string>Tagnan</string>
+  <key>CFBundleIdentifier</key><string>local.tagnan</string>
+  <key>CFBundleExecutable</key><string>Tagnan</string>
+  <key>CFBundleIconFile</key><string>tagnan</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSUIElement</key><true/>
+</dict>
+</plist>
+PLIST
+
+# The app's program: the window, its messages in the log as with scripts/tagnan.
+printf '%s\n' '#!/bin/bash' \
+  "exec \"$repo/scripts/tagnan-ui\" >\"$state/ui.log\" 2>&1 </dev/null" \
+  >"$app/Contents/MacOS/Tagnan"
+chmod +x "$app/Contents/MacOS/Tagnan"
+
+# The icon: Tagnan the musketeer, drawn by the window's own code, turned to .icns by sips.
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+if (cd "$repo" && "$python" -B -m tagnan.ui.icon "$work/tagnan.png") &&
+  sips -s format icns "$work/tagnan.png" --out "$app/Contents/Resources/tagnan.icns" >/dev/null; then
+  touch "$app" # the Finder reads the icon again
+else
+  echo "No icon made: the app works without it." >&2
+fi
+
+if [[ "$startup" == true ]]; then
+  mkdir -p "$(dirname "$agent")"
+  cat >"$agent" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.tagnan</string>
+  <key>ProgramArguments</key>
+  <array><string>/usr/bin/open</string><string>-g</string><string>$app</string></array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+fi
+done="Done: \"Tagnan\" is in your Applications"
+if [[ "$startup" == true ]]; then
+  done+=", and comes along at each sign-in"
+fi
+echo "$done."

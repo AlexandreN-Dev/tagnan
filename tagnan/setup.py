@@ -1,4 +1,4 @@
-"""The guided setup, which scripts/setup hands over to once WSL and uv are there.
+"""The guided setup, which scripts/setup hands over to once WSL (or macOS) and uv are there.
 
 It checks each thing Tagnan needs, installs what is missing with the user's consent, connects
 their Claude account, writes their settings, tries the brain for real and starts Tagnan. It can
@@ -12,6 +12,7 @@ run again at will: what is already done is skipped.
 import argparse
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -23,13 +24,24 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from tagnan import config as configs
-from tagnan.paths import EXAMS_DIR, REPO, config_file
+from tagnan.paths import EXAMS_DIR, REPO, config_file, state_dir
 from tagnan.scheduler import PACES
 
 LOCAL_BIN = Path.home() / ".local" / "bin"
-# Where the brain finds programs: it runs through `wsl.exe -e`, without a login shell, so only
-# with ~/.local/bin (scripts/brain adds it) and the system's own folders.
-BRAIN_PATH = (LOCAL_BIN, Path("/usr/local/bin"), Path("/usr/bin"), Path("/bin"))
+# Where the brain finds programs: it runs through `wsl.exe -e`, or from the Finder or launchd on
+# macOS, without a login shell, so only with ~/.local/bin and Homebrew's (scripts/brain adds
+# them) and the system's own folders.
+BRAIN_PATH = (
+    LOCAL_BIN,
+    Path("/opt/homebrew/bin"),
+    Path("/usr/local/bin"),
+    Path("/usr/bin"),
+    Path("/bin"),
+)
+# The environment a Mac app starts with (Finder, launchd): the trial calls the brain in it.
+MAC_APP_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+# The oldest macOS the window's Qt runs on (PySide6 6.12's wheels are macosx_14_0).
+MIN_MACOS = (14, 0)
 CLAUDE_INSTALLER = "curl -fsSL https://claude.ai/install.sh | bash"
 WINGET_PYTHON = (
     "winget.exe",
@@ -220,10 +232,27 @@ def windows(function: str) -> str:
     return done.stdout.strip()
 
 
+def macos_supported(version: str) -> bool:
+    """Whether a macOS version ("14.5", "15") runs the window; an unreadable one is let through."""
+    try:
+        numbers = tuple(int(part) for part in version.split(".")[:2])
+    except ValueError:
+        return True
+    return not numbers or numbers >= MIN_MACOS
+
+
+def mac_window_python() -> Path:
+    """The window's Python on macOS, in the environment scripts/ui-setup creates."""
+    return state_dir() / "venv" / "bin" / "python"
+
+
 class Setup:
-    def __init__(self, term: Terminal, *, check: bool) -> None:
+    def __init__(
+        self, term: Terminal, *, check: bool, mac: bool = sys.platform == "darwin"
+    ) -> None:
         self.term = term
         self.check = check
+        self.mac = mac  # window, brain and game side by side; else the window is on Windows
         self.missing: list[str] = []
 
     def offer(self, question: str) -> bool:
@@ -233,7 +262,16 @@ class Setup:
     # --- The steps ----------------------------------------------------------------------------
 
     def prerequisites(self) -> None:
-        self.term.ok("WSL", os.environ.get("WSL_DISTRO_NAME", ""))
+        if self.mac:
+            version = platform.mac_ver()[0]
+            if not macos_supported(version):
+                raise SetupError(
+                    f"macOS {version}: my window needs macOS {MIN_MACOS[0]} (Sonoma) or later.\n"
+                    "Update the Mac, then run scripts/setup again."
+                )
+            self.term.ok("macOS", version)
+        else:
+            self.term.ok("WSL", os.environ.get("WSL_DISTRO_NAME", ""))
         uv = run(["uv", "--version"], capture_output=True).stdout.split()
         self.term.ok("uv", uv[1] if len(uv) > 1 else "")
 
@@ -257,7 +295,7 @@ class Setup:
             self.term.todo("Claude Code", f"in {program.parent}, out of the window's reach")
             self.term.note(
                 "The window calls Claude without your login shell, so it must be in\n"
-                "~/.local/bin. The native build installs there (claude install)."
+                "~/.local/bin (or Homebrew's). The native build installs there (claude install)."
             )
             if not self.offer("Install the native build?"):
                 self.missing.append("Claude Code in ~/.local/bin")
@@ -326,7 +364,11 @@ class Setup:
         self.term.ok("  installed")
 
     def window(self) -> None:
-        venv = Path(windows("windows_venv_dir")) / "Scripts" / "python.exe"
+        venv = (
+            mac_window_python()
+            if self.mac
+            else Path(windows("windows_venv_dir")) / "Scripts" / "python.exe"
+        )
         if self.check:
             if venv.exists():
                 self.term.ok("Window (PySide6)", "ready")
@@ -388,7 +430,7 @@ class Setup:
 
     def pace(self) -> None:
         """His starting pace, kept by the window in its settings.json; the menu changes it later."""
-        path = Path(windows('wslpath -u "$(windows_localappdata)"')) / "tagnan" / "settings.json"
+        path = self.window_settings()
         try:
             saved = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -410,8 +452,28 @@ class Setup:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(saved, indent=2), encoding="utf-8")
 
+    def window_settings(self) -> Path:
+        if self.mac:
+            return state_dir() / "settings.json"
+        return Path(windows('wslpath -u "$(windows_localappdata)"')) / "tagnan" / "settings.json"
+
+    def brain_call(self) -> tuple[list[str], dict[str, Any]]:
+        """How the window calls the brain: through wsl.exe from Windows; on macOS directly, in
+        the bare environment a Mac app starts with."""
+        brain = str(REPO / "scripts" / "brain")
+        if self.mac:
+            env = {
+                name: os.environ[name]
+                for name in ("HOME", "USER", "LOGNAME", "TMPDIR", "LANG")
+                if name in os.environ
+            }
+            return [brain, "check"], {"env": {**env, "PATH": MAC_APP_PATH}}
+        command = ["wsl.exe", "-d", os.environ["WSL_DISTRO_NAME"], "-e", brain, "check"]
+        return command, {"cwd": "/mnt/c"}
+
     def trial(self) -> None:
-        """One tiny real call, the way the window makes them: wsl.exe, then scripts/brain."""
+        """One tiny real call, the way the window makes them: scripts/brain, through wsl.exe from
+        Windows."""
         self.term.section("Trial")
         if self.check or self.missing:
             if self.missing:
@@ -420,16 +482,9 @@ class Setup:
                 self.term.note("Skipped with --check (it uses a little of your usage).")
             return
         self.term.quip("Let me dip my quill.")
-        command = [
-            "wsl.exe",
-            "-d",
-            os.environ["WSL_DISTRO_NAME"],
-            "-e",
-            str(REPO / "scripts" / "brain"),
-            "check",
-        ]
+        command, options = self.brain_call()
         began = time.monotonic()
-        done = run(command, capture_output=True, stdin=subprocess.DEVNULL, cwd="/mnt/c")
+        done = run(command, capture_output=True, stdin=subprocess.DEVNULL, **options)
         seconds = time.monotonic() - began
         try:
             answer = json.loads(done.stdout)
@@ -448,9 +503,16 @@ class Setup:
         self.term.section("Shortcuts")
         if self.check:
             return
-        shortcut = self.term.yes('A "Tagnan" icon in the Start menu?')
+        where = "in Applications (Launchpad, Spotlight)" if self.mac else "in the Start menu"
+        startup = False
+        shortcut = self.term.yes(f'A "Tagnan" icon {where}?')
         if shortcut:
-            startup = self.term.yes("And bring him along at each Windows sign-in?", False)
+            startup = self.term.yes(
+                "And bring him along at each sign-in?"
+                if self.mac
+                else "And bring him along at each Windows sign-in?",
+                False,
+            )
             command = [str(REPO / "scripts" / "install-shortcut")]
             if run([*command, "--startup"] if startup else command).returncode != 0:
                 self.term.fail("Shortcuts", "see the message above; Tagnan works without them")
@@ -458,20 +520,29 @@ class Setup:
         self.term.line()
         if self.term.yes("Bring Tagnan in now?"):
             if run([str(REPO / "scripts" / "tagnan")]).returncode != 0:
-                raise SetupError("Tagnan did not start: see ~/.local/state/tagnan/ui.log.")
+                log = str(self.log()).replace(str(Path.home()), "~")
+                raise SetupError(f"Tagnan did not start: see {log}.")
             self.term.line()
             self.term.quip("Here I am. My first questions take a few minutes to write.")
         self.term.note(
             "Right-click him: a question now, progress, pace, sound, a break.\n"
             "To start him again later: scripts/tagnan"
-            + (", or his Start menu icon." if shortcut else ".")
+            + (f", or his icon {where}." if shortcut else ".")
         )
+
+    def log(self) -> Path:
+        """Where scripts/tagnan sends the window's messages."""
+        if self.mac:
+            return state_dir() / "ui.log"
+        state = os.environ.get("XDG_STATE_HOME")
+        return (Path(state) if state else Path.home() / ".local" / "state") / "tagnan" / "ui.log"
 
     def all(self) -> int:
         self.term.banner()
         self.prerequisites()
         self.claude()
-        self.windows_python()
+        if not self.mac:
+            self.windows_python()
         self.window()
         self.settings()
         self.trial()

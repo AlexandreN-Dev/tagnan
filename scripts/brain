@@ -6,8 +6,9 @@
 #   scripts/brain check                 (a tiny real call, used by scripts/setup)
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# wsl.exe -e starts us without a login shell: uv and claude live in ~/.local/bin.
-export PATH="$HOME/.local/bin:$PATH"
+# wsl.exe -e, the Finder and launchd start us without a login shell: uv and claude live in
+# ~/.local/bin, or in Homebrew's folder on macOS.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 cd "$repo"
 # Standard library only: a bare Python 3.12, outside the project's development environment.
 exec uv run --quiet --no-project --python 3.12 python -B -m tagnan.brain "$@"

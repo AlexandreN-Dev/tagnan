@@ -2,9 +2,10 @@
 
     scripts/brain generate < request.json   # {"exam", "slots": [...], "avoid": [...]}
     scripts/brain explain < request.json    # {"exam", "question": {...}, "chosen": [...]}
+    scripts/brain check                     # one tiny call with the configured model
 
 It prints one JSON object on stdout; on failure, a message on stderr and exit code 1. Claude is
-reached through the official CLI only, with the Team seat's own login: clean environment, no
+reached through the official CLI only, with the user's own login: clean environment, no
 tools, no hooks, no MCP servers, in an empty folder (no CLAUDE.md, no project settings).
 """
 
@@ -41,7 +42,7 @@ ISOLATION_FLAGS = (
     '{"disableAllHooks": true}',
 )
 # Opus at max effort thinks long: a batch of ten can take minutes, an explanation a minute.
-GENERATE_TIMEOUT, EXPLAIN_TIMEOUT = 600.0, 240.0
+GENERATE_TIMEOUT, EXPLAIN_TIMEOUT, CHECK_TIMEOUT = 600.0, 240.0, 180.0
 DIFFICULTIES = ("easy", "medium", "hard")
 
 QUESTION_SCHEMA: dict[str, Any] = {
@@ -78,6 +79,12 @@ BATCH_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"questions": {"type": "array", "items": QUESTION_SCHEMA}},
     "required": ["questions"],
+    "additionalProperties": False,
+}
+CHECK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"ok": {"type": "boolean"}},
+    "required": ["ok"],
     "additionalProperties": False,
 }
 EXPLAIN_SCHEMA: dict[str, Any] = {
@@ -275,15 +282,33 @@ def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     return {"text": text}
 
 
+def check(cfg: configs.Config) -> dict[str, Any]:
+    """The setup's real try: the login, the model and the isolation flags, for a sliver of quota."""
+    structured = run_claude(
+        "Set ok to true.",
+        system="You answer a connection check for Tagnan, a quiz game.",
+        schema=CHECK_SCHEMA,
+        model=cfg.brain.model,
+        effort="low",
+        timeout=CHECK_TIMEOUT,
+    )
+    if structured.get("ok") is not True:
+        raise BrainError("claude answered the check oddly")
+    return {"ok": True, "model": cfg.brain.model}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brain", description="Tagnan's brain")
-    parser.add_argument("action", choices=["generate", "explain"])
+    parser.add_argument("action", choices=["generate", "explain", "check"])
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
     try:
         cfg = configs.load(args.config)
-        request = json.loads(sys.stdin.read() or "{}")
-        result = generate(request, cfg) if args.action == "generate" else explain(request, cfg)
+        if args.action == "check":
+            result = check(cfg)
+        else:
+            request = json.loads(sys.stdin.read() or "{}")
+            result = generate(request, cfg) if args.action == "generate" else explain(request, cfg)
     except (BrainError, ValueError, KeyError) as error:
         print(f"brain: {error}", file=sys.stderr)
         return 1

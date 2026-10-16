@@ -3,6 +3,7 @@
 # The window calls it through wsl.exe, the terminal quiz directly:
 #   scripts/brain generate < request.json
 #   scripts/brain explain < request.json
+#   scripts/brain check                 (a tiny real call, used by scripts/setup)
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # wsl.exe -e starts us without a login shell: uv and claude live in ~/.local/bin.

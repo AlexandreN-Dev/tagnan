@@ -62,14 +62,9 @@ def test_points_streaks_and_grades() -> None:
     p, delta = after_answer(p, True)
     assert (p.points, p.streak, delta) == (10, 1, 10)
     p, delta = after_answer(p, True)
-    assert (p.points, p.grade, delta) == (22, 1, 12)  # streak bonus, Gascon from 20
+    assert (p.points, delta) == (21, 11)  # +1 for each right answer in a row
     p, delta = after_answer(p, False)
-    assert (p.points, p.streak, p.best_streak, delta) == (14, 0, 2, -8)
-    assert p.grade == 1  # one miss right after the promotion keeps the grade
-    p, _ = after_answer(p, False)
-    assert (p.points, p.grade) == (6, 1)  # 20 - 16 = 4: still within the margin
-    p, _ = after_answer(p, False)
-    assert (p.points, p.grade) == (0, 0)
+    assert (p.points, p.streak, p.best_streak, delta) == (13, 0, 2, -8)
     p2, _ = after_answer(Progress(points=5), False)
     assert p2.points == 0
 
@@ -80,16 +75,52 @@ def test_streak_bonus_is_capped() -> None:
     assert delta == progress.RIGHT + progress.MAX_BONUS
 
 
+def test_a_miss_right_after_a_promotion_keeps_the_grade() -> None:
+    gascon = GRADES[1].threshold
+    p, _ = after_answer(Progress(points=gascon - 5), True)
+    assert p.grade == 1
+    p, _ = after_answer(p, False)
+    assert p.points < gascon
+    assert p.grade == 1
+
+
 def test_grades_drop_one_at_a_time_past_the_margin() -> None:
-    mousquetaire = GRADES[3].threshold  # 140, band 80 under it: margin max(12, 16) = 16
+    mousquetaire = GRADES[3].threshold  # band 1100 under it: margin 165
     assert grade_for(mousquetaire, 2) == 3
-    assert grade_for(mousquetaire - 16, 3) == 3
-    assert grade_for(mousquetaire - 17, 3) == 2
-    capitaine = GRADES[5].threshold  # 420, band 160: margin 24
-    assert grade_for(capitaine - 24, 5) == 5
-    assert grade_for(capitaine - 25, 5) == 4
+    assert grade_for(mousquetaire - 165, 3) == 3
+    assert grade_for(mousquetaire - 166, 3) == 2
+    capitaine = GRADES[5].threshold  # band 2400: margin 360
+    assert grade_for(capitaine - 360, 5) == 5
+    assert grade_for(capitaine - 361, 5) == 4
     assert grade_for(0, 5) == 4
-    assert grade_for(1000, 0) == 5
+    assert grade_for(100_000, 0) == 5
+
+
+def test_a_grade_won_on_an_older_scale_is_settled() -> None:
+    assert progress.settle(Progress(points=20, grade=1)).grade == 0
+    assert progress.settle(Progress(points=100, grade=5)).grade == 0
+    within_margin = Progress(points=GRADES[3].threshold - 100, grade=3)
+    assert progress.settle(within_margin) == within_margin
+
+
+def weeks_to_captain(accuracy: float, runs: int = 60, per_week: int = 100) -> float:
+    """Median weeks to the last grade, answering per_week questions a week."""
+    results = []
+    for seed in range(runs):
+        rng = random.Random(seed)
+        p = Progress()
+        answered = 0
+        while p.grade < len(GRADES) - 1:
+            p, _ = after_answer(p, rng.random() < accuracy)
+            answered += 1
+        results.append(answered / per_week)
+    return sorted(results)[runs // 2]
+
+
+def test_the_road_to_captain_is_long() -> None:
+    assert 6 <= weeks_to_captain(0.8) <= 8.5
+    assert 8.5 <= weeks_to_captain(0.7) <= 12
+    assert weeks_to_captain(0.6) >= 14
 
 
 def test_leitner_boxes() -> None:

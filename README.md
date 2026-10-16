@@ -29,16 +29,16 @@ Il faut : Claude Code installé et connecté dans WSL (`~/.local/bin/claude`), u
 
 ## Les grades
 
-| Grade | Points | Ce qu'il gagne |
-|---|---|---|
-| Encrier | 0 | de l'encre dans son encrier, une plume d'oie trempée |
-| Gascon | 20 | il s'échappe de l'encrier |
-| Cadet | 60 | un feutre |
-| Mousquetaire | 140 | la casaque à croix et la plume blanche |
-| Lieutenant | 260 | la rapière et la moustache en croc |
-| Capitaine | 420 | le chapeau à cocarde, la royale et l'or |
+| Grade | Points | Ce qu'il gagne | À 80 % de bonnes réponses |
+|---|---|---|---|
+| Encrier | 0 | de l'encre dans son encrier, une plume d'oie trempée | au départ |
+| Gascon | 250 | il s'échappe de l'encrier | 2 jours |
+| Cadet | 900 | un feutre | 1 semaine |
+| Mousquetaire | 2 000 | la casaque à croix et la plume blanche | 2 semaines et demie |
+| Lieutenant | 3 600 | la rapière et la moustache en croc | 4 semaines |
+| Capitaine | 6 000 | le chapeau à cocarde, la royale et l'or | 7 semaines |
 
-Une bonne réponse rapporte 10 points, plus 2 par réponse juste d'affilée (jusqu'à +10) ; une erreur en coûte 8 et remet la série à zéro. Un grade ne se perd que bien en dessous de son seuil (deux erreurs au moins). La difficulté des questions suit le grade, et les domaines où tu te trompes le plus reviennent plus souvent.
+La route est longue exprès. Une bonne réponse rapporte 10 points, plus 1 par réponse juste d'affilée (jusqu'à +5) ; une erreur en coûte 8 et remet la série à zéro. Les durées supposent une centaine de réponses par semaine : à 70 % de bonnes réponses, il faut dix semaines pour devenir Capitaine, à 60 % plus de quatre mois. Un grade ne se perd que bien en dessous de son seuil. Les questions sont faciles dans l'encrier, au niveau de l'examen ensuite, difficiles pour les deux derniers grades ; les domaines où tu te trompes le plus reviennent plus souvent.
 
 ## Comment c'est fait
 

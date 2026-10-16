@@ -84,7 +84,7 @@ def test_batch_request_follows_the_grade(game: Game) -> None:
     assert len(request["slots"]) == 10
     assert {s["difficulty"] for s in request["slots"]} == {"facile"}
     assert {s["kind"] for s in request["slots"]} == {"single"}
-    game.store.save_progress(game.exam, Progress(points=300, grade=4))
+    game.store.save_progress(game.exam, Progress(points=3700, grade=4))
     slots = game.batch_request()["slots"]
     assert {s["difficulty"] for s in slots} == {"difficile"}
     assert sum(s["kind"] == "multiple" for s in slots) == 2  # a quarter of ten, rounded

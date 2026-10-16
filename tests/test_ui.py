@@ -211,7 +211,7 @@ def test_a_flagged_question_never_comes_back(game: Game) -> None:
 
 def test_promotion_changes_his_look(game: Game) -> None:
     fill(game)
-    game.store.save_progress(game.exam, Progress(points=15, streak=2, grade=0))
+    game.store.save_progress(game.exam, Progress(points=245, streak=2, grade=0))
     controller, _, animator = make(game)
     stages: list[int] = []
     controller.stageChanged.connect(lambda: stages.append(controller.property("stage")))

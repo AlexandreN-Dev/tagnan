@@ -12,16 +12,20 @@ class Grade:
     look: str  # what Tagnan gains, as the window and the stats say it
 
 
+# A long road, on purpose: about 100 answers a week (twenty a working day) at 80 % right make
+# Tagnan Gascon in two days, Cadet in a week, Mousquetaire in two and a half, Lieutenant in four
+# and Capitaine in seven; at 70 % right, ten weeks; at 60 %, four months. Simulated in
+# tests/test_rules.py.
 GRADES = (
     Grade("Encrier", 0, "de l'encre dans son encrier"),
-    Grade("Gascon", 20, "il s'échappe de l'encrier"),
-    Grade("Cadet", 60, "un feutre"),
-    Grade("Mousquetaire", 140, "la casaque à croix et la plume blanche"),
-    Grade("Lieutenant", 260, "la rapière et la moustache en croc"),
-    Grade("Capitaine", 420, "le chapeau à cocarde, la royale et l'or"),
+    Grade("Gascon", 250, "il s'échappe de l'encrier"),
+    Grade("Cadet", 900, "un feutre"),
+    Grade("Mousquetaire", 2000, "la casaque à croix et la plume blanche"),
+    Grade("Lieutenant", 3600, "la rapière et la moustache en croc"),
+    Grade("Capitaine", 6000, "le chapeau à cocarde, la royale et l'or"),
 )
 
-RIGHT, STREAK_BONUS, MAX_BONUS, WRONG = 10, 2, 10, -8
+RIGHT, STREAK_BONUS, MAX_BONUS, WRONG = 10, 1, 5, -8
 # A grade is lost only well below its threshold: 15 % of the band under it, and never for a
 # single miss right after the promotion (two misses at least).
 DEMOTION_MARGIN = 0.15
@@ -50,6 +54,15 @@ def grade_for(points: int, current: int) -> int:
     if points < GRADES[current].threshold - margin:
         return current - 1
     return current
+
+
+def settle(progress: Progress) -> Progress:
+    """The grade the points support, should the thresholds have changed since it was won (a
+    grade within its margin is kept, as after a miss)."""
+    grade = progress.grade
+    while (lower := grade_for(progress.points, grade)) < grade:
+        grade = lower
+    return progress if grade == progress.grade else replace(progress, grade=grade)
 
 
 def after_answer(progress: Progress, correct: bool) -> tuple[Progress, int]:

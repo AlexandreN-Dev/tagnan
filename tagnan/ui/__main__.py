@@ -41,7 +41,7 @@ from tagnan.game import Game
 from tagnan.paths import config_file, state_dir
 from tagnan.scheduler import Scheduler
 from tagnan.store import Store
-from tagnan.ui.animation.rig import Rig
+from tagnan.ui.animation.rig import WOBBLE_RATE, Rig
 from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
@@ -178,8 +178,8 @@ def main() -> int:
     parser.add_argument(
         "--ripple-rate",
         type=int,
-        default=15,
-        help="development: ink outlines per second",
+        default=WOBBLE_RATE,
+        help="development: ink outlines per second of his time",
     )
     args = parser.parse_args()
 

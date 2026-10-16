@@ -27,10 +27,12 @@ BREATH = 0.02
 SWAY = 1.2
 TAP_SQUASH = 0.16
 SACCADE = 2.0
-# The edge's new outline re-blurs the glow: 15 times a second is enough for so slow a wave.
-WOBBLE_RATE = 15
-# His whole animation runs 10 % slower than real time (taps are still counted in real time).
-TEMPO = 0.9
+# The ink's outline changes this many times a second of his time, about 14 in real time: enough
+# for so slow a wave. It goes round once a second, so these few outlines repeat (and are cached).
+WOBBLE_RATE = 22
+# His whole animation runs at 0.648 of real time: a tenth, a fifth, then a tenth slower again
+# (taps are still counted in real time).
+TEMPO = 0.648
 DRIP_PERIOD = 7.0
 GLOW_PERIOD = 3.4
 BURST_LENGTH = 1.2

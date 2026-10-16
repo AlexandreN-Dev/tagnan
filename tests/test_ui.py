@@ -15,7 +15,7 @@ from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
 from tagnan.progress import Progress
 from tagnan.scheduler import Rhythm, Scheduler
-from tagnan.ui.animation.rig import Rig
+from tagnan.ui.animation.rig import BURST_LENGTH, Rig
 from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
@@ -86,7 +86,7 @@ def test_taps_splash_and_change_his_face() -> None:
     pose = rig.step(0.033)
     assert pose.expression == "wink"
     assert pose.burst >= 0
-    run(rig, 1.5)
+    run(rig, BURST_LENGTH / rig.tempo + 0.1)  # the splash lasts that long in his own time
     assert rig.step(0.033).burst == -1.0
     for _ in range(3):  # three within 1.5 s
         rig.tap()

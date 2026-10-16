@@ -62,7 +62,9 @@ Window {
         learn: "M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5",
         focus: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
         search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",
-        check: "M5 12.5l4.5 4.5L19 7"
+        check: "M5 12.5l4.5 4.5L19 7",
+        update: "M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9M18.6 3.2v4.1h-4.1M5.4 20.8v-4.1h4.1",
+        spinner: "M12 3.5a8.5 8.5 0 1 1-8.1 5.9"
     })
 
     function commandRows() {
@@ -81,6 +83,12 @@ Window {
         } else {
             list.push({ action: "pause", label: "A break…", icon: "pause" })
         }
+        // Update (tagnan/ui/updater.py): a gold "New" when GitHub has a new version, a spinner
+        // and a bar while he takes it, before he starts again.
+        const u = c.update
+        if (u)
+            list.push({ action: "update", label: u.label, value: u.value, icon: u.busy ? "spinner" : "update",
+                        pill: u.pill, busy: u.busy, strong: u.strong })
         list.push({ action: "quit", label: "Quit Tagnan", icon: "quit", quiet: true })
         return list
     }
@@ -502,12 +510,22 @@ Window {
                         width: parent.width - 20
                         Glyph {
                             name: rowItem.modelData.icon || ""
-                            tint: rowItem.modelData.primary ? win.theme.panel : win.theme.muted
+                            tint: rowItem.modelData.primary ? win.theme.panel
+                                : rowItem.modelData.strong ? win.theme.gold
+                                : rowItem.modelData.busy ? win.theme.ink : win.theme.muted
                             anchors.verticalCenter: parent.verticalCenter
+                            RotationAnimator on rotation {
+                                running: rowItem.modelData.busy === true
+                                from: 0
+                                to: 360
+                                duration: 900
+                                loops: Animation.Infinite
+                            }
                         }
                         Text {
                             id: label
                             width: parent.width - 30 - (value.visible ? value.width + 12 : 0)
+                                   - (pill.visible ? pill.width + 12 : 0)
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.verticalCenterOffset: rowItem.twoLines ? -8 : 0
                             elide: Text.ElideRight
@@ -516,11 +534,11 @@ Window {
                                  : rowItem.modelData.quiet ? win.theme.muted : win.theme.text
                             font.family: win.theme.body
                             font.pixelSize: rowItem.modelData.quiet ? 13 : 14
-                            font.weight: rowItem.modelData.primary ? Font.DemiBold : Font.Normal
+                            font.weight: rowItem.modelData.primary || rowItem.modelData.strong ? Font.DemiBold : Font.Normal
                         }
                         Text {
                             id: value
-                            visible: !rowItem.twoLines
+                            visible: !rowItem.twoLines && rowItem.modelData.pill !== true
                             width: Math.min(implicitWidth, 130)
                             anchors.verticalCenter: parent.verticalCenter
                             elide: Text.ElideRight
@@ -530,6 +548,50 @@ Window {
                             opacity: rowItem.modelData.primary ? 0.8 : 1
                             font.family: win.theme.body
                             font.pixelSize: 12
+                        }
+                        // A value that asks to be seen: the gold "New" of Update.
+                        Rectangle {
+                            id: pill
+                            visible: rowItem.modelData.pill === true
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: pillText.implicitWidth + 16
+                            height: 18
+                            radius: 9
+                            color: win.theme.goldSoft
+                            Text {
+                                id: pillText
+                                anchors.centerIn: parent
+                                text: rowItem.modelData.value || ""
+                                color: win.theme.goldInk
+                                font.family: win.theme.body
+                                font.pixelSize: 11
+                                font.bold: true
+                            }
+                        }
+                    }
+                    // Under a busy row (Update, while he takes it), a bar that runs on and on.
+                    Rectangle {
+                        id: busyBar
+                        visible: rowItem.modelData.busy === true
+                        x: 40
+                        y: parent.height - 7
+                        width: parent.width - 50
+                        height: 3
+                        radius: 1.5
+                        clip: true
+                        color: win.theme.choice
+                        Rectangle {
+                            width: busyBar.width * 0.35
+                            height: 3
+                            radius: 1.5
+                            color: win.theme.ink
+                            NumberAnimation on x {
+                                running: busyBar.visible
+                                from: -busyBar.width * 0.35
+                                to: busyBar.width
+                                duration: 1200
+                                loops: Animation.Infinite
+                            }
                         }
                     }
                     Text {

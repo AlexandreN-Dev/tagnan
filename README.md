@@ -47,6 +47,10 @@ scripts/install-shortcut --startup   # optional: Start menu, and start with Wind
 To work on the code: `uv sync`, then the checks listed in `CLAUDE.md`.
 </details>
 
+### Updating
+
+When a new version is out, "Update" in his menu shows a gold "New": one click and he takes it, starts again and tells you what changed. He looks for one a minute after he starts, then once a day. By hand, in a terminal: `cd ~/tagnan && scripts/update`, then quit him from his menu and start him again. Your progress, questions and settings stay: they live outside the repository. He never updates over changes of your own to his files: then `git pull` it is.
+
 ## Living with Tagnan
 
 - **A question**: click the right answer (or the two right ones, then "Confirm"). "Later" puts it off for ten minutes; left unanswered, it goes away after ten minutes with no penalty, and the next one waits ten minutes, or the pace's gap if longer.
@@ -58,7 +62,7 @@ To work on the code: `uv sync`, then the checks listed in `CLAUDE.md`.
 - **His call**: when he asks a question on his own, he sounds a call, so you hear him away from the screen. Pick one in "Sound": "Bugle call" (the cavalry charge, the default), "Clashing rapiers", "Bell", "Lute", "Kalimba" or "Silent". A click plays the sound and picks it; the menu stays open to hear the others, Esc or a click elsewhere closes it. A question you ask for ("A question now") makes no sound. The volume is Python's, in the Windows volume mixer (on a Mac, the Mac's volume).
 - **Closing a bubble**: a click anywhere else does it, except for a question, which stays until you answer or choose "Later".
 - **Clicking Tagnan**: he winks and splashes (during a break, he tells you until when); three clicks in a row annoy him, six make him sulk. **Drag** him to move him (he remembers his place).
-- **His menu**: right-click Tagnan or his tray icon (a left click on the icon shows his progress). At the top, his rank and the points to the next; then a question now (with the time of the next one), progress, subject, pace, sound, a break, quit. "How often" and "Sound" open their list beside it; a click on a sound plays it and keeps the list open, to hear the next. Or just type: `break 45`, `until 4pm`, `often`, `bell`, `learn pottery`, `focus RAG`; he shows what he understood and Enter does it. The arrows, Enter, → and ← for the lists, and Esc work throughout.
+- **His menu**: right-click Tagnan or his tray icon (a left click on the icon shows his progress). At the top, his rank and the points to the next; then a question now (with the time of the next one), progress, subject, pace, sound, a break, update, quit. "How often" and "Sound" open their list beside it; a click on a sound plays it and keeps the list open, to hear the next. Or just type: `break 45`, `until 4pm`, `often`, `bell`, `learn pottery`, `focus RAG`; he shows what he understood and Enter does it. The arrows, Enter, → and ← for the lists, and Esc work throughout.
 - He stays hidden during a full-screen application, a presentation or while the session is locked, and so makes no sound either: if Windows locks the session after a few idle minutes, he keeps quiet until you are back.
 
 ## Ranks
@@ -91,6 +95,7 @@ Windows                                          WSL (Ubuntu)
 - **The game** (`tagnan/game.py`, `progress.py`, `scheduler.py`, `pause.py`, `store.py`, `model.py`) uses only the standard library and is tested in WSL. Each generated question is checked (domain, task, number of right answers, one explanation per wrong choice) and its choices are shuffled before it is stored. Each question records its language: those written in French in early versions stay in the database but are no longer asked.
 - **The sounds** (`assets/sounds/`) are synthesized by `scripts/make-sounds`: standard library, no sound bank, the same loudness for all (−16 LUFS). The window plays them with `winsound` (on a Mac, `afplay`), without Qt Multimedia.
 - **The course outline** (a blueprint) gives the domains, their weights, the notions of each task, and how to write good questions on the subject. `exam/aif-c01.toml` comes with Tagnan, from the official exam guide; the course one asks for in his menu is drawn up once by the brain (`scripts/brain plan`) and kept in the database. Every request to the brain carries the whole outline, so the brain stays stateless. The course learned at first is the config's `exam = "…"`.
+- **His updates** (`tagnan/update.py`, `scripts/update`) come from GitHub: a fast-forward of this clone, never over changes of your own. The window asks through wsl.exe, as it asks the brain (`tagnan/ui/updater.py`), then quits, and `scripts/update restart` starts him again once he is gone, making his window's environment again first when its pinned versions changed.
 - **Tagnan** (`tagnan/art.py`) is drawn flat and cut into layers: the window draws the rippling ink and the drops, and animates the SVG layers (eyes, mouth, hat, plumes, rapier…) with a rig (`tagnan/ui/animation/`): springs, blinks, eyes that follow the mouse, random gestures, taps.
 
 ## Usage limits

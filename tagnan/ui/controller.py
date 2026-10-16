@@ -49,6 +49,8 @@ RESULT_SECONDS = 15  # a right answer's bubble closes by itself, unless hovered
 QUIP_SECONDS = 1.8
 MAX_COURSE_WORDS = 120
 BUSY_MODES = ("question", "thinking", "result", "explanation", "pause")
+UPDATED_KEY = "updated"  # in his settings, from tagnan/ui/updater.py: what an update changed
+UPDATED_SECONDS = 30
 
 
 class Controller(QObject):
@@ -115,7 +117,7 @@ class Controller(QObject):
 
     def start(self) -> None:
         self._tick_timer.start(TICK_MS)
-        if self.game.store.fresh_count(self.game.exam) == 0:
+        if not self._tell_updated() and self.game.store.fresh_count(self.game.exam) == 0:
             self._show(
                 {
                     "mode": "message",
@@ -125,6 +127,27 @@ class Controller(QObject):
                 }
             )
         self._refill_if_needed()
+
+    def _tell_updated(self) -> bool:
+        """Back from an update (tagnan/ui/updater.py): what changed, once."""
+        updated = self.settings.get(UPDATED_KEY)
+        if not isinstance(updated, dict):
+            return False
+        self.settings.set(UPDATED_KEY, None)
+        news = [str(line) for line in updated.get("news") or []][:4]
+        text = "I'm up to date." + (
+            " What's new:" + "".join(f"\n· {line}" for line in news) if news else ""
+        )
+        self._show(
+            {"mode": "message", "title": "Freshly inked!", "text": text, "button": "Splendid!"}
+        )
+        self._hide_timer.start(UPDATED_SECONDS * 1000)
+        return True
+
+    @Slot(str, str)
+    def say(self, title: str, text: str) -> None:
+        """A word in his bubble from elsewhere (his updates), unless he is busy."""
+        self._tell_if_free(title, text)
 
     # --- What QML reads ---------------------------------------------------------------------
 

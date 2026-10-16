@@ -10,6 +10,9 @@ QtObject {
     readonly property color line: dark ? "#2F3A52" : "#D5DBE6"
     readonly property color ink: dark ? "#8FB2EC" : "#2B4A8C"
     readonly property color gold: dark ? "#E0B54E" : "#8F6A12"
+    // A gold chip and its words (his menu's "New"), readable on the panel.
+    readonly property color goldSoft: dark ? "#3A3322" : "#F3E8C9"
+    readonly property color goldInk: dark ? "#E0B54E" : "#7A5A0F"
     readonly property color good: dark ? "#6FCB95" : "#2D7A4E"
     readonly property color bad: dark ? "#F07A80" : "#B3343A"
     readonly property color choice: dark ? "#232C40" : "#EEF1F6"

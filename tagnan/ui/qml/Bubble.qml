@@ -401,6 +401,13 @@ Item {
                 primary: true
                 onActivated: bubble.controller.dismiss()
             }
+            // A message may carry a button of its own ("Splendid!", once he is updated).
+            Action {
+                visible: bubble.mode === "message" && (bubble.content.button || "") !== ""
+                label: bubble.content.button || ""
+                primary: true
+                onActivated: bubble.controller.dismiss()
+            }
 
             // --- Break --------------------------------------------------------------------
             Flow {

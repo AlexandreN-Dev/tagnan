@@ -15,6 +15,7 @@ from tagnan.scheduler import PACES
 from tagnan.ui import sounds as calls
 from tagnan.ui.controller import Controller
 from tagnan.ui.placement import Box, screen_area
+from tagnan.ui.updater import Updater
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ COMMANDS = (
     ("subject", "Subject…", ("subject", "topic", "course", "learn")),
     ("pause", "A break…", ("break", "pause", "rest", "stop")),
     ("resume", "Resume now", ("resume", "back", "continue")),
+    ("update", "Update", ("update", "upgrade", "new version", "version")),
     ("quit", "Quit Tagnan", ("quit", "exit", "close", "bye")),
 )
 BREAK_WORDS = ("break", "pause", "a break", "rest")
@@ -66,9 +68,10 @@ def _after(text: str, words: tuple[str, ...]) -> str | None:
 class Menu(QObject):
     changed = Signal()  # shown, where, what it shows
 
-    def __init__(self, controller: Controller) -> None:
+    def __init__(self, controller: Controller, updater: Updater | None = None) -> None:
         super().__init__()
         self._controller = controller
+        self._updater = updater
         self._shown = False
         self._anchor = (0, 0)
         self._x = self._y = 0
@@ -79,6 +82,8 @@ class Menu(QObject):
         controller.menuRequested.connect(self.openAt)
         for signal in (controller.prefsChanged, controller.statusChanged, controller.stageChanged):
             signal.connect(self._refresh)
+        if updater is not None:
+            updater.changed.connect(self._refresh)
 
     # --- What QML reads -----------------------------------------------------------------------
 
@@ -157,6 +162,8 @@ class Menu(QObject):
             "paces": [{"key": p.key, "name": p.name, "hint": p.hint} for p in PACES],
             "calls": [{"key": k, "name": name} for k, name in calls.CALLS]
             + [{"key": calls.SILENT, "name": "Silent"}],
+            # His Update row (tagnan/ui/updater.py), None without updates.
+            "update": self._updater.row() if self._updater else None,
         }
 
     # --- Opening and closing ------------------------------------------------------------------
@@ -197,6 +204,9 @@ class Menu(QObject):
         if self._shown:
             self.changed.emit()
 
+    def _updates(self) -> bool:
+        return self._updater is not None and self._updater.row() is not None
+
     # --- Typing -------------------------------------------------------------------------------
 
     @Slot(str, result=list)
@@ -230,7 +240,7 @@ class Menu(QObject):
                 add(f"Questions on {rest}", f"focus:{rest}", preview["text"])
         paused = c.scheduler.paused_until > now
         for action, label, words in COMMANDS:
-            if action == "resume" and not paused:
+            if (action == "resume" and not paused) or (action == "update" and not self._updates()):
                 continue
             if any(w.startswith(folded) or folded in w for w in (label.casefold(), *words)):
                 add(label, action)
@@ -256,6 +266,10 @@ class Menu(QObject):
         if verb == "call":
             c.setCall(arg)
             return True  # one hears a call, then the next, and keeps the last
+        if verb == "update":
+            if self._updater is not None:
+                self._updater.activate()
+            return True  # it says how it goes, until he starts again
         self.close()
         match verb:
             case "ask":

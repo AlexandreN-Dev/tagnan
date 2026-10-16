@@ -51,6 +51,7 @@ from tagnan.ui.outside import OutsideClicks
 from tagnan.ui.placement import Placement
 from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
+from tagnan.ui.updater import UpdateClient, Updater
 from tagnan.ui.worker import BrainWorker
 
 QML_DIR = Path(__file__).resolve().parent / "qml"
@@ -227,7 +228,14 @@ def main() -> int:
         game, scheduler, worker, animator, rng, settings=settings, sounds=Sounds()
     )
     placement = Placement()
-    menu = Menu(controller)
+    # His updates: from GitHub, through scripts/update; none in a development snapshot or measure.
+    updates = (
+        UpdateClient.through_wsl(args.distro, args.repo)
+        if args.distro and args.repo
+        else UpdateClient.local()
+    )
+    updater = Updater(None if development else updates, settings)
+    menu = Menu(controller, updater)
     tray = Tray(controller, menu)
 
     def leave(code: int = 0) -> None:
@@ -239,6 +247,21 @@ def main() -> int:
         os._exit(code)
 
     controller.quitRequested.connect(leave)
+
+    def restart(setup: bool) -> None:
+        """Updated: scripts/update restart starts him again once this window is gone."""
+        lock.unlock()
+        try:
+            updates.restart(setup)
+        except OSError as error:
+            logging.warning("cannot start again by myself: %s", error)
+            lock.tryLock(0)
+            controller.say("Updated!", "Quit me and start me again to see what's new.")
+            return
+        leave()
+
+    updater.restartRequested.connect(restart)
+    updater.failed.connect(controller.say)
     QQuickStyle.setStyle("Basic")  # the same look everywhere, no native style
     engine = QQmlApplicationEngine()
     engine.addImageProvider("tagnan", LayerImages())
@@ -276,6 +299,7 @@ def main() -> int:
 
     animator.start()
     controller.start()
+    updater.start()
     logging.info(
         "Tagnan is up (grade %d, %d fresh questions)",
         game.progress.grade,
@@ -300,7 +324,8 @@ def main() -> int:
     heartbeat = QTimer()  # lets Python see Ctrl+C now and then
     heartbeat.timeout.connect(lambda: None)
     heartbeat.start(250)
-    keep: list[QObject] = [tray, menu, placement, outside, animator, controller, worker]  # QML's
+    # What QML holds, kept alive here until the end.
+    keep: list[QObject] = [tray, menu, placement, outside, animator, controller, worker, updater]
     app.exec()
     del keep
     leave()

@@ -1,0 +1,256 @@
+"""Start Tagnan's window: python -m tagnan.ui [--distro NAME --repo PATH] [--config PATH].
+
+On Windows, scripts/tagnan-ui launches it from WSL and tells it where the brain lives (the WSL
+distribution and the repository's path inside it); in WSL itself, for development, the brain
+is called directly.
+"""
+
+import argparse
+import logging
+import logging.handlers
+import os
+import random
+import signal
+import sys
+import tempfile
+import time
+from collections.abc import Callable
+from pathlib import Path
+
+from PySide6.QtCore import (
+    QLockFile,
+    QMessageLogContext,
+    QObject,
+    QPoint,
+    QTimer,
+    QtMsgType,
+    QUrl,
+    qInstallMessageHandler,
+)
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
+from PySide6.QtQuickControls2 import QQuickStyle
+from PySide6.QtWidgets import QApplication
+
+from tagnan import blueprint as blueprints
+from tagnan import config as configs
+from tagnan.brain_client import BrainClient
+from tagnan.game import Game
+from tagnan.paths import config_file, state_dir
+from tagnan.scheduler import Scheduler
+from tagnan.store import Store
+from tagnan.ui.animation.rig import Rig
+from tagnan.ui.animator import Animator
+from tagnan.ui.controller import Controller
+from tagnan.ui.desktop import Settings
+from tagnan.ui.images import LayerImages
+from tagnan.ui.tray import Tray
+from tagnan.ui.window_mask import WindowMask
+from tagnan.ui.worker import BrainWorker
+
+QML_DIR = Path(__file__).resolve().parent / "qml"
+EDGE_MARGIN = 24  # from the screen's right edge to Tagnan's
+FOOT_MARGIN = 2  # from the taskbar to his feet
+
+
+def forward_qt_messages(kind: QtMsgType, context: QMessageLogContext, message: str) -> None:
+    level = logging.INFO if kind in (QtMsgType.QtDebugMsg, QtMsgType.QtInfoMsg) else logging.WARNING
+    logging.getLogger("qt").log(level, message)
+
+
+def place(window: QQuickWindow, settings: Settings) -> None:
+    """Where he was left, if that is still on a screen; else bottom right, above the taskbar."""
+    saved = settings.get("position")
+    app = QGuiApplication.instance()
+    screens = app.screens() if isinstance(app, QGuiApplication) else []
+    if isinstance(saved, list) and len(saved) == 2:
+        feet = QPoint(int(saved[0]) + window.width() // 2, int(saved[1]) + window.height() - 8)
+        if any(s.availableGeometry().contains(feet) for s in screens):
+            window.setPosition(int(saved[0]), int(saved[1]))
+            return
+    screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        return
+    area = screen.availableGeometry()
+    figure_right = window.width() // 2 + 75
+    window.setPosition(
+        area.right() - EDGE_MARGIN - figure_right,
+        area.bottom() + 1 - FOOT_MARGIN - window.height(),
+    )
+
+
+def setup_logging() -> None:
+    folder = state_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    handlers.append(
+        logging.handlers.RotatingFileHandler(
+            folder / "tagnan.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8"
+        )
+    )
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=handlers,
+    )
+
+
+def demo(controller: Controller, what: str) -> None:
+    """Development: show a bubble at once (snapshots)."""
+    if what.startswith("question") or what.startswith("result"):
+        controller.askNow()
+        question = controller._current
+        if what != "question" and question is not None:
+            right = list(question.answers)
+            wrong = [i for i in range(len(question.choices)) if i not in right][: len(right)]
+            controller.answer(right if what == "result-right" else wrong)
+    elif what == "stats":
+        controller.showStats()
+    elif what == "quip":
+        controller.animator.tap()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Fenêtre de Tagnan")
+    parser.add_argument("--distro", help="distribution WSL du cerveau (depuis Windows)")
+    parser.add_argument("--repo", help="chemin du dépôt dans WSL (depuis Windows)")
+    parser.add_argument("--config", type=Path, default=config_file())
+    parser.add_argument("--db", type=Path, default=state_dir() / "tagnan.db")
+    parser.add_argument("--reduced-motion", action="store_true", help="mouvements réduits")
+    parser.add_argument(
+        "--snapshot", type=Path, help="développement : image de la fenêtre, puis quitter"
+    )
+    parser.add_argument("--snapshot-delay", type=int, default=2500, help="en millisecondes")
+    parser.add_argument(
+        "--demo",
+        choices=["question", "result-right", "result-wrong", "stats", "quip"],
+        help="développement : afficher tout de suite une bulle",
+    )
+    parser.add_argument(
+        "--grade", type=int, choices=range(6), help="développement : forcer un grade"
+    )
+    parser.add_argument(
+        "--measure-cpu", type=float, metavar="SECONDES", help="mesurer le CPU, puis quitter"
+    )
+    args = parser.parse_args()
+
+    setup_logging()
+    qInstallMessageHandler(forward_qt_messages)
+    app = QApplication(sys.argv[:1])
+    app.setApplicationName("Tagnan")
+    app.setQuitOnLastWindowClosed(False)
+    development = bool(args.snapshot or args.measure_cpu or args.demo)
+    lock = QLockFile(str(Path(tempfile.gettempdir()) / "tagnan-ui.lock"))
+    if not development and not lock.tryLock(0):
+        logging.info("a Tagnan window is already open: nothing to do")
+        return 0
+
+    try:
+        cfg = configs.load(args.config)
+        bp = blueprints.load(cfg.exam)
+    except ValueError as error:
+        logging.error("%s", error)
+        return 1
+    rng = random.Random()  # noqa: S311 - questions and interjections, not secrets
+    store = Store(args.db)
+    game = Game(store, bp, rng)
+    if args.grade is not None:
+        from dataclasses import replace
+
+        store.save_progress(game.exam, replace(game.progress, grade=args.grade))
+    scheduler = Scheduler(cfg.rhythm, rng, time.time())
+    client = (
+        BrainClient.through_wsl(args.distro, args.repo)
+        if args.distro and args.repo
+        else BrainClient.local()
+    )
+    worker = BrainWorker(client)
+    animator = Animator(Rig(rng, reduced_motion=args.reduced_motion))
+    controller = Controller(game, scheduler, worker, animator, rng)
+    settings = Settings(state_dir() / "settings.json")
+    window_mask = WindowMask()
+    tray = Tray(controller)
+
+    def leave(code: int = 0) -> None:
+        """Every way out ends the process at once: Qt's own teardown waits for its render
+        thread, which a locked session freezes (Dartt learnt it the hard way)."""
+        qInstallMessageHandler(None)
+        store.close()
+        logging.shutdown()
+        os._exit(code)
+
+    controller.quitRequested.connect(leave)
+    QQuickStyle.setStyle("Basic")  # the same look everywhere, no native style
+    engine = QQmlApplicationEngine()
+    engine.addImageProvider("tagnan", LayerImages())
+    engine.setInitialProperties(
+        {"controller": controller, "animator": animator, "windowMask": window_mask}
+    )
+    engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
+    roots = engine.rootObjects()
+    if not roots or not isinstance(roots[0], QQuickWindow):
+        logging.error("the window did not load")
+        return 1
+    window: QQuickWindow = roots[0]
+    place(window, settings)
+    window_mask.attach(window)
+    window.show()
+
+    save_timer = QTimer()
+    save_timer.setSingleShot(True)
+    save_timer.timeout.connect(lambda: settings.set("position", [window.x(), window.y()]))
+    window.xChanged.connect(lambda: save_timer.start(800))
+    window.yChanged.connect(lambda: save_timer.start(800))
+
+    animator.start()
+    controller.start()
+    logging.info(
+        "Tagnan is up (grade %d, %d fresh questions)",
+        game.progress.grade,
+        store.fresh_count(game.exam),
+    )
+
+    if args.demo:
+        QTimer.singleShot(300, lambda: demo(controller, args.demo))
+    if args.snapshot is not None:
+        snapshot: Path = args.snapshot
+
+        def save() -> None:
+            window.grabWindow().save(str(snapshot))
+            leave()
+
+        QTimer.singleShot(args.snapshot_delay, save)
+    if args.measure_cpu:
+        measure(args.measure_cpu, leave)
+
+    signal.signal(signal.SIGINT, lambda *_: leave())
+    heartbeat = QTimer()  # lets Python see Ctrl+C now and then
+    heartbeat.timeout.connect(lambda: None)
+    heartbeat.start(250)
+    keep: list[QObject] = [tray, window_mask, animator, controller, worker]  # alive while QML runs
+    app.exec()
+    del keep
+    leave()
+    return 0
+
+
+def measure(seconds: float, leave: Callable[[int], None]) -> None:
+    """CPU used by the whole window process, as Task Manager counts it."""
+    start_cpu, start_wall = time.process_time(), time.monotonic()
+
+    def report() -> None:
+        cpu, wall = time.process_time() - start_cpu, time.monotonic() - start_wall
+        cores = os.cpu_count() or 1
+        print(
+            f"CPU de la fenêtre sur {wall:.0f} s : {100 * cpu / wall / cores:.2f} % de la machine "
+            f"({100 * cpu / wall:.1f} % d'un cœur)",
+            flush=True,
+        )
+        leave(0)
+
+    QTimer.singleShot(round(seconds * 1000), report)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

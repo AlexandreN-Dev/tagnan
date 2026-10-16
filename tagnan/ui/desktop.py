@@ -1,0 +1,48 @@
+"""What the window asks of Windows: is now a good time to pop up? Where is he kept?"""
+
+import json
+import logging
+import sys
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# SHQueryUserNotificationState: 5 accepts notifications, 6 quiet time after a first logon.
+# The others (locked or screensaver, busy full screen, Direct3D game, presentation) mean later.
+WELCOME_STATES = frozenset({5, 6})
+
+
+def busy() -> bool:
+    """True when Windows would hold a notification back: locked session, full-screen
+    application or game, presentation. Never on other systems."""
+    if sys.platform == "win32":
+        import ctypes
+
+        state = ctypes.c_int(0)
+        if ctypes.windll.shell32.SHQueryUserNotificationState(ctypes.byref(state)) != 0:
+            return False
+        return state.value not in WELCOME_STATES
+    return False
+
+
+class Settings:
+    """The window's own settings (its place on the screen), as JSON next to the database."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        try:
+            self._data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self._data = {}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self._data[key] = value
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.write_text(json.dumps(self._data, indent=2), encoding="utf-8")
+        except OSError as error:
+            logger.warning("settings not saved: %s", error)

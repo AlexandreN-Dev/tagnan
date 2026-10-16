@@ -23,14 +23,23 @@ windows_venv_python() {
   fi
 }
 
-# Python used to create the environment: the per-user install, unless TAGNAN_WIN_PYTHON says
-# otherwise.
+# Python used to create the environment: TAGNAN_WIN_PYTHON if set, else the per-user install,
+# else the py launcher's 3.12 (installed for all users, say). The per-user path when none is.
 windows_base_python() {
   if [[ -n "${TAGNAN_WIN_PYTHON:-}" ]]; then
     echo "$TAGNAN_WIN_PYTHON"
-  else
-    wslpath -u "$(windows_localappdata)\\Programs\\Python\\Python312\\python.exe"
+    return
   fi
+  local user found
+  user="$(wslpath -u "$(windows_localappdata)\\Programs\\Python\\Python312\\python.exe")"
+  if [[ ! -x "$user" ]]; then
+    found="$( (cd /mnt/c && py.exe -3.12 -c "import sys; print(sys.executable)") 2>/dev/null \
+      | tr -d '\r')" || true
+    if [[ -n "$found" ]]; then
+      user="$(wslpath -u "$found")"
+    fi
+  fi
+  echo "$user"
 }
 
 require_windows_venv() {

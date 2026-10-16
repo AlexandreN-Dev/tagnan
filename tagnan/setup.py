@@ -45,17 +45,6 @@ MAC_APP_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 # The oldest macOS the window's Qt runs on (PySide6 6.12's wheels are macosx_14_0).
 MIN_MACOS = (14, 0)
 CLAUDE_INSTALLER = "curl -fsSL https://claude.ai/install.sh | bash"
-WINGET_PYTHON = (
-    "winget.exe",
-    "install",
-    "--id",
-    "Python.Python.3.12",
-    "--exact",
-    "--scope",
-    "user",
-    "--accept-package-agreements",
-    "--accept-source-agreements",
-)
 
 # The models offered, from config.Brain's default down: (model, effort, label, hint).
 MODELS = (
@@ -248,21 +237,12 @@ class Setup:
         return status if isinstance(status, dict) else {}
 
     def windows_python(self) -> None:
+        """The window's Python on Windows: the one installed, else one that uv brings for Tagnan
+        only, at the window's step (scripts/ui-setup): no admin rights, no Store."""
         if Path(windows("windows_base_python")).exists():
             self.term.done("Windows Python 3.12", "found")
-            return
-        self.term.todo("Windows Python 3.12", "not installed")
-        self.term.note("My window runs on Windows' own Python. Installed for you only, no admin.")
-        if not self.offer("Install it with winget?"):
-            self.missing.append("Windows Python 3.12")
-            return
-        self.install("Installing Python 3.12 with winget", WINGET_PYTHON, cwd="/mnt/c")
-        if not Path(windows("windows_base_python")).exists():
-            raise SetupError(
-                "Still no Python 3.12 on the Windows side. Install it from\n"
-                "https://www.python.org/downloads/windows/ (for you only), then run this again."
-            )
-        self.term.done("Windows Python 3.12", "installed")
+        elif not (Path(windows("windows_venv_dir")) / "Scripts" / "python.exe").exists():
+            self.term.done("Windows Python 3.12", "none needed: Tagnan brings his own")
 
     def window(self) -> None:
         venv = (
@@ -277,10 +257,7 @@ class Setup:
                 self.term.todo("Window", "to prepare")
                 self.missing.append("the window's environment")
             return
-        if "Windows Python 3.12" in self.missing:
-            self.missing.append("the window's environment")
-            return
-        label = "Checking the window" if venv.exists() else "Preparing the window (Qt, ~60 MB)"
+        label = "Checking the window" if venv.exists() else "Preparing the window (a few minutes)"
         if not self.install(label, [str(REPO / "scripts" / "ui-setup")]):
             raise SetupError("Preparing the window failed: its last messages are above.")
         self.term.done("Window", "ready")
@@ -411,14 +388,12 @@ class Setup:
                 self.term.done("Shortcut", place + (", and at each sign-in" if startup else ""))
             else:
                 shortcut = False
-        started = self.term.confirm("Bring Tagnan in now?")
-        if started and not self.install("Calling Tagnan", [str(REPO / "scripts" / "tagnan")]):
+        if not self.install("Calling Tagnan", [str(REPO / "scripts" / "tagnan")]):
             log = str(self.log()).replace(str(Path.home()), "~")
             raise SetupError(f"Tagnan did not start: see {log}.")
         self.term.gap()
-        if started:
-            self.term.done("Tagnan is on your desktop", "bottom right")
-            self.term.quip("Here I am! My first questions take a few minutes to write.")
+        self.term.done("Tagnan is on your desktop", "bottom right")
+        self.term.quip("Here I am! My first questions take a few minutes to write.")
         self.term.note("Right-click him for a question now, progress, pace, sound or a break.")
         self.term.note(
             "Start him later: " + (f"his icon {where}, or " if shortcut else "") + "scripts/tagnan"

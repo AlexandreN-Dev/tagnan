@@ -42,6 +42,31 @@ windows_base_python() {
   echo "$user"
 }
 
+# uv for Windows, pinned and checked, for a machine without Python: it brings a Python 3.12 of
+# Tagnan's own (%LOCALAPPDATA%\tagnan\python), with no admin rights, no Store, no script run.
+WINDOWS_UV_VERSION="0.13.0"
+WINDOWS_UV_SHA256="088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c"
+
+windows_uv() {
+  local dir zip
+  dir="$(wslpath -u "$(windows_localappdata)\\tagnan\\uv")"
+  if [[ ! -x "$dir/uv.exe" ]]; then
+    mkdir -p "$dir"
+    zip="$dir/uv.zip"
+    curl -fsSL -o "$zip" \
+      "https://github.com/astral-sh/uv/releases/download/$WINDOWS_UV_VERSION/uv-x86_64-pc-windows-msvc.zip"
+    if ! echo "$WINDOWS_UV_SHA256  $zip" | sha256sum --check --status; then
+      rm -f "$zip"
+      echo "uv for Windows: unexpected checksum, nothing installed." >&2
+      return 1
+    fi
+    # Unzipped by uv's own Python in WSL: unzip is not always there.
+    uv run --quiet --no-project --python 3.12 python -m zipfile -e "$zip" "$dir"
+    rm -f "$zip"
+  fi
+  echo "$dir/uv.exe"
+}
+
 require_windows_venv() {
   local python
   python="$(windows_venv_python)"

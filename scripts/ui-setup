@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Create the window's Windows environment (%LOCALAPPDATA%\tagnan\venv) and install its pinned,
-# hashed dependencies (tagnan/ui/requirements.txt). Run it once, and after a version change.
+# Create the window's Windows environment (%LOCALAPPDATA%\tagnan\venv), on Windows' Python 3.12
+# or, without one, on a Python that uv brings for Tagnan only, and install its pinned, hashed
+# dependencies (tagnan/ui/requirements.txt). Run it once, and after a version change.
 # On macOS: the environment is ~/Library/Application Support/tagnan/venv, on uv's Python 3.12
 # (the pinned wheels' hashes cover macOS too).
 set -euo pipefail
@@ -22,19 +23,31 @@ if is_mac; then
 fi
 
 source "$repo/scripts/_windows.sh"
+export PATH="$HOME/.local/bin:$PATH"  # uv, which unpacks uv for Windows
 
 base="$(windows_base_python)"
 venv_dir="$(windows_venv_dir)"
-if [[ ! -x "$base" ]]; then
-  echo "Windows Python not found: $base (set TAGNAN_WIN_PYTHON for another path)." >&2
-  exit 1
-fi
+venv="$(wslpath -w "$venv_dir")"
+requirements="$(wslpath -w "$repo/tagnan/ui/requirements.txt")"
 cd /mnt/c
 if [[ ! -x "$venv_dir/Scripts/python.exe" ]]; then
-  echo "Creating the Windows environment in $(wslpath -w "$venv_dir")"
-  "$base" -m venv "$(wslpath -w "$venv_dir")"
+  echo "Creating the Windows environment in $venv"
+  if [[ -x "$base" ]]; then
+    "$base" -m venv "$venv"
+  else
+    # No Python on Windows: uv brings one, for Tagnan only, next to his other files.
+    uv_exe="$(windows_uv)"
+    UV_PYTHON_INSTALL_DIR="$(windows_localappdata)\\tagnan\\python" \
+      WSLENV="UV_PYTHON_INSTALL_DIR:${WSLENV:-}" \
+      "$uv_exe" venv --quiet --managed-python --python 3.12 "$venv"
+  fi
 fi
 echo "Installing the dependencies (versions and hashes checked)…"
-"$venv_dir/Scripts/python.exe" -m pip install --quiet --disable-pip-version-check --require-hashes \
-  --no-deps -r "$(wslpath -w "$repo/tagnan/ui/requirements.txt")"
+if [[ -x "$venv_dir/Scripts/pip.exe" ]]; then
+  "$venv_dir/Scripts/python.exe" -m pip install --quiet --disable-pip-version-check \
+    --require-hashes --no-deps -r "$requirements"
+else  # an environment made by uv has no pip
+  "$(windows_uv)" pip install --quiet --python "$venv\\Scripts\\python.exe" --require-hashes \
+    --no-deps -r "$requirements"
+fi
 echo "Windows environment ready. Start Tagnan with scripts/tagnan."

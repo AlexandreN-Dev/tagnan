@@ -12,7 +12,7 @@ You need Windows 10 or 11 with WSL (Ubuntu; otherwise run `wsl --install` in Pow
 git clone https://github.com/AlexandreN-Dev/tagnan.git ~/tagnan && cd ~/tagnan && scripts/setup
 ```
 
-The guided setup checks each requirement and installs what is missing, asking first: uv, Claude Code, Windows' Python 3.12 (through winget, no admin rights needed) and the window's environment. It connects your Claude account (a sign-in page opens), asks for the model, your hours and the starting pace, makes one small real call to Claude to check everything works, offers a Start menu icon and starting with Windows, then brings Tagnan in. Enter keeps the value offered in brackets.
+The guided setup checks each requirement and installs what is missing, asking first: uv and Claude Code. No Python needed beforehand, on Windows or on a Mac: if there is none, Tagnan gets a Python 3.12 of his own (through uv, pinned and checksum-verified, no admin rights), kept in his folder. It connects your Claude account (a sign-in page opens), asks for the model, your hours and the starting pace, makes one small real call to Claude to check everything works, offers a Start menu icon and starting with Windows, then brings Tagnan in, bottom right of the screen. Arrow keys choose, Enter keeps the value offered.
 
 It is safe to run again, to change your answers or after an update: what is already done is skipped. `scripts/setup --check` reports what is ready without changing anything; `scripts/setup --yes` takes every default.
 
@@ -37,7 +37,7 @@ What differs from Windows: he holds back only while the screen is locked (not du
 
 ```bash
 claude auth login            # Claude Code installed in ~/.local/bin and signed in
-scripts/ui-setup             # the window's environment, on the Windows side (needs Windows Python 3.12)
+scripts/ui-setup             # the window's environment (Windows' Python 3.12, or one uv brings)
 cp config.example.toml ~/.config/tagnan/config.toml   # optional
 scripts/brain check          # one small real call to Claude
 scripts/tagnan               # Tagnan arrives in the bottom right corner

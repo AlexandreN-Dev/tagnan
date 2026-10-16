@@ -21,6 +21,7 @@ Window {
     property int subCurrent: 0
     property var suggestions: []
     property bool keyboard: false  // the arrows were used: the row they are on is ringed
+    property point pointer: Qt.point(-1, -1)  // where the mouse last was, in the window
     readonly property bool typing: field.text.trim() !== ""
     readonly property var rows: typing ? suggestionRows() : commandRows()
     readonly property bool subOnLeft: sub !== "" && menu.subLeft
@@ -85,6 +86,15 @@ Window {
                 found.push(i)
         return found
     }
+    // Whether the mouse really moved: Qt also reports a still pointer when rows are made anew
+    // under it (as one types), which must not take the keyboard's row.
+    function moved(area, mouse) {
+        const at = area.mapToItem(null, mouse.x, mouse.y)
+        const first = pointer.x < 0
+        const same = Math.abs(at.x - pointer.x) < 1 && Math.abs(at.y - pointer.y) < 1
+        pointer = at
+        return !first && !same
+    }
     function move(step) {
         keyboard = true
         if (sub !== "") {
@@ -137,6 +147,7 @@ Window {
             suggestions = []
             current = 0
             keyboard = false
+            pointer = Qt.point(-1, -1)
             Qt.callLater(function() {
                 win.menu.place(panel.width, panel.height, 230)
                 win.requestActivate()
@@ -171,6 +182,26 @@ Window {
         }
     }
 
+    // The highlight under the row the mouse or the arrows are on: it slides to the next row
+    // rather than fading out while the next fades in.
+    component Hilite: Rectangle {
+        property Item target: null
+        property bool shown: false
+        property real originY: 0
+        property bool placed: false  // no slide for the first row lit
+        x: 8
+        width: parent.width - 16
+        y: target ? originY + target.y : originY
+        height: target ? target.height : 0
+        radius: 9
+        color: win.theme.choiceHover
+        visible: shown
+        onVisibleChanged: if (!visible) placed = false
+        onYChanged: if (visible) Qt.callLater(function() { placed = true })
+        Behavior on y { enabled: placed; NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+        Behavior on height { enabled: placed; NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+    }
+
     // A soft shadow under each panel, as under the bubble (no effect: it shows everywhere).
     component Shadow: Item {
         required property Item under
@@ -198,6 +229,15 @@ Window {
         border.color: win.theme.line
         opacity: 0
         transform: Translate { id: panelShift; y: 0 }
+
+        // One highlight for the whole menu, that slides from row to row: never two rows lit at
+        // once, as each row's own fade would leave them for a moment.
+        Hilite {
+            id: hilite
+            target: { win.current; rowRepeater.count; return rowRepeater.itemAt(win.current) }
+            shown: target !== null && !target.modelData.separator && !target.modelData.primary
+            originY: column.y
+        }
 
         Column {
             id: column
@@ -332,6 +372,7 @@ Window {
                     id: rowItem
                     required property var modelData
                     required property int index
+                    objectName: "row-" + index
                     readonly property bool on: win.current === index && !modelData.separator
                     width: column.width
                     readonly property bool twoLines: win.typing && (modelData.value || "") !== ""
@@ -348,15 +389,12 @@ Window {
                         color: win.theme.line
                     }
                     Rectangle {
-                        visible: !rowItem.modelData.separator
+                        visible: rowItem.modelData.primary === true
                         anchors.fill: parent
                         radius: 9
-                        color: rowItem.modelData.primary ? win.theme.ink
-                             : (rowItem.on || (win.sub !== "" && rowItem.modelData.action === "sub:" + win.sub))
-                               ? win.theme.choiceHover : "transparent"
-                        border.width: rowItem.modelData.primary && rowItem.on && win.keyboard ? 2 : 0
+                        color: win.theme.ink
+                        border.width: rowItem.on && win.keyboard ? 2 : 0
                         border.color: win.theme.gold
-                        Behavior on color { ColorAnimation { duration: 90 } }
                     }
                     Row {
                         visible: !rowItem.modelData.separator
@@ -408,17 +446,21 @@ Window {
                         font.pixelSize: 12
                     }
                     MouseArea {
+                        id: rowMouse
                         enabled: !rowItem.modelData.separator
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         // Only a mouse that moves takes the row: rows made anew under a still
                         // pointer, as one types, leave the keyboard's choice alone.
-                        onPositionChanged: {
-                            if (win.current === rowItem.index)
+                        onPositionChanged: (mouse) => {
+                            if (!win.moved(rowMouse, mouse) || win.current === rowItem.index)
                                 return
                             win.current = rowItem.index
-                            if (rowItem.modelData.more && win.sub !== "" && win.sub !== rowItem.modelData.action.slice(4))
+                            // A list open beside follows the row the mouse is on, or closes.
+                            if (win.sub !== "" && !rowItem.modelData.more)
+                                win.sub = ""
+                            else if (rowItem.modelData.more && win.sub !== "" && win.sub !== rowItem.modelData.action.slice(4))
                                 win.openSub(rowItem.modelData.action.slice(4), rowItem.index)
                         }
                         onClicked: win.activate(rowItem.index)
@@ -439,6 +481,12 @@ Window {
         radius: 14
         color: win.theme.panel
         border.color: win.theme.line
+
+        Hilite {
+            target: { win.subCurrent; subList.count; return subList.itemAt(win.subCurrent) }
+            shown: target !== null
+            originY: subColumn.y
+        }
 
         Column {
             id: subColumn
@@ -476,11 +524,10 @@ Window {
                     width: subColumn.width
                     height: hint.visible ? 46 : 34
                     radius: 9
-                    color: chosen ? win.theme.choiceOn : (win.subCurrent === index ? win.theme.choiceHover : "transparent")
+                    color: "transparent"
                     Accessible.role: Accessible.RadioButton
                     Accessible.name: modelData.name
                     Accessible.checked: chosen
-                    Behavior on color { ColorAnimation { duration: 90 } }
                     Glyph {
                         x: 8
                         anchors.verticalCenter: parent.verticalCenter
@@ -517,10 +564,14 @@ Window {
                         tint: win.subCurrent === choice.index ? win.theme.ink : win.theme.muted
                     }
                     MouseArea {
+                        id: choiceMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onPositionChanged: win.subCurrent = choice.index
+                        onPositionChanged: (mouse) => {
+                            if (win.moved(choiceMouse, mouse) && win.subCurrent !== choice.index)
+                                win.subCurrent = choice.index
+                        }
                         onClicked: win.choose(choice.index)
                     }
                 }

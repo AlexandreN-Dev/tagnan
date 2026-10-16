@@ -672,7 +672,7 @@ def test_a_question_left_alone_goes_and_the_next_one_waits_for_the_pace(game: Ga
 def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> None:
     from PySide6.QtCore import QObject, QUrl, qInstallMessageHandler
     from PySide6.QtQml import QQmlApplicationEngine
-    from PySide6.QtQuick import QQuickWindow
+    from PySide6.QtQuick import QQuickItem, QQuickWindow
 
     from tagnan.ui.__main__ import QML_DIR
     from tagnan.ui.images import LayerImages
@@ -701,6 +701,31 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         QApplication.processEvents()
         assert popup.isVisible()
         assert popup.property("current") == 0
+        # The mouse takes the row it moves onto; only one row is lit, and the highlight goes
+        # with it.
+        from PySide6.QtCore import QPoint
+        from PySide6.QtTest import QTest
+
+        def items(item: QQuickItem) -> list[QQuickItem]:
+            return [item] + [d for child in item.childItems() for d in items(child)]
+
+        def row_centre(index: int) -> QPoint:
+            row = next(i for i in items(popup.contentItem()) if i.objectName() == f"row-{index}")
+            centre = row.mapToScene(row.boundingRect().center())
+            return QPoint(round(centre.x()), round(centre.y()))
+
+        rows = popup.property("rows").toVariant()
+        progress = next(i for i, r in enumerate(rows) if r.get("action") == "stats")
+        subject = next(i for i, r in enumerate(rows) if r.get("action") == "subject")
+        QTest.mouseMove(popup, row_centre(progress))
+        QTest.mouseMove(popup, row_centre(progress) + QPoint(3, 0))
+        assert popup.property("current") == progress
+        QTest.mouseMove(popup, row_centre(subject))
+        assert popup.property("current") == subject
+        # Rows made anew under the still pointer, as one types, leave the first one lit.
+        popup.findChild(QObject, "field").setProperty("text", "how often")
+        assert popup.property("current") == 0
+        popup.findChild(QObject, "field").setProperty("text", "")
         popup.openSub("pace", 4)
         assert popup.property("sub") == "pace"
         field = popup.findChild(QObject, "field")

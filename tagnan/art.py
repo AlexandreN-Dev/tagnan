@@ -1,11 +1,12 @@
 """Tagnan's drawing: flat Prussian-blue ink in Dartt's art direction, cut into the pieces the
 window animates.
 
-The window draws the rippling ink, its shade, the arms and the droplets itself (QtQuick Shapes,
-from the numbers of `figure()` and the outlines of `blob_path()`/`ink_path()`). Every other piece
-is an SVG layer (`layer()`, rendered by QtSvg) that it moves, turns or swaps: eyes, mouth,
-moustache, royale, cross, hat, plumes, rapier, inkwell, decorations. `still_svg()` puts them all
-together for the tray icon, the reference sheet and the tests.
+The window draws the rippling ink, its shade and the droplets itself (QtQuick Shapes, from the
+numbers of `figure()`, the outlines of `blob_path()`/`ink_path()` and, in the inkwell, the shading
+of `inkwell_shading()`). Every other piece is an SVG layer (`layer()`, rendered by QtSvg) that it
+moves, turns or swaps: eyes, mouth, moustache, royale, cross, hat, plumes, rapier, inkwell,
+decorations. `still_svg()` puts them all together for the tray icon, the reference sheet and the
+tests.
 
 Coordinates are those of the 120 x 140 reference drawing; each grade is drawn at its own scale
 around the feet (60, 132).
@@ -21,12 +22,16 @@ FELT, FELT_LIGHT = "#3E3850", "#554E72"
 CREAM, GOLD, GOLD_DK = "#F4EDE1", "#D2A24C", "#94701C"
 STEEL, STEEL_DK, GRIP = "#D9DCE3", "#9AA3B2", "#6B3E1F"
 GLASS, GLASS_LN, CAP, CAP_LIGHT = "#DCE4F0", "#B8C2D2", "#2A2733", "#5A5370"
+# The inkwell (grade 0): the outline of its glass, also around its cap so that the cap stands out
+# on dark desktops; the lit side of its ink; the quill's shaded half and its outline, so that the
+# quill stands out on light ones.
+GLASS_OUTLINE, INK_LIGHT, CREAM_SHADE, QUILL_LINE = "#A9B7CB", "#3F63B5", "#DDD3C2", "#5E5649"
 BAND_BLUE, RIB = "#4F7FCB", "#BDB5A4"
 ANGER = "#D8333A"
 
 WIDTH, HEIGHT = 120, 140
 FEET = (60.0, 132.0)
-SCALES = (0.84, 0.84, 0.88, 0.93, 0.97, 1.0)
+SCALES = (1.0, 0.84, 0.88, 0.93, 0.97, 1.0)
 EXPRESSIONS = ("idle", "ask", "happy", "angry", "wink", "annoyed", "sulk")
 # The rapier layer is drawn in the rapier's own frame: guard at (0, 0), blade towards -y.
 RAPIER_BOX = (-12.0, -50.0, 24.0, 68.0)
@@ -104,13 +109,92 @@ def blob_path(stage: int, phase: float) -> str:
     return spline(blob_points(blob, phase)) if blob else ink_path(phase)
 
 
+# The ink in the inkwell (grade 0): its walls, its surface at rest, its bottom, the radius of its
+# lower corners. Where it turns from lit to shaded, as a fraction of its width.
+INKWELL_INK = (25.0, 95.0, 92.0, 127.0, 5.0)
+INKWELL_TURN = 60 / 70
+# The lit band under the surface (colour, opacity) and the meniscus along it (colour, opacity, width).
+INKWELL_LIT = (INK_LIGHT, 0.28)
+INKWELL_MENISCUS = (INK_LIGHT, 0.9, 1.3)
+
+
+def _blossom(
+    p0: tuple[float, float], p1: tuple[float, float], p2: tuple[float, float], t1: float, t2: float
+) -> tuple[float, float]:
+    """The quadratic Bézier's polar form: (t, t) is its point at t; (t1, t2) the control point of
+    its stretch from t1 to t2."""
+    a, b, c = (1 - t1) * (1 - t2), (1 - t1) * t2 + t1 * (1 - t2), t1 * t2
+    return a * p0[0] + b * p1[0] + c * p2[0], a * p0[1] + b * p1[1] + c * p2[1]
+
+
+def surface(
+    phase: float, dy: float = 0.0, start: float = 0.0, end: float = 1.0
+) -> tuple[tuple[float, float], str]:
+    """The inkwell's sloshing surface, `dy` below it, from `start` to `end` of its width (0 at the
+    left wall, 1 at the right): where that stretch begins, and its quadratic Béziers. The surface
+    always meets the walls and the middle at rest height; in between it rises on one side as it
+    sinks on the other."""
+    left, right, top, _, _ = INKWELL_INK
+    mid, s = (left + right) / 2, 3 * math.sin(phase)
+    halves = (
+        ((left, top), ((left + mid) / 2, top - s), (mid, top)),
+        ((mid, top), ((mid + right) / 2, top + s), (right, top)),
+    )
+    begin = (left, top + dy)
+    d: list[str] = []
+    for k, (p0, p1, p2) in enumerate(halves):
+        t1, t2 = max(2 * start - k, 0.0), min(2 * end - k, 1.0)
+        if t2 <= t1:
+            continue
+        if not d:
+            x, y = _blossom(p0, p1, p2, t1, t1)
+            begin = (x, y + dy)
+        (cx, cy), (x, y) = _blossom(p0, p1, p2, t1, t2), _blossom(p0, p1, p2, t2, t2)
+        d.append(f"Q{pt(cx, cy + dy)} {pt(x, y + dy)}")
+    return begin, " ".join(d)
+
+
 def ink_path(phase: float) -> str:
     """The ink in the inkwell (grade 0): its surface sloshes from side to side."""
-    s = 3 * math.sin(phase)
+    left, right, _, bottom, r = INKWELL_INK
+    (x, y), top = surface(phase)
     return (
-        f"M33 99 Q46 {n(99 - s)} 60 99 Q74 {n(99 + s)} 87 99 "
-        "L87 122 Q87 127 82 127 L38 127 Q33 127 33 122 Z"
+        f"M{pt(x, y)} {top} L{pt(right, bottom - r)} Q{pt(right, bottom)} {pt(right - r, bottom)} "
+        f"L{pt(left + r, bottom)} Q{pt(left, bottom)} {pt(left, bottom - r)} Z"
     )
+
+
+def inkwell_shading(phase: float) -> dict[str, str]:
+    """What gives the inkwell's ink its volume, following its sloshing surface: the shaded side on
+    the right ("shade"), a lit band under the surface ("light") and the meniscus, a light line
+    along it ("meniscus", to stroke)."""
+    _, right, _, bottom, r = INKWELL_INK
+    (sx, sy), shaded = surface(phase, 0.6, INKWELL_TURN, 1.0)
+    (lx, ly), lit = surface(phase, 0.6, 0.0, INKWELL_TURN)
+    (mx, my), meniscus = surface(phase, 0.3, 1.5 / 70, 68.5 / 70)
+    return {
+        "shade": f"M82 127 Q86.5 110 {pt(sx, sy)} {shaded} L{pt(right, bottom - r)} Q{pt(right, bottom)} {pt(right - r, bottom)} Z",
+        "light": f"M{pt(lx, ly)} {lit} Q84 97.5 80 98.6 L25 98.6 Z",
+        "meniscus": f"M{pt(mx, my)} {meniscus}",
+    }
+
+
+def inkwell_shading_svg(phase: float = 0.0) -> str:
+    """The inkwell's shading as SVG, for the still figure."""
+    shading = inkwell_shading(phase)
+    lit, lit_opacity = INKWELL_LIT
+    line, line_opacity, line_width = INKWELL_MENISCUS
+    return (
+        f'<path d="{shading["shade"]}" fill="{INK_SHADE}"/>'
+        f'<path d="{shading["light"]}" fill="{lit}" opacity="{n(lit_opacity)}"/>'
+        f'<path d="{shading["meniscus"]}" fill="none" stroke="{line}" stroke-width="{n(line_width)}" '
+        f'stroke-linecap="round" opacity="{n(line_opacity)}"/>'
+    )
+
+
+def argb(colour: str, opacity: float) -> str:
+    """A colour and its opacity, as QML reads them: #AARRGGBB."""
+    return f"#{round(opacity * 255):02X}{colour.lstrip('#')}"
 
 
 def teardrop(x: float, y: float, r: float) -> str:
@@ -161,7 +245,7 @@ def burst(stage: int) -> list[Droplet]:
         theta = math.radians(a + rng.uniform(-7, 7))
         reach = rng.uniform(17, 27) if fountain else rng.uniform(13, 24)
         if blob is None:
-            x, y = 60 + rng.uniform(-3, 3), 80.0
+            x, y = 60 + rng.uniform(-3, 3), 70.0  # out of the inkwell's mouth
         else:
             x = blob.cx + blob.rx * 0.9 * math.cos(theta)
             y = blob.cy + blob.ry * 0.9 * math.sin(theta)
@@ -201,11 +285,18 @@ def figure(stage: int) -> dict[str, Any]:
         "ink": INK,
         "shade": INK_SHADE,
         "glow": GOLD_GLOW if stage >= 5 else GLOW,
-        "shadeOffset": [2.0, 1.5] if stage == 0 else [2.4, 2.6] if stage == 1 else [2.6, 3.0],
+        # The inkwell's ink is shaded inside (inkwell_shading), not by an offset copy.
+        "shadeOffset": [0.0, 0.0] if stage == 0 else [2.4, 2.6] if stage == 1 else [2.6, 3.0],
+        # Its shading as QML colours; the window gets the paths from the animator.
+        "inkLight": argb(*INKWELL_LIT),
+        "meniscus": argb(INKWELL_MENISCUS[0], INKWELL_MENISCUS[1]),
+        "meniscusWidth": INKWELL_MENISCUS[2],
+        "shadowRx": 40.0 if stage == 0 else 28 * SCALES[stage],  # the inkwell is wider
         "ripplePeriod": blob.period if blob else 2.8,
-        "centre": [blob.cx, blob.cy] if blob else [60.0, 112.0],
+        "centre": [blob.cx, blob.cy] if blob else [60.0, 109.5],
         "ring": [blob.cx, blob.cy, blob.rx, blob.ry] if blob else [],
-        "decor": [104.0, 62.0] if stage == 0 else [102.0, 62.0] if stage == 1 else [102.0, 46.0],
+        # The mood's sign: left of the inkwell, the quill taking its right.
+        "decor": [24.0, 58.0] if stage == 0 else [102.0, 62.0] if stage == 1 else [102.0, 46.0],
         "hasHat": stage >= 2,
         "hasPlume": stage >= 3,
         "hasRapier": stage >= 4,
@@ -217,10 +308,10 @@ def figure(stage: int) -> dict[str, Any]:
             drip=[],
             fall=[],
             staticDrips=[],
-            eyes=[[60 - 7.2, 109.0], [60 + 7.2, 109.0]],
-            eyeRadius=4.6,
-            mouth=[60.0, 117.0],
-            quill=[61.0, 104.0],
+            eyes=[[60 - 11.0, 107.5], [60 + 11.0, 107.5]],
+            eyeRadius=8.13,
+            mouth=[60.0, 118.5],
+            quill=list(QUILL[0]),
         )
     elif stage == 1:
         spec.update(
@@ -320,8 +411,12 @@ def _grin(
     c_bot: float,
     teeth: int = 5,
 ) -> str:
-    """The flask's wide grin: a cream crescent, teeth drawn in ink."""
+    """The flask's wide grin: a cream crescent, teeth drawn in ink. Without teeth (0), a plain
+    crescent, a little thinner: its upper edge comes down towards the lower one."""
     mid = (x1 + x2) / 2
+    if not teeth:
+        c_top += 0.12 * (c_bot - c_top)
+        return f'<path d="M{pt(x1, y1)} Q{pt(mid, c_top)} {pt(x2, y2)} Q{pt(mid, c_bot)} {pt(x1, y1)} Z" fill="{CREAM}"/>'
     lines = []
     for i in range(1, teeth + 1):
         t = i / (teeth + 1)
@@ -335,17 +430,39 @@ def _grin(
     )
 
 
-def mouth(cx: float, cy: float, s: float, expression: str) -> str:
-    w = 14 * s
+def mouth(
+    cx: float, cy: float, s: float, expression: str, depth: float = 1.0, teeth: bool = True
+) -> str:
+    """The grin of each mood, `s` its size; `depth` flattens it apart from its width. The inkwell's
+    grins have no teeth."""
+    w, v = 14 * s, s * depth
+
+    def count(k: int) -> int:
+        return k if teeth else 0
+
     if expression == "happy":
         return _grin(
-            cx - w * 1.25, cx + w * 1.25, cy - 1, cy - 1, cy + 6 * s, cy + 11 * s, cy + 18 * s, 6
+            cx - w * 1.25,
+            cx + w * 1.25,
+            cy - 1,
+            cy - 1,
+            cy + 6 * v,
+            cy + 11 * v,
+            cy + 18 * v,
+            count(6),
         )
     if expression == "angry":
-        return _grin(cx - w, cx + w, cy + 7 * s, cy + 7 * s, cy - 5 * s, cy, cy + 4 * s, 6)
+        return _grin(cx - w, cx + w, cy + 7 * v, cy + 7 * v, cy - 5 * v, cy, cy + 4 * v, count(6))
     if expression in ("ask", "wink"):
         return _grin(
-            cx - w * 0.8, cx + w * 0.85, cy + 1, cy - 1.5, cy + 5 * s, cy + 9 * s, cy + 13 * s, 4
+            cx - w * 0.8,
+            cx + w * 0.85,
+            cy + 1,
+            cy - 1.5,
+            cy + 5 * v,
+            cy + 9 * v,
+            cy + 13 * v,
+            count(4),
         )
     if expression == "annoyed":
         return _grin(
@@ -353,22 +470,25 @@ def mouth(cx: float, cy: float, s: float, expression: str) -> str:
             cx + w * 0.85,
             cy + 2,
             cy + 2,
-            cy + 0.5 * s,
-            cy + 2.6 * s,
-            cy + 5.5 * s,
-            6,
+            cy + 0.5 * v,
+            cy + 2.6 * v,
+            cy + 5.5 * v,
+            count(6),
         )
     if expression == "sulk":
         return (
-            f'<path d="M{pt(cx - 3.5 * s, cy + 4 * s)} Q{pt(cx, cy)} {pt(cx + 3.5 * s, cy + 4 * s)}" '
+            f'<path d="M{pt(cx - 3.5 * s, cy + 4 * v)} Q{pt(cx, cy)} {pt(cx + 3.5 * s, cy + 4 * v)}" '
             f'fill="none" stroke="{CREAM}" stroke-width="{n(2.2 * s)}" stroke-linecap="round"/>'
         )
-    return _grin(cx - w, cx + w, cy, cy, cy + 6 * s, cy + 10 * s, cy + 15 * s)
+    return _grin(cx - w, cx + w, cy, cy, cy + 6 * v, cy + 10 * v, cy + 15 * v, count(5))
 
 
-def eye(cx: float, cy: float, s: float, expression: str, side: int) -> str:
-    """One capsule eye (side -1: his right, on our left); a quarter smaller than Dartt's."""
-    spacing, s = s, s * 0.75
+def eye(
+    cx: float, cy: float, s: float, expression: str, side: int, spacing: float | None = None
+) -> str:
+    """One capsule eye (side -1: his right, on our left); a quarter smaller than Dartt's at size 1.
+    `spacing` sets the gap between the eyes apart from their size (by default, it follows it)."""
+    spacing, s = s if spacing is None else spacing, s * 0.75
     x = cx + side * 10 * spacing + (3 * spacing if expression == "sulk" else 0)
     if expression == "happy" or (expression == "wink" and side == -1):
         return (
@@ -559,31 +679,85 @@ def royale(expression: str, cx: float = 60) -> str:
     )
 
 
+# The knocked-over inkwell beside the Gascon (grade 1).
 BOTTLE = (
     "M30 124 Q30 130 36 130 L84 130 Q90 130 90 124 L90 100 Q90 92 82 90 L72 86 L72 80 "
     "L48 80 L48 86 L38 90 Q30 92 30 100 Z"
 )
+# The inkwell itself (grade 0): wide, round-shouldered, with a thick neck.
+INKWELL = (
+    "M22 122 Q22 130 30 130 L90 130 Q98 130 98 122 L98 97 Q98 80 82 79 "
+    "L76 78.5 L76 74 L44 74 L44 78.5 L38 79 Q22 80 22 97 Z"
+)
+# The quill: where it is dipped (the window turns it around that point), and its tip.
+QUILL = ((61.0, 104.0), (92.0, 44.0))
+
+
+def open_spline(points: list[tuple[float, float]]) -> str:
+    """Cubic Béziers through the points, as an open Catmull-Rom curve whose ends keep the direction
+    of their chord (no overshoot); it starts from the current point, which is points[0]."""
+    count = len(points)
+    d = []
+    for i in range(count - 1):
+        p0, p1, p2 = points[max(i - 1, 0)], points[i], points[i + 1]
+        p3 = points[min(i + 2, count - 1)]
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d.append(f"C{pt(*c1)} {pt(*c2)} {pt(*p2)}")
+    return " ".join(d)
 
 
 def quill() -> str:
+    """The goose quill dipped in the inkwell: a vane in two tones (cream towards the light, shaded
+    on the other side of the shaft), the shaft, a gold nib in the ink, and a thin dark outline all
+    round, so that the cream stands out on light desktops."""
+    (x0, y0), (x1, y1) = QUILL
+    width, start, shaft, line = 11.0, 0.4, 2.2, 1.0
+    length = math.hypot(x1 - x0, y1 - y0)
+    ux, uy = (x1 - x0) / length, (y1 - y0) / length
+
+    def edge(side: int) -> list[tuple[float, float]]:
+        """One edge of the vane, from its base on the shaft to the tip (side 1: the shaded one)."""
+        points = []
+        for i in range(10):
+            t = start + (1 - start) * i / 9
+            w = width * side * math.sin(math.pi * i / 9) ** 0.8
+            points.append((x0 + ux * length * t - uy * w, y0 + uy * length * t + ux * w))
+        return points
+
+    lit, shaded = edge(-1), edge(1)
+    shaft_d = f"M{pt(x0 - ux * 2, y0 - uy * 2)} L{pt(x1 - ux * 3.5, y1 - uy * 3.5)}"
+    nib = f"M{pt(x0 - ux * 3.5, y0 - uy * 3.5)} L{pt(x0 + ux * 4, y0 + uy * 4)}"
+    nib_shade = f"M{pt(x0 - ux * 3.5, y0 - uy * 3.5)} L{pt(x0 - ux * 0.5, y0 - uy * 0.5)}"
+    outline = f"M{pt(*lit[0])} {open_spline(lit)} {open_spline(shaded[::-1])} Z"
+    round_cap = 'fill="none" stroke-linecap="round"'
     return (
-        f'<path d="M61 104 L94 40" stroke="{RIB}" stroke-width="1.6" stroke-linecap="round"/>'
-        f'<path d="M74 78 C68 64 76 48 93 40 C96 50 90 70 80 82 Z" fill="{CREAM}"/>'
-        f'<path d="M76 76 Q80 60 92 42" fill="none" stroke="{RIB}" stroke-width="1" stroke-linecap="round"/>'
+        # The outline under the shaft and the nib shows only along their edges.
+        f'<path d="{shaft_d}" {round_cap} stroke="{QUILL_LINE}" stroke-width="{n(shaft + 2 * line)}"/>'
+        f'<path d="{nib}" {round_cap} stroke="{QUILL_LINE}" stroke-width="{n(shaft + 0.9 + 2 * line)}"/>'
+        f'<path d="M{pt(*lit[0])} {open_spline(lit)} Z" fill="{CREAM}"/>'
+        f'<path d="M{pt(*shaded[0])} {open_spline(shaded)} Z" fill="{CREAM_SHADE}"/>'
+        f'<path d="{outline}" fill="none" stroke="{QUILL_LINE}" stroke-width="{n(line)}" stroke-linejoin="round"/>'
+        f'<path d="{shaft_d}" {round_cap} stroke="{RIB}" stroke-width="{n(shaft)}"/>'
+        f'<path d="{nib}" {round_cap} stroke="{GOLD}" stroke-width="{n(shaft + 0.9)}"/>'
+        f'<path d="{nib_shade}" fill="none" stroke="{GOLD_DK}" stroke-width="0.6"/>'
     )
 
 
 def glass() -> str:
-    """The inkwell's glass, drawn over the ink: its walls, thick base, lip and highlights."""
+    """The inkwell's glass, drawn over the ink: a faint tint, its thick base (its top just under
+    the lowest grin, so that no mood's mouth fades into it), its outline, the lip of its mouth and
+    the light on its shoulder and lip."""
+    light = 'fill="none" stroke="#fff" stroke-linecap="round"'
     return (
-        f'<path d="{BOTTLE}" fill="{GLASS}" opacity=".28"/>'
-        f'<path d="{BOTTLE}" fill="none" stroke="{GLASS_LN}" stroke-width="1.4" stroke-linejoin="round"/>'
-        f'<path d="M30 124 Q30 130 36 130 L84 130 Q90 130 90 124 L90 123 L30 123 Z" fill="{GLASS}" opacity=".45"/>'
-        f'<rect x="45.5" y="76" width="29" height="5.5" rx="2" fill="{GLASS}" opacity=".7" '
-        f'stroke="{GLASS_LN}" stroke-width="1.2"/>'
-        '<path d="M35.5 96 L35.5 118" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".38"/>'
-        '<path d="M40 90 Q44 86 50 85" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" '
-        'opacity=".4"/>'
+        f'<path d="{INKWELL}" fill="{GLASS}" opacity=".18"/>'
+        f'<path d="M22 122.6 Q22.31 130 30 130 L90 130 Q97.69 130 98 122.6 Z" fill="{GLASS}" opacity=".5"/>'
+        f'<path d="{INKWELL}" fill="none" stroke="{GLASS_OUTLINE}" stroke-width="2" stroke-linejoin="round"/>'
+        f'<rect x="40" y="66" width="40" height="9.5" rx="3.5" fill="{GLASS}" opacity=".85"/>'
+        f'<rect x="40" y="66" width="40" height="9.5" rx="3.5" fill="none" stroke="{GLASS_OUTLINE}" stroke-width="1.8"/>'
+        f'<path d="M29 88 L29 118" {light} stroke-width="3.6" opacity=".5"/>'
+        f'<path d="M36 85.5 L36 93" {light} stroke-width="3" opacity=".5"/>'
+        f'<path d="M44.5 68.4 L60 68.4" {light} stroke-width="1.6" opacity=".6"/>'
     )
 
 
@@ -603,10 +777,14 @@ def ground(stage: int) -> str:
     """What lies on the desk and never moves: the cap and a blot (grade 0), the knocked-over
     inkwell (grade 1)."""
     if stage == 0:
+        # The cap is ringed with the glass's outline, so that it stands out on dark desktops.
         return (
-            f'<rect x="97" y="121" width="14" height="9" rx="2" fill="{CAP}"/>'
-            f'<rect x="97" y="121" width="14" height="2.5" rx="1" fill="{CAP_LIGHT}"/>'
-            f'<ellipse cx="18" cy="129.5" rx="7" ry="2.2" fill="{INK}"/><circle cx="27" cy="127" r="1.4" fill="{INK}"/>'
+            f'<ellipse cx="11" cy="129.6" rx="5.5" ry="2.1" fill="{INK}"/><circle cx="19.1" cy="127.6" r="1.3" fill="{INK}"/>'
+            f'<rect x="100.1" y="118.6" width="17.8" height="12.3" rx="3.3" fill="{GLASS_OUTLINE}"/>'
+            f'<rect x="101" y="119.5" width="16" height="10.5" rx="2.4" fill="{CAP}"/>'
+            f'<rect x="101" y="119.5" width="16" height="2.6" rx="1.2" fill="{CAP_LIGHT}"/>'
+            '<path d="M102.6 120.8 L108.2 120.8" fill="none" stroke="#fff" stroke-width="0.9" '
+            'stroke-linecap="round" opacity=".35"/>'
         )
     if stage == 1:
         return (
@@ -660,20 +838,34 @@ def layer_names(stage: int) -> tuple[str, ...]:
     return tuple(name for name in LAYERS if present[name])
 
 
-def _face(stage: int) -> tuple[float, float, float, float, float]:
-    """Eyes centre, eye scale, mouth centre and scale."""
+@dataclass(frozen=True)
+class Face:
+    """Where a grade's face sits, and how its eyes and grin are drawn."""
+
+    eyes_y: float
+    eye_size: float
+    eye_spacing: float  # the gap between the eyes, at its own scale
+    mouth_y: float
+    mouth_size: float
+    mouth_depth: float = 1.0
+    teeth: bool = True
+
+
+def _face(stage: int) -> Face:
     if stage == 0:
-        return 60, 109, 0.72, 117, 0.68
+        # The inkwell's face, made to read at tray size: big, wide-set eyes, a flatter grin
+        # without teeth.
+        return Face(107.5, 1.26, 1.1, 118.5, 0.68, mouth_depth=0.795, teeth=False)
     if stage == 1:
-        return 60, 86, 1.0, 100, 1.0
-    return 60, 76, 1.0, 91, 1.0
+        return Face(86, 1.0, 1.0, 100, 1.0)
+    return Face(76, 1.0, 1.0, 91, 1.0)
 
 
 def layer_body(stage: int, name: str, expression: str = "idle") -> str:
     """The SVG elements of a layer (no <svg> around them); "" when absent at that grade."""
     if name not in layer_names(stage):
         return ""
-    ex, ey, es, my, ms = _face(stage)
+    face = _face(stage)
     match name:
         case "glow":
             return glow(stage)
@@ -683,12 +875,13 @@ def layer_body(stage: int, name: str, expression: str = "idle") -> str:
             return glass()
         case "quill":
             return quill()
-        case "eye-left":
-            return eye(ex, ey, es, expression, -1)
-        case "eye-right":
-            return eye(ex, ey, es, expression, 1)
+        case "eye-left" | "eye-right":
+            side = -1 if name == "eye-left" else 1
+            return eye(60, face.eyes_y, face.eye_size, expression, side, face.eye_spacing)
         case "mouth":
-            return mouth(60, my, ms, expression)
+            return mouth(
+                60, face.mouth_y, face.mouth_size, expression, face.mouth_depth, face.teeth
+            )
         case "cross":
             return cross(stage)
         case "moustache":
@@ -728,10 +921,13 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True) -> str:
     outline = blob_path(stage, 0)
     dx, dy = spec["shadeOffset"]
     parts = [layer_body(stage, "glow")] if glow else []
-    parts += [
-        f'<path d="{outline}" fill="{INK_SHADE}" transform="translate({pt(dx, dy)})"/>',
-        f'<path d="{outline}" fill="{INK}"/>',
-    ]
+    if dx or dy:
+        parts.append(
+            f'<path d="{outline}" fill="{INK_SHADE}" transform="translate({pt(dx, dy)})"/>'
+        )
+    parts.append(f'<path d="{outline}" fill="{INK}"/>')
+    if stage == 0:
+        parts.append(inkwell_shading_svg())
     for x, y, r in spec["staticDrips"] + ([spec["drip"]] if spec["drip"] else []):
         parts.append(f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>')
     parts += [
@@ -752,7 +948,7 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True) -> str:
             f'translate({pt(-gx, -gy)})">{rapier(stage)}</g>'
         )
     scaled = f"translate(60 132) scale({n(k)}) translate(-60 -132)"
-    shadow = f'<ellipse cx="60" cy="133.5" rx="{n(28 * k)}" ry="3.6" fill="#000" opacity=".16"/>'
+    shadow = f'<ellipse cx="60" cy="133.5" rx="{n(spec["shadowRx"])}" ry="3.6" fill="#000" opacity=".16"/>'
     return _svg(
         f'{shadow}<g transform="{scaled}">{layer_body(stage, "ground")}'
         f'<g transform="translate(0 {n(-lift)})">{"".join(parts)}</g></g>'

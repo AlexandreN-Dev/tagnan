@@ -19,6 +19,15 @@ def outline(stage: int, phase: float) -> str:
     return art.blob_path(stage, phase)
 
 
+@lru_cache(maxsize=512)
+def shading(stage: int, phase: float) -> tuple[str, str, str]:
+    """The inkwell's shaded side, lit band and meniscus (grade 0; nothing at the others)."""
+    if stage != 0:
+        return "", "", ""
+    paths = art.inkwell_shading(phase)
+    return paths["shade"], paths["light"], paths["meniscus"]
+
+
 def _pose_property(name: str, kind: type, notify: Signal) -> Any:
     def getter(self: "Animator") -> object:
         return getattr(self._pose, name)
@@ -39,6 +48,7 @@ class Animator(QObject):
         self._rig.set_stage(stage)
         self._pose: Pose = REST_POSE
         self._outline = outline(stage, 0.0)
+        self._shading = shading(stage, 0.0)
         self._eyes: QPointF | None = None
         self._cursor: QPointF | None = None
         self._last = time.monotonic()
@@ -78,6 +88,7 @@ class Animator(QObject):
         if stage != self._rig.stage:
             self._rig.set_stage(stage)
             self._outline = outline(stage, self._pose.wobble)
+            self._shading = shading(stage, self._pose.wobble)
             self.stageChanged.emit()
             self.outlineChanged.emit()
 
@@ -127,11 +138,24 @@ class Animator(QObject):
         self.poseChanged.emit()
         if wobble_changed:
             self._outline = outline(self._rig.stage, round(pose.wobble, 4))
+            self._shading = shading(self._rig.stage, round(pose.wobble, 4))
             self.outlineChanged.emit()
 
     @Property(str, notify=outlineChanged)
     def inkPath(self) -> str:
         return self._outline
+
+    @Property(str, notify=outlineChanged)
+    def inkwellShade(self) -> str:
+        return self._shading[0]
+
+    @Property(str, notify=outlineChanged)
+    def inkwellLight(self) -> str:
+        return self._shading[1]
+
+    @Property(str, notify=outlineChanged)
+    def meniscus(self) -> str:
+        return self._shading[2]
 
     expression = _pose_property("expression", str, poseChanged)
     bodySx = _pose_property("body_sx", float, poseChanged)

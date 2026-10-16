@@ -69,3 +69,19 @@ def test_burst_is_fixed_and_rises_higher_than_it_falls() -> None:
     assert len(art.burst(0)) == 7
     for d in droplets:
         assert d.my < d.dy  # the top of the arc is above where it lands
+
+
+def test_inkwell_shading_follows_the_slosh() -> None:
+    left, right, top, _, _ = art.INKWELL_INK
+    mid = (left + right) / 2
+    t = 2 * art.INKWELL_TURN - 1  # where the shade starts, on the right half of the surface
+    for phase in (0.0, 1.0, math.pi / 2, 4.0):
+        sag = 3 * math.sin(phase)
+        (x, y), _ = art.surface(phase, 0.0, art.INKWELL_TURN, 1.0)
+        assert x == pytest.approx(mid + (right - mid) * t)
+        assert y == pytest.approx(top + 2 * t * (1 - t) * sag)  # on the ink's own surface
+        shading = art.inkwell_shading(phase)
+        assert all(d.startswith("M") for d in shading.values())
+        assert shading["shade"].endswith("Z")
+        assert shading["light"].endswith("Z")
+    assert art.inkwell_shading(math.pi / 2) != art.inkwell_shading(3 * math.pi / 2)

@@ -105,7 +105,7 @@ Item {
             ShapePath {
                 fillColor: "#29000000"
                 strokeColor: "transparent"
-                PathSvg { path: root.ellipse(60, 133.5, 28 * root.spec.scale, 3.6) }
+                PathSvg { path: root.ellipse(60, 133.5, root.spec.shadowRx, 3.6) }
             }
         }
 
@@ -160,11 +160,36 @@ Item {
                     height: 140
 
                     Ink {
+                        visible: root.spec.shadeOffset[0] !== 0 || root.spec.shadeOffset[1] !== 0
                         d: root.animator.inkPath
                         fill: root.spec.shade
                         transform: Translate { x: root.spec.shadeOffset[0]; y: root.spec.shadeOffset[1] }
                     }
                     Ink { d: root.animator.inkPath }
+                    // Grade 0: the inkwell's ink, shaded on the right, lit under its surface, with
+                    // its meniscus; all three follow the slosh (tagnan.art.inkwell_shading).
+                    Shape {
+                        visible: root.stage === 0
+                        anchors.fill: parent
+                        preferredRendererType: Shape.CurveRenderer
+                        ShapePath {
+                            fillColor: root.spec.shade
+                            strokeColor: "transparent"
+                            PathSvg { path: root.animator.inkwellShade }
+                        }
+                        ShapePath {
+                            fillColor: root.spec.inkLight
+                            strokeColor: "transparent"
+                            PathSvg { path: root.animator.inkwellLight }
+                        }
+                        ShapePath {
+                            fillColor: "transparent"
+                            strokeColor: root.spec.meniscus
+                            strokeWidth: root.spec.meniscusWidth
+                            capStyle: ShapePath.RoundCap
+                            PathSvg { path: root.animator.meniscus }
+                        }
+                    }
                     Repeater {
                         model: root.spec.staticDrips
                         Ink {

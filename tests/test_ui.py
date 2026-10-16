@@ -113,8 +113,11 @@ def test_animator_hands_the_outline_to_qml() -> None:
     animator.advance(0.5)
     assert animator.property("inkPath") != first
     assert animator.property("inkPath").startswith("M")
+    shading = ("inkwellShade", "inkwellLight", "meniscus")
+    assert not any(animator.property(name) for name in shading)  # only the inkwell's ink has it
     animator.setProperty("stage", 0)
-    assert "L87 122" in animator.property("inkPath")  # the inkwell's ink
+    assert "L95 122" in animator.property("inkPath")  # the inkwell's ink
+    assert all(animator.property(name).startswith("M") for name in shading)
 
 
 # --- The game in the window -------------------------------------------------------------------

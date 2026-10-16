@@ -1,0 +1,19 @@
+# Tagnan's config: copy it to ~/.config/tagnan/config.toml and change what you like.
+# Every key is optional; an unknown key or a wrong value stops Tagnan with a clear message.
+
+# The exam, as a file of exam/ without .toml.
+exam = "aif-c01"
+
+[rhythm]
+# A question every 8 to 25 minutes, at random, from 9:00 to 19:00, weekdays only.
+min_minutes = 8
+max_minutes = 25
+snooze_minutes = 10  # « Plus tard »
+start_hour = 9
+end_hour = 19
+weekends = false
+
+[brain]
+# Claude Code's model aliases (claude --help): sonnet, opus, fable, haiku.
+model = "sonnet"  # writes the questions, ten at a time
+explain_model = "sonnet"  # « Explique-moi plus »

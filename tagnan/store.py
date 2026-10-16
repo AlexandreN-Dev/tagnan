@@ -227,6 +227,11 @@ class Store:
                 (key, value),
             )
 
+    def course_keys(self) -> list[str]:
+        """The courses the brain drew up, kept in the state table."""
+        rows = self._db.execute("SELECT key FROM state WHERE key LIKE 'course:%' ORDER BY key")
+        return [str(r[0])[7:] for r in rows]
+
     def domain_stats(self, exam: str) -> dict[int, tuple[int, int]]:
         """For each domain: answers given, right answers."""
         rows = self._db.execute(

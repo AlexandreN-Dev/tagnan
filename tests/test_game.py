@@ -1,15 +1,17 @@
+import random
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-from tagnan import config
+from tagnan import blueprint, config
+from tagnan.blueprint import Blueprint
 from tagnan.game import LOW_WATER, Game
 from tagnan.progress import DAY, Progress
 from tagnan.store import Store
 from tagnan.subject import Subject
 from tagnan.subject import parse as parse_subject
-from tests.conftest import question_data
+from tests.conftest import pottery_data, pottery_question, question_data
 
 NOW = 1_800_000_000.0
 
@@ -183,3 +185,32 @@ def test_an_older_database_gains_the_subject(tmp_path: Path) -> None:
     db.close()
     store = Store(path)
     assert store.question(1).subject == ""
+
+
+def test_a_course_drawn_up_is_kept_and_found_again(tmp_path: Path, bp: Blueprint) -> None:
+    path = tmp_path / "tagnan.db"
+    game = Game(Store(path), bp, random.Random(1))
+    assert game.courses() == [bp]
+    game.set_course(blueprint.from_dict(pottery_data()))
+    ids, rejected = game.add_batch([pottery_question()], NOW)
+    assert ids
+    assert not rejected
+    assert game.batch_request()["course"]["name"] == "Pottery"
+    assert game.topic() == "Pottery"
+    game.set_subject(parse_subject("glazes", game.blueprint))
+    assert game.topic() == "glazes (Pottery)"
+
+    again = Game(Store(path), bp, random.Random(1))
+    assert again.exam == "pottery"
+    assert [c.key for c in again.courses()] == ["pottery", "aif-c01"]
+    assert again.find_course(" pottery. ") == again.blueprint
+    assert again.find_course("aws certified ai practitioner") == bp
+    assert again.find_course("history") is None
+    assert again.subject == Subject(text="glazes")
+    # Each course keeps its questions apart.
+    again.set_course(bp)
+    assert again.store.fresh(again.exam) == []
+    assert again.add_batch([question_data()], NOW, course="nowhere") == (
+        [],
+        ["unknown course: nowhere"],
+    )

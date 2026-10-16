@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from tagnan import brain, config
+from tagnan import blueprint, brain, config
 from tagnan.blueprint import Blueprint
 from tagnan.brain_client import BrainClient, BrainError, decode
-from tests.conftest import question_data
+from tests.conftest import pottery_data, pottery_question, question_data
 
 FAKE_CLAUDE = """#!/usr/bin/env python3
 import json, os, sys
@@ -192,3 +192,75 @@ def test_live_generation_writes_usable_questions(bp: Blueprint) -> None:
     )
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout)["questions"]
+
+
+def test_any_course_travels_with_the_request_and_leaves_aws_out(fake_claude: Path) -> None:
+    answer(fake_claude, {"questions": [pottery_question()]})
+    request = {
+        "course": pottery_data(),
+        "slots": [{"domain": 2, "difficulty": "easy", "kind": "single"}],
+    }
+    result = brain.generate(request, config.Config())
+    assert result["course"] == "pottery"
+    assert len(result["questions"]) == 1
+    log = call_log(fake_claude)
+    argv = [str(a) for a in log["argv"]]  # type: ignore[attr-defined]
+    system = argv[argv.index("--system-prompt") + 1]
+    assert "helps someone learn Pottery." in system
+    assert "Ask about techniques every potter agrees on." in system
+    prompt = str(log["stdin"])
+    assert "questions to learn Pottery" in prompt
+    assert "Clay and Glazes for the Potter" in prompt
+    assert "AWS" not in system + prompt
+    explained = brain.explain_prompt(blueprint.from_dict(pottery_data()), pottery_question(), [1])
+    assert explained.startswith("Someone learning Pottery got")
+    assert "exam day" not in explained
+
+
+def test_the_aws_exam_keeps_its_own_rules(bp: Blueprint) -> None:
+    system = brain.system_prompt(bp)
+    assert "AWS Certified AI Practitioner (AIF-C01) certification" in system
+    assert "Never rely on quotas, prices" in system
+    slots = [{"domain": 3, "difficulty": "hard", "kind": "single"}]
+    prompt = brain.generate_prompt(bp, slots, [])
+    assert "practice questions for the AIF-C01 exam" in prompt
+    assert "Services and features in the exam's scope: Amazon Bedrock," in prompt
+    assert 'the AWS document to read again, for example "Amazon Bedrock User Guide' in prompt
+
+
+def test_a_course_is_drawn_up_from_words(fake_claude: Path) -> None:
+    data = pottery_data()
+    structured = {
+        "understood": True,
+        "message": "",
+        "exam": False,
+        "code": "Pottery",
+        "name": "Pottery",
+        "guidance": data["guidance"],
+        "reference": data["reference"],
+        "services": [],
+        "multiple": True,
+        "domains": data["domains"],
+    }
+    answer(fake_claude, structured)
+    result = brain.plan({"words": "  la   poterie "}, config.Config())
+    assert '"la poterie"' in str(call_log(fake_claude)["stdin"])
+    course = blueprint.from_dict(result["course"])
+    assert course.key == "pottery"
+    assert not course.exam
+    assert course.kinds == ("single", "multiple")
+    assert course.whole == "all of Pottery"
+    answer(fake_claude, {**structured, "code": "SAA-C03", "exam": True, "multiple": False})
+    assert brain.plan({"words": "solutions architect"}, config.Config())["course"]["key"] == (
+        "saa-c03"
+    )
+    answer(fake_claude, {**structured, "understood": False, "message": "Name a subject."})
+    assert brain.plan({"words": "stuff"}, config.Config()) == {
+        "understood": False,
+        "message": "Name a subject.",
+    }
+    answer(fake_claude, {**structured, "domains": []})
+    with pytest.raises(ValueError, match="each domain"):
+        brain.plan({"words": "pottery"}, config.Config())
+    with pytest.raises(brain.BrainError, match="without words"):
+        brain.plan({"words": " "}, config.Config())

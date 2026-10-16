@@ -25,7 +25,7 @@ from tagnan.ui.desktop import Settings
 from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
-from tests.conftest import question_data
+from tests.conftest import pottery_data, pottery_question, question_data
 
 NOW = 1_800_000_000.0
 
@@ -128,6 +128,7 @@ class FakeWorker(BrainWorker):
         super().__init__(BrainClient(("false",)))
         self.requests: list[dict[str, Any]] = []
         self.explanations: list[int] = []
+        self.plans: list[str] = []
 
     def generate(self, request: dict[str, Any]) -> bool:
         self.requests.append(request)
@@ -136,6 +137,11 @@ class FakeWorker(BrainWorker):
 
     def explain(self, question_id: int, request: dict[str, Any]) -> None:
         self.explanations.append(question_id)
+
+    def plan(self, words: str) -> bool:
+        self.plans.append(words)
+        self.planning = words
+        return True
 
 
 class Clock:
@@ -328,7 +334,7 @@ def test_the_subject_is_chosen_kept_and_written_for(game: Game) -> None:
     assert controller.previewSubject("rag") == {"ok": True, "text": "Questions on rag."}
     assert controller.subjectWith("  ") is False
     assert controller.subjectWith("RAG") is True
-    assert controller.property("subject") == "RAG"
+    assert controller.property("subject") == "RAG (AIF-C01)"
     assert "a few minutes" in controller.property("bubble")["text"]
     request = worker.requests[-1]
     assert request["subject"] == "RAG"
@@ -359,9 +365,82 @@ def test_his_menu_names_the_subject(game: Game) -> None:
     controller, _, _ = make(game)
     tray = Tray(controller)
     labels = [a.text() for a in tray.menu.actions()]
-    assert "Subject: the whole exam…" in labels
+    assert "Subject: AWS Certified AI Practitioner…" in labels
     controller.setSubject("domain:2")
-    assert tray._subject.text() == "Subject: Domain 2 · Fundamentals of Generative AI…"
+    assert tray._subject.text() == "Subject: Domain 2 · Fundamentals of Generative A……"
+
+
+def test_anything_can_be_learned_each_with_its_own_grade(game: Game) -> None:
+    fill(game)
+    game.store.save_progress(game.exam, Progress(points=1000, grade=2))
+    controller, worker, _ = make(game)
+    assert controller.property("stage") == 2
+    controller.showSubject()
+    bubble = controller.property("bubble")
+    assert bubble["courses"][0] == {"label": "AWS Certified AI Practitioner", "key": "aif-c01"}
+    assert bubble["course"] == "aif-c01"
+    back = controller.previewCourse("AIF-C01")
+    assert back == {"ok": True, "text": "Back to AWS Certified AI Practitioner."}
+    assert controller.previewCourse("pottery")["text"].startswith("I'll draw up a course")
+    assert controller.previewCourse("x" * 121)["ok"] is False
+    assert controller.learnWith("Pottery!") is True
+    assert worker.plans == ["Pottery"]
+    assert "drawing up" in controller.property("bubble")["text"]
+    assert game.exam == "aif-c01"  # until the course is drawn up
+
+    # A course drawn up while a question waits for its answer: it waits for the bubble to close.
+    worker.generating = False
+    controller.askNow()
+    worker.planning = ""
+    worker.planned.emit("Pottery", {"understood": True, "course": pottery_data()})
+    assert controller.property("bubble")["mode"] == "question"
+    assert game.exam == "aif-c01"
+    controller.later()
+    assert game.exam == "pottery"
+    assert controller.property("stage") == 0  # a grade of its own
+    assert controller.property("subject") == "Pottery"
+    text = controller.property("bubble")["text"]
+    assert "Your course is ready: Pottery. 1. Clay bodies; 2. Glazes and firing." in text
+    assert worker.requests[-1]["course"]["name"] == "Pottery"
+
+    # A batch written for the course left behind lands in it.
+    worker.batchReady.emit({"questions": [question_data(topic="late")], "course": "aif-c01"})
+    assert game.fresh_count() == 0
+    worker.generating = False
+    batch = [pottery_question(topic=f"firing {i}") for i in range(10)]
+    worker.batchReady.emit({"questions": batch, "course": "pottery"})
+    assert game.fresh_count() == 10
+    controller.dismiss()
+    controller.askNow()
+    assert controller.property("bubble")["meta"] == "Pottery · Domain 2 · Glazes and firing"
+    asked = controller._current
+    assert asked is not None
+    controller.answer([asked.answers[0]])
+    assert game.progress.points > 0
+
+    # Back to AWS: its grade comes back.
+    controller.dismiss()
+    controller.showSubject()
+    keys = [c["key"] for c in controller.property("bubble")["courses"]]
+    assert keys == ["pottery", "aif-c01"]
+    assert controller.learnWith("aif-c01") is True
+    assert game.exam == "aif-c01"
+    assert controller.property("stage") == 2
+    assert game.fresh_count() == 6 + 1  # fill()'s questions and the late one
+    controller.setCourse("pottery")
+    assert controller.property("stage") == 0
+
+
+def test_words_that_cannot_be_taught_are_said_so(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    controller.learnWith("stuff")
+    worker.planning = ""
+    worker.planned.emit("stuff", {"understood": False, "message": "Name a subject, please."})
+    assert controller.property("bubble")["text"] == "A course on stuff? Name a subject, please."
+    worker.planFailed.emit("pottery", "claude did not answer within 600 s")
+    assert "couldn't draw up a course on pottery" in controller.property("bubble")["text"]
+    assert game.exam == "aif-c01"
 
 
 def test_every_bubble_but_a_question_closes_on_a_click_elsewhere(game: Game) -> None:
@@ -495,7 +574,7 @@ def test_his_menu_sets_the_pace_and_lets_one_hear_every_call(game: Game) -> None
     assert [a.text() for a in tray.menu.actions()] == [
         "A question now",
         "Progress",
-        "Subject: the whole exam…",
+        "Subject: AWS Certified AI Practitioner…",
         "",
         "How often",
         "Sound",

@@ -70,3 +70,6 @@ class BrainClient:
 
     def explain(self, request: Mapping[str, Any], timeout: float = 270.0) -> str:
         return str(self.call("explain", request, timeout).get("text", ""))
+
+    def plan(self, words: str, timeout: float = 630.0) -> dict[str, Any]:
+        return self.call("plan", {"words": words}, timeout)

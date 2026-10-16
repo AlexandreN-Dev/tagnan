@@ -17,6 +17,7 @@ Item {
     property var picked: []
     property var preview: ({ ok: false, text: "" })
     property var subjectPreview: ({ ok: false, text: "" })
+    property var coursePreview: ({ ok: false, text: "" })
 
     width: quip ? Math.min(260, quipText.implicitWidth + 28) : 400
     height: quip ? quipText.implicitHeight + 20 : Math.min(maxHeight, column.implicitHeight + 28)
@@ -27,6 +28,8 @@ Item {
         breakField.text = ""
         subjectPreview = { ok: false, text: "" }
         subjectField.text = ""
+        coursePreview = { ok: false, text: "" }
+        courseField.text = ""
     }
 
     // The break typed so far: what he understood, said before it is confirmed.
@@ -39,9 +42,14 @@ Item {
         if (!bubble.controller.subjectWith(subjectField.text))
             subjectPreview = bubble.controller.previewSubject(subjectField.text)
     }
+    // Something else to learn, the same way.
+    function confirmCourse() {
+        if (!bubble.controller.learnWith(courseField.text))
+            coursePreview = bubble.controller.previewCourse(courseField.text)
+    }
     function focusField() {
         if (mode === "subject")
-            subjectField.forceActiveFocus()
+            courseField.forceActiveFocus()
         else
             breakField.forceActiveFocus()
     }
@@ -469,7 +477,72 @@ Item {
                 Action { label: "Cancel"; onActivated: bubble.controller.dismiss() }
             }
 
-            // --- Subject ------------------------------------------------------------------
+            // --- Subject: what we learn, then what within it ------------------------------
+            Flow {
+                visible: bubble.mode === "subject" && (bubble.content.courses || []).length > 1
+                width: column.width
+                spacing: 6
+                Repeater {
+                    model: bubble.mode === "subject" ? bubble.content.courses : []
+                    Action {
+                        required property var modelData
+                        width: Math.min(implicitWidth, column.width)
+                        label: modelData.label
+                        primary: modelData.key === bubble.content.course
+                        onActivated: bubble.controller.setCourse(modelData.key)
+                    }
+                }
+            }
+            Item {
+                visible: bubble.mode === "subject"
+                width: column.width
+                height: 32
+                TextField {
+                    id: courseField
+                    width: parent.width - courseOk.width - 8
+                    height: 32
+                    placeholderText: "Learn something else: an AWS exam, pottery, history…"
+                    color: bubble.theme.text
+                    placeholderTextColor: bubble.theme.muted
+                    font.family: bubble.theme.body
+                    font.pixelSize: 13
+                    leftPadding: 10
+                    background: Rectangle {
+                        radius: 6
+                        color: bubble.theme.choice
+                        border.color: courseField.activeFocus ? bubble.theme.ink : bubble.theme.line
+                    }
+                    onTextChanged: bubble.coursePreview = bubble.controller.previewCourse(text)
+                    onAccepted: bubble.confirmCourse()
+                    Keys.onEscapePressed: bubble.controller.dismiss()
+                }
+                Action {
+                    id: courseOk
+                    anchors.right: parent.right
+                    label: "OK"
+                    primary: true
+                    ready: bubble.coursePreview.ok === true
+                    onActivated: bubble.confirmCourse()
+                }
+            }
+            Para {
+                visible: bubble.mode === "subject" && bubble.coursePreview.text !== ""
+                text: bubble.coursePreview.text
+                color: bubble.coursePreview.ok ? bubble.theme.text : bubble.theme.bad
+                font.pixelSize: 12
+            }
+            Rectangle {
+                visible: bubble.mode === "subject"
+                width: column.width
+                height: 1
+                color: bubble.theme.line
+            }
+            Para {
+                visible: bubble.mode === "subject"
+                text: bubble.content.within || ""
+                font.weight: Font.DemiBold
+                font.pixelSize: 12
+            }
             Flow {
                 visible: bubble.mode === "subject"
                 width: column.width
@@ -487,7 +560,7 @@ Item {
             }
             Para {
                 visible: bubble.mode === "subject"
-                text: "Or tell me a subject of your own:"
+                text: "Or a corner of it, in your own words:"
                 color: bubble.theme.muted
                 font.pixelSize: 12
             }
@@ -499,7 +572,9 @@ Item {
                     id: subjectField
                     width: parent.width - subjectOk.width - 8
                     height: 32
-                    placeholderText: "RAG, Bedrock Guardrails, prompt engineering…"
+                    placeholderText: bubble.content.course === "aif-c01"
+                                     ? "RAG, Bedrock Guardrails, prompt engineering…"
+                                     : "A corner of it, in your own words…"
                     color: bubble.theme.text
                     placeholderTextColor: bubble.theme.muted
                     font.family: bubble.theme.body

@@ -1,5 +1,5 @@
-"""The brain's calls, off the window's thread: a batch takes minutes, an explanation up to a
-minute."""
+"""The brain's calls, off the window's thread: a batch or a new course takes minutes, an
+explanation up to a minute."""
 
 import logging
 import threading
@@ -18,11 +18,14 @@ class BrainWorker(QObject):
     batchFailed = Signal(str)
     explained = Signal(int, str)  # question id, text
     explainFailed = Signal(int, str)
+    planned = Signal(str, object)  # the words, the brain's answer: {"understood", "course"...}
+    planFailed = Signal(str, str)  # the words, the error
 
     def __init__(self, client: BrainClient) -> None:
         super().__init__()
         self._client = client
         self.generating = False
+        self.planning = ""  # the words of the course being drawn up
 
     def generate(self, request: dict[str, Any]) -> bool:
         """Start writing a batch, unless one is on its way."""
@@ -55,6 +58,26 @@ class BrainWorker(QObject):
             self.explained.emit(question_id, text)
 
         self._start(work)
+
+    def plan(self, words: str) -> bool:
+        """Start drawing up a course, unless one is on its way."""
+        if self.planning:
+            return False
+        self.planning = words
+
+        def work() -> None:
+            try:
+                answer = self._client.plan(words)
+            except BrainError as error:
+                logger.warning("course failed: %s", error)
+                self.planning = ""
+                self.planFailed.emit(words, str(error))
+                return
+            self.planning = ""
+            self.planned.emit(words, answer)
+
+        self._start(work)
+        return True
 
     @staticmethod
     def _start(work: Callable[[], None]) -> None:

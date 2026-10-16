@@ -3,6 +3,7 @@
     uv run python -m tagnan.cli            # one question (a batch is written first if needed)
     uv run python -m tagnan.cli -n 5       # five in a row
     uv run python -m tagnan.cli --stats
+    uv run python -m tagnan.cli --learn pottery # learn something else (a course is drawn up)
     uv run python -m tagnan.cli --subject RAG   # questions on RAG from now on ("all": the exam)
     uv run python -m tagnan.cli --import batch.json   # questions written by scripts/brain
 
@@ -34,7 +35,7 @@ SCOLDS = ("Zounds!", "Sacrebleu!", "Blast it, no!", "By my sword, no!")
 
 
 def show(question: Question) -> None:
-    print(f"\n— Domaine {question.domain} · {question.difficulty} —")
+    print(f"\n— Domain {question.domain} · {question.difficulty} —")
     print(question.stem)
     for letter, choice in zip(LETTERS, question.choices, strict=False):
         print(f"  {letter}. {choice}")
@@ -87,16 +88,34 @@ def refill(game: Game, brain: BrainClient) -> None:
     print(f"{len(ids)} questions ready" + (f", {len(rejected)} set aside." if rejected else "."))
 
 
+def learn(game: Game, words: str, brain: BrainClient) -> None:
+    """A course learned before at once; anything else once the brain has drawn up its course."""
+    bp = game.find_course(words)
+    if bp is None:
+        print(f"Tagnan is drawing up a course on {words.strip()} (a minute or two)…", flush=True)
+        answer = brain.plan(words)
+        if not answer.get("understood"):
+            raise BrainError(str(answer.get("message") or "he doesn't know how to teach that"))
+        try:
+            bp = blueprints.from_dict(answer.get("course") or {}, where="course")
+        except ValueError as error:
+            raise BrainError(str(error)) from None
+        for d in bp.domains:
+            print(f"  {d.id}. {d.name}")
+    game.set_course(bp)
+    print(f"From now on, Tagnan teaches {bp.name}: he is {rules.GRADES[game.progress.grade].name}.")
+
+
 def stats(game: Game) -> None:
     s = game.summary()
     nxt = f", {s['next_threshold']} for {s['next_name']}" if s["next_name"] else ""
-    print(f"Tagnan is {s['grade_name']}: {s['points']} points{nxt}.")
+    print(f"{s['course']}: Tagnan is {s['grade_name']}, {s['points']} points{nxt}.")
     print(f"Streak: {s['streak']} (best {s['best_streak']}).", end=" ")
     print(f"Answers: {s['right']}/{s['answered']}.")
     for d in s["domains"]:
         rate = f"{100 * d['right'] // d['answered']}%" if d["answered"] else "—"
         print(f"  {d['id']}. {d['name']}: {d['right']}/{d['answered']} ({rate})")
-    print(f"Subject: {s['subject']}, {s['fresh']} new questions on it.", end=" ")
+    print(f"Subject: {s['topic']}, {s['fresh']} new questions on it.", end=" ")
     print(f"To review in all: {s['reviews']}.")
 
 
@@ -104,6 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tagnan", description="Tagnan in the terminal")
     parser.add_argument("-n", "--count", type=int, default=1, help="questions in a row")
     parser.add_argument("--stats", action="store_true", help="the progress, no question")
+    parser.add_argument("--learn", help="learn something else from now on: an exam, pottery…")
     parser.add_argument("--subject", help='what to work on from now on ("all": the whole exam)')
     parser.add_argument(
         "--import", dest="import_file", type=Path, help="add a batch from the brain"
@@ -121,6 +141,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"{len(ids)} questions added" + (f", {len(rejected)} set aside." if rejected else ".")
         )
         return 0
+    if args.learn is not None:
+        try:
+            learn(game, args.learn, BrainClient.local())
+        except BrainError as error:
+            print(f"No course: {error}", file=sys.stderr)
+            return 1
+        if args.count == 1 and not args.stats and args.subject is None:
+            return 0
     if args.subject is not None:
         try:
             game.set_subject(parse_subject(args.subject, game.blueprint))
@@ -157,16 +185,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             more = input("  Enter to go on, 'e' for a longer explanation: ")
             if more.strip().lower() == "e":
                 try:
-                    print(
-                        "\n"
-                        + brain.explain(
-                            {
-                                "exam": game.exam,
-                                "question": question.to_dict(),
-                                "chosen": list(outcome.chosen),
-                            }
-                        )
-                    )
+                    print("\n" + brain.explain(game.explain_request(question, outcome.chosen)))
                 except BrainError as error:
                     print(f"No explanation: {error}", file=sys.stderr)
     return 0

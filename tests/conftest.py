@@ -14,6 +14,57 @@ def bp() -> Blueprint:
     return blueprint.load("aif-c01")
 
 
+def pottery_data() -> dict[str, Any]:
+    """A course as the brain draws it up (brain.plan's "course")."""
+    return {
+        "key": "pottery",
+        "code": "Pottery",
+        "name": "Pottery",
+        "exam": False,
+        "guidance": "Ask about techniques every potter agrees on.",
+        "reference": 'a book or chapter, for example "Clay and Glazes for the Potter, ch. 4"',
+        "kinds": ["single"],
+        "services": [],
+        "domains": [
+            {
+                "id": 1,
+                "name": "Clay bodies",
+                "weight": 50,
+                "tasks": [{"id": "1.1", "title": "Know the clays", "notions": "earthenware"}],
+            },
+            {
+                "id": 2,
+                "name": "Glazes and firing",
+                "weight": 50,
+                "tasks": [{"id": "2.1", "title": "Fire a kiln", "notions": "bisque, cones"}],
+            },
+        ],
+    }
+
+
+def pottery_question(**changes: Any) -> dict[str, Any]:
+    data = {
+        "domain": 2,
+        "task": "2.1",
+        "topic": "bisque firing",
+        "stem": "Why is a pot bisque fired before it is glazed?",
+        "choices": [
+            "To make it porous yet strong",
+            "To melt the glaze",
+            "To color it",
+            "To dry it",
+        ],
+        "why_wrong": [
+            "",
+            "No glaze yet.",
+            "Firing does not color bare clay.",
+            "Drying comes first.",
+        ],
+        "reference": "Clay and Glazes for the Potter, ch. 4",
+    }
+    return question_data(**{**data, **changes})
+
+
 def question_data(**changes: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "domain": 3,

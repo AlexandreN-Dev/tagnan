@@ -9,6 +9,7 @@ from typing import Any
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from tagnan import art
+from tagnan import blueprint as blueprints
 from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan import subject as subjects
@@ -45,6 +46,8 @@ FIRST_QUESTION_DELAY = 20.0  # the very first question comes soon after the firs
 MOOD_SECONDS = {"happy": 4.0, "angry": 6.0}
 RESULT_SECONDS = 15  # a right answer's bubble closes by itself, unless hovered
 QUIP_SECONDS = 1.8
+MAX_COURSE_WORDS = 120
+BUSY_MODES = ("question", "thinking", "result", "explanation", "pause")
 
 
 class Controller(QObject):
@@ -88,6 +91,7 @@ class Controller(QObject):
         self._outcome: Outcome | None = None
         self._held = False
         self._refill_after = 0.0
+        self._pending_course: tuple[blueprints.Blueprint, str] | None = None
         self._first_run = game.summary()["answered"] == 0
         animator.set_stage(self._stage)
         animator.tapped.connect(self._on_tapped)
@@ -95,6 +99,8 @@ class Controller(QObject):
         worker.batchFailed.connect(self._on_batch_failed)
         worker.explained.connect(self._on_explained)
         worker.explainFailed.connect(self._on_explain_failed)
+        worker.planned.connect(self._on_planned)
+        worker.planFailed.connect(self._on_plan_failed)
         self._tick_timer = self._timer(self._tick, single=False)
         self._mood_timer = self._timer(lambda: self._set_mood("idle"))
         self._hide_timer = self._timer(self._auto_hide)
@@ -149,7 +155,8 @@ class Controller(QObject):
 
     @Property(str, notify=prefsChanged)
     def subject(self) -> str:
-        return self.game.subject.name(self.game.blueprint)
+        """What he asks about: the course, or the subject within it."""
+        return self.game.topic()
 
     @Property(str, notify=statusChanged)
     def status(self) -> str:
@@ -183,6 +190,8 @@ class Controller(QObject):
         meta = f"Domain {domain.id} · {domain.name}"
         if self.game.subject.text:
             meta = f"{self.game.subject.text} · Domain {domain.id}"
+        if not self.game.blueprint.exam:  # a subject of one's own: its name says what it is
+            meta = f"{self.game.blueprint.code} · {meta}"
         self._show(
             {
                 "mode": "question",
@@ -301,12 +310,7 @@ class Controller(QObject):
         self._hide_timer.stop()
         self._show({**self._bubble, "mode": "thinking"})
         self.worker.explain(
-            outcome.question.id,
-            {
-                "exam": self.game.exam,
-                "question": outcome.question.to_dict(),
-                "chosen": list(outcome.chosen),
-            },
+            outcome.question.id, self.game.explain_request(outcome.question, outcome.chosen)
         )
 
     @Slot()
@@ -357,7 +361,7 @@ class Controller(QObject):
                     }
                     for i, d in enumerate(s["domains"])
                 ],
-                "bank": f"Subject: {s['subject']}. {s['fresh']} new questions on it in store, "
+                "bank": f"{s['topic']}: {s['fresh']} new questions in store, "
                 f"{s['reviews']} to review in all. {when}",
             }
         )
@@ -416,21 +420,96 @@ class Controller(QObject):
 
     @Slot()
     def showSubject(self) -> None:
-        """The subject bubble: the whole exam, a domain, a subject chosen before, or one's own
-        words."""
+        """The subject bubble: what we learn (a course learned before, or anything in one's own
+        words), then what within it (all of it, a domain, a subject chosen before, or one's own
+        words)."""
         bp = self.game.blueprint
-        choices = [{"label": "The whole exam", "key": ""}]
+        whole = bp.whole
+        choices = [{"label": whole[0].upper() + whole[1:], "key": ""}]
         choices += [{"label": f"{d.id}. {d.name}", "key": f"domain:{d.id}"} for d in bp.domains]
         choices += [{"label": text, "key": text} for text in self.game.store.subjects(bp.key)]
+        planning = self.worker.planning
         self._show(
             {
                 "mode": "subject",
                 "title": "What shall we work on?",
+                "courses": [{"label": c.name, "key": c.key} for c in self.game.courses()],
+                "course": bp.key,
+                "within": f"Within {bp.name}:",
                 "choices": choices,
                 "current": self.game.subject.key,
-                "status": f"Now: {self.subject}.",
+                "status": f"Now: {self.subject}."
+                + (f" I'm drawing up a course on {planning}." if planning else ""),
             }
         )
+
+    @Slot(str, result=dict)
+    def previewCourse(self, text: str) -> dict[str, Any]:
+        """What the course typed so far would be, said before it is confirmed."""
+        said = " ".join(text.split())
+        if not said:
+            return {"ok": False, "text": ""}
+        known = self.game.find_course(said)
+        if known is not None:
+            return {"ok": True, "text": f"Back to {known.name}."}
+        if len(said) > MAX_COURSE_WORDS:
+            return {"ok": False, "text": f"Shorter, please: {MAX_COURSE_WORDS} characters at most."}
+        return {"ok": True, "text": "I'll draw up a course on it: a minute or two."}
+
+    @Slot(str, result=bool)
+    def learnWith(self, text: str) -> bool:
+        """Learn something else: a course learned before at once, anything else once the brain
+        has drawn up its course."""
+        said = " ".join(text.split()).strip(" .!?")
+        if not self.previewCourse(said)["ok"]:
+            return False
+        known = self.game.find_course(said)
+        if known is not None:
+            self._change_course(known)
+            return True
+        if self.worker.planning:
+            title = "One at a time!"
+            line = f"I'm still drawing up a course on {self.worker.planning}."
+        else:
+            self.worker.plan(said)
+            logger.info("course asked for: %r", said)
+            title = "Let me think…"
+            line = (
+                f"A course on {said}: I'm drawing up its chapters, give me a minute or two."
+                " I'll tell you when it's ready."
+            )
+        self._set_mood("idle")
+        self._show({"mode": "message", "title": title, "text": line})
+        self._hide_timer.start(8000)
+        return True
+
+    @Slot(str)
+    def setCourse(self, key: str) -> None:
+        """A course learned before: its key, as showSubject gives it."""
+        try:
+            self._change_course(self.game.course(key))
+        except (KeyError, ValueError):
+            logger.warning("unknown course: %r", key)
+
+    def _change_course(self, bp: blueprints.Blueprint, intro: str = "") -> None:
+        if bp.key == self.game.exam:
+            text = f"We're already on {bp.name}. I'll keep to it."
+        else:
+            self.game.set_course(bp)
+            logger.info("course: %r", bp.key)
+            self._current = None
+            self._set_stage(self.game.progress.grade)  # each course has its own grade
+            self.prefsChanged.emit()
+            self.statusChanged.emit()
+            grade = rules.GRADES[self.game.progress.grade].name
+            text = intro or f"From now on, we learn {bp.name}."
+            text += f" Here I'm {grade}."
+            if not self.game.fresh_count():
+                text += " Give me a few minutes to write the questions."
+            self._refill_if_needed(force=True)
+        self._set_mood("idle")
+        self._show({"mode": "message", "title": "As you wish!", "text": text})
+        self._hide_timer.start(9000)
 
     @Slot(str, result=dict)
     def previewSubject(self, text: str) -> dict[str, Any]:
@@ -560,7 +639,8 @@ class Controller(QObject):
     def _on_batch(self, answer: object) -> None:
         questions = answer.get("questions", []) if isinstance(answer, dict) else []
         subject = str(answer.get("subject") or "") if isinstance(answer, dict) else ""
-        ids, rejected = self.game.add_batch(questions, self._clock(), subject)
+        course = str(answer.get("course") or "") if isinstance(answer, dict) else ""
+        ids, rejected = self.game.add_batch(questions, self._clock(), subject, course)
         logger.info(
             "batch on %r: %d kept, %d dropped %s", subject, len(ids), len(rejected), rejected[:3]
         )
@@ -591,6 +671,31 @@ class Controller(QObject):
                     "text": f"I couldn't write questions: {error}. I'll try again in ten minutes.",
                 }
             )
+
+    def _on_planned(self, words: str, answer: object) -> None:
+        data = answer if isinstance(answer, dict) else {}
+        try:
+            if not data.get("understood"):
+                raise ValueError(str(data.get("message") or "I don't know how to teach that."))
+            bp = blueprints.from_dict(data.get("course") or {}, where="course")
+        except ValueError as error:
+            self._tell_if_free("Hmm…", f"A course on {words}? {error}")
+            return
+        chapters = "; ".join(f"{d.id}. {d.name}" for d in bp.domains)
+        intro = f"Your course is ready: {bp.name}. {chapters}."
+        if self._bubble["mode"] in BUSY_MODES:
+            self._pending_course = (bp, intro)  # not over a question or a verdict
+            return
+        self._change_course(bp, intro)
+
+    def _on_plan_failed(self, words: str, error: str) -> None:
+        self._tell_if_free("My brain stalls", f"I couldn't draw up a course on {words}: {error}.")
+
+    def _tell_if_free(self, title: str, text: str) -> None:
+        if self._bubble["mode"] in ("hidden", "message", "quip", "subject", "stats"):
+            self._set_mood("idle")
+            self._show({"mode": "message", "title": title, "text": text})
+            self._hide_timer.start(9000)
 
     def _on_explained(self, question_id: int, text: str) -> None:
         if (
@@ -644,6 +749,10 @@ class Controller(QObject):
         self._show({"mode": "hidden"})
         if self.animator.mood_name() == "ask":
             self._set_mood("idle")
+        if self._pending_course is not None:  # a course drawn up while he was busy
+            bp, intro = self._pending_course
+            self._pending_course = None
+            self._change_course(bp, intro)
 
     def _auto_hide(self) -> None:
         if self._held:

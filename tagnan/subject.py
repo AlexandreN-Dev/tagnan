@@ -1,5 +1,6 @@
-"""What Tagnan's questions are about: the whole exam, one of its domains, or a subject in one's
-own words ("RAG", "Bedrock Guardrails"). He keeps to it until told otherwise."""
+"""What Tagnan's questions are about, within the course learned (tagnan.blueprint): all of it,
+one of its domains, or a subject in one's own words ("RAG", "Bedrock Guardrails"). He keeps to it
+until told otherwise."""
 
 import re
 from dataclasses import dataclass
@@ -19,6 +20,8 @@ WHOLE_WORDS = frozenset(
         "whole exam",
         "the whole exam",
         "all domains",
+        "all of it",
+        "the whole course",
         "tout",
         "tout l'examen",
         "l'examen",
@@ -53,7 +56,7 @@ class Subject:
     def name(self, bp: Blueprint) -> str:
         if self.domain is not None:
             return f"Domain {self.domain} · {bp.domain(self.domain).name}"
-        return self.text or "the whole exam"
+        return self.text or bp.whole
 
 
 def from_key(key: str) -> Subject:
@@ -75,7 +78,7 @@ def parse(text: str, bp: Blueprint) -> Subject:
     if found:
         number = int(found.group(1))
         if number not in ids:
-            raise ValueError(f"The exam has domains {min(ids)} to {max(ids)}.")
+            raise ValueError(f"There are domains {min(ids)} to {max(ids)}.")
         return Subject(domain=number)
     for domain in bp.domains:
         if folded == domain.name.casefold():

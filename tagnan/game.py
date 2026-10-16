@@ -1,12 +1,14 @@
 """The rules in one place, for the window and the terminal: what to ask, what an answer earns,
 and when to ask the brain for more questions."""
 
+import json
 import random
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+from tagnan import blueprint as blueprints
 from tagnan import progress as rules
 from tagnan.blueprint import Blueprint
 from tagnan.model import Question, parse_question
@@ -45,18 +47,75 @@ class Outcome:
 
 
 class Game:
+    """blueprint: the course learned until one chooses another (the config file's exam)."""
+
     def __init__(self, store: Store, blueprint: Blueprint, rng: random.Random) -> None:
         self.store = store
-        self.blueprint = blueprint
+        self._default = blueprint
+        self._courses: dict[str, Blueprint] = {blueprint.key: blueprint}
         self._rng = rng
 
     @property
     def exam(self) -> str:
+        """The course learned now: its key, under which its questions and progress are kept."""
         return self.blueprint.key
 
     @property
     def progress(self) -> Progress:
+        """Tagnan's grade and points in the course learned now: each course has its own."""
         return rules.settle(self.store.progress(self.exam))
+
+    # --- The course -------------------------------------------------------------------------
+
+    @property
+    def blueprint(self) -> Blueprint:
+        try:
+            return self.course(self.store.setting("course") or self._default.key)
+        except KeyError:
+            return self._default
+
+    def course(self, key: str) -> Blueprint:
+        """A course by its key: one learned before, or a file of exam/; KeyError otherwise."""
+        if key not in self._courses:
+            kept = self.store.setting(f"course:{key}")
+            if kept:
+                self._courses[key] = blueprints.from_dict(json.loads(kept), key)
+            elif key in blueprints.known():
+                self._courses[key] = blueprints.load(key)
+            else:
+                raise KeyError(key)
+        return self._courses[key]
+
+    def set_course(self, bp: Blueprint) -> None:
+        """Learn this course from now on; one drawn up by the brain is kept for good."""
+        if bp.key not in blueprints.known():
+            self.store.set_setting(f"course:{bp.key}", json.dumps(bp.to_dict(), ensure_ascii=False))
+        self._courses[bp.key] = bp
+        self.store.set_setting("course", bp.key)
+
+    def courses(self) -> list[Blueprint]:
+        """The courses one can go back to: the one learned now first, then the others."""
+        keys = [self.exam, self._default.key, *self.store.course_keys(), *blueprints.known()]
+        found = []
+        for key in dict.fromkeys(keys):
+            try:
+                found.append(self.course(key))
+            except (KeyError, ValueError):
+                continue
+        return found
+
+    def find_course(self, words: str) -> Blueprint | None:
+        """A known course, named by its key, its code or its name."""
+        said = " ".join(words.split()).strip(" .!?").casefold()
+        for bp in self.courses():
+            if said in (bp.key.casefold(), bp.code.casefold(), bp.name.casefold()):
+                return bp
+        return None
+
+    def topic(self) -> str:
+        """What he asks about now, in words: the course, or the subject within it."""
+        bp, subject = self.blueprint, self.subject
+        return bp.name if subject.whole else f"{subject.name(bp)} ({bp.code})"
 
     # --- The subject ------------------------------------------------------------------------
 
@@ -157,6 +216,7 @@ class Game:
         ]
         return {
             "exam": self.exam,
+            "course": self.blueprint.to_dict(),
             "slots": slots,
             "avoid": self.store.recent_topics(
                 self.exam, AVOID_TOPICS, subject.text if subject.text else None
@@ -165,18 +225,31 @@ class Game:
         }
 
     def add_batch(
-        self, raw: Sequence[Mapping[str, Any]], now: float, subject: str = ""
+        self, raw: Sequence[Mapping[str, Any]], now: float, subject: str = "", course: str = ""
     ) -> tuple[list[int], list[str]]:
         """Keep the questions that hold up, shuffled; say why the others were dropped.
-        subject: the key of the subject they were written for."""
+        subject, course: the keys of the subject and the course they were written for (the
+        course learned now when not said: one may have chosen another meanwhile)."""
+        try:
+            bp = self.course(course) if course else self.blueprint
+        except (KeyError, ValueError):
+            return [], [f"unknown course: {course}"]
         kept, rejected = [], []
         for i, data in enumerate(raw, 1):
             try:
-                question = parse_question(data, self.blueprint).shuffled(self._rng)
+                question = parse_question(data, bp).shuffled(self._rng)
                 kept.append(replace(question, subject=subject))
             except ValueError as error:
                 rejected.append(f"question {i} : {error}")
-        return self.store.add_questions(self.exam, kept, now), rejected
+        return self.store.add_questions(bp.key, kept, now), rejected
+
+    def explain_request(self, question: Question, chosen: Sequence[int]) -> dict[str, Any]:
+        return {
+            "exam": self.exam,
+            "course": self.blueprint.to_dict(),
+            "question": question.to_dict(),
+            "chosen": list(chosen),
+        }
 
     def summary(self) -> dict[str, Any]:
         """What the stats show: grade, points, streaks, accuracy by domain, the bank."""
@@ -205,6 +278,8 @@ class Game:
                 for d in self.blueprint.domains
             ],
             "subject": subject.name(self.blueprint),
+            "course": self.blueprint.name,
+            "topic": self.topic(),
             "fresh": self.fresh_count(),
             "reviews": self.store.reviews_pending(self.exam),
         }

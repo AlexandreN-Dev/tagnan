@@ -8,6 +8,14 @@ name = "AWS Certified AI Practitioner"
 # Question formats the brain may use. The real exam also has ordering, matching and case
 # studies; Tagnan sticks to the two that fit in a bubble.
 kinds = ["single", "multiple"]
+# How the brain writes for this exam, and what a question's reference points to.
+guidance = """You write as the exam's authors do: accurate, unambiguous questions about stable \
+facts that AWS documents well, AWS services, features and terms named exactly as the AWS \
+documentation names them. Hard questions weigh the constraints AWS scenarios turn on: cost, \
+latency, security, governance, effort. Never rely on quotas, prices, numeric limits, lists of \
+Regions, version numbers or preview features: they change too often. If a fact seems uncertain \
+to you, choose another notion."""
+reference = "the AWS document to read again, for example \"Amazon Bedrock User Guide, Guardrails\""
 
 services = [
     "Amazon Bedrock", "Amazon Bedrock Knowledge Bases", "Amazon Bedrock Agents",

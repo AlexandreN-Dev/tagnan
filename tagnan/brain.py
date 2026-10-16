@@ -1,12 +1,15 @@
 """The brain, in WSL: writes questions and explanations with the claude CLI.
 
-    scripts/brain generate < request.json   # {"exam", "slots": [...], "avoid": [...], "subject"}
-    scripts/brain explain < request.json    # {"exam", "question": {...}, "chosen": [...]}
+    scripts/brain generate < request.json   # {"course", "slots": [...], "avoid": [...], "subject"}
+    scripts/brain explain < request.json    # {"course", "question": {...}, "chosen": [...]}
+    scripts/brain plan < request.json       # {"words": "pottery"}: a new course's blueprint
     scripts/brain check                     # one tiny call with the configured model
 
-It prints one JSON object on stdout; on failure, a message on stderr and exit code 1. Claude is
-reached through the official CLI only, with the user's own login: clean environment, no
-tools, no hooks, no MCP servers, in an empty folder (no CLAUDE.md, no project settings).
+"course" is a blueprint (tagnan.blueprint's to_dict); a request may instead name a file of
+exam/ by its key, as "exam". It prints one JSON object on stdout; on failure, a message on
+stderr and exit code 1. Claude is reached through the official CLI only, with the user's own
+login: clean environment, no tools, no hooks, no MCP servers, in an empty folder (no CLAUDE.md,
+no project settings).
 """
 
 import argparse
@@ -43,7 +46,8 @@ ISOLATION_FLAGS = (
     '{"disableAllHooks": true}',
 )
 # Opus at max effort thinks long: a batch of ten can take minutes, an explanation a minute.
-GENERATE_TIMEOUT, EXPLAIN_TIMEOUT, CHECK_TIMEOUT = 600.0, 240.0, 180.0
+GENERATE_TIMEOUT, EXPLAIN_TIMEOUT, CHECK_TIMEOUT, PLAN_TIMEOUT = 600.0, 240.0, 180.0, 600.0
+MAX_WORDS = 120
 DIFFICULTIES = ("easy", "medium", "hard")
 
 QUESTION_SCHEMA: dict[str, Any] = {
@@ -80,6 +84,57 @@ BATCH_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"questions": {"type": "array", "items": QUESTION_SCHEMA}},
     "required": ["questions"],
+    "additionalProperties": False,
+}
+TASK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "notions": {"type": "string"},
+    },
+    "required": ["id", "title", "notions"],
+    "additionalProperties": False,
+}
+PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "understood": {"type": "boolean"},
+        "message": {"type": "string"},
+        "exam": {"type": "boolean"},
+        "code": {"type": "string"},
+        "name": {"type": "string"},
+        "guidance": {"type": "string"},
+        "reference": {"type": "string"},
+        "services": {"type": "array", "items": {"type": "string"}},
+        "multiple": {"type": "boolean"},
+        "domains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "weight": {"type": "number"},
+                    "tasks": {"type": "array", "items": TASK_SCHEMA},
+                },
+                "required": ["id", "name", "weight", "tasks"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": [
+        "understood",
+        "message",
+        "exam",
+        "code",
+        "name",
+        "guidance",
+        "reference",
+        "services",
+        "multiple",
+        "domains",
+    ],
     "additionalProperties": False,
 }
 CHECK_SCHEMA: dict[str, Any] = {
@@ -182,8 +237,17 @@ def _template(name: str, **values: object) -> str:
     return Template(text).substitute({k: str(v) for k, v in values.items()}).strip()
 
 
+def course(request: Mapping[str, Any], cfg: configs.Config) -> Blueprint:
+    """The course a request is about: its blueprint, or the key of a file of exam/."""
+    data = request.get("course")
+    if isinstance(data, Mapping):
+        return blueprints.from_dict(data, where="course")
+    return blueprints.load(str(request.get("exam", cfg.exam)))
+
+
 def system_prompt(bp: Blueprint) -> str:
-    return _template("system.md", exam_name=bp.name, exam_code=bp.code)
+    goal = f"prepare for the {bp.name} ({bp.code}) certification" if bp.exam else f"learn {bp.name}"
+    return _template("system.md", goal=goal, guidance=bp.guidance)
 
 
 def generate_prompt(
@@ -208,11 +272,12 @@ def generate_prompt(
         )
     wanted = {d for d, _, _ in counts}
     shown = sorted(d.id for d in bp.domains) if 0 in wanted else sorted(wanted)
+    place = "exam" if bp.exam else "course"
     subject_text = (
         f'Every question is about the subject the learner chose: "{subject}". Approach it from'
-        " a different angle each time, and give each question the domain and task of the exam"
-        " that cover that angle. If the subject reaches beyond the exam, keep to what the exam"
-        " covers of it."
+        f" a different angle each time, and give each question the domain and task of the {place}"
+        f" that cover that angle. If the subject reaches beyond the {place}, keep to what the"
+        f" {place} covers of it."
         if subject
         else ""
     )
@@ -230,11 +295,17 @@ def generate_prompt(
     return _template(
         "generate.md",
         count=len(slots),
-        exam_code=bp.code,
+        what=f"practice questions for the {bp.code} exam"
+        if bp.exam
+        else f"questions to learn {bp.name}",
         slots="\n".join(lines),
         subject=subject_text,
         domains="\n\n".join(domains),
-        services=", ".join(bp.services),
+        task_example=bp.domains[0].tasks[0].id,
+        reference=bp.reference,
+        services=f"Services and features in the exam's scope: {', '.join(bp.services)}."
+        if bp.services
+        else "",
         avoid=avoid_text,
     )
 
@@ -248,7 +319,8 @@ def explain_prompt(bp: Blueprint, question: Mapping[str, Any], chosen: Sequence[
 
     return _template(
         "explain.md",
-        exam_code=bp.code,
+        course=f"{bp.name} ({bp.code})" if bp.exam else bp.name,
+        remember=" on exam day" if bp.exam else "",
         stem=question["stem"],
         choices="\n".join(f"{letters[i]}. {c}" for i, c in enumerate(choices)),
         right=named([int(a) for a in question["answers"]]),
@@ -258,7 +330,7 @@ def explain_prompt(bp: Blueprint, question: Mapping[str, Any], chosen: Sequence[
 
 
 def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
-    bp = blueprints.load(str(request.get("exam", cfg.exam)))
+    bp = course(request, cfg)
     slots = request.get("slots") or []
     if not slots:
         raise BrainError("request without question slots")
@@ -281,11 +353,11 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
         questions.append(data)
     if not questions:
         raise BrainError("no usable question: " + "; ".join(rejected[:3]))
-    return {"questions": questions, "rejected": rejected, "subject": subject}
+    return {"questions": questions, "rejected": rejected, "subject": subject, "course": bp.key}
 
 
 def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
-    bp = blueprints.load(str(request.get("exam", cfg.exam)))
+    bp = course(request, cfg)
     question = request.get("question")
     if not isinstance(question, Mapping):
         raise BrainError("request without a question")
@@ -301,6 +373,35 @@ def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     if not text:
         raise BrainError("empty explanation")
     return {"text": text}
+
+
+def plan(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
+    """A new course from the learner's words: {"understood": true, "course": blueprint}, or
+    {"understood": false, "message": what to say instead}."""
+    words = " ".join(str(request.get("words") or "").split())
+    if not words:
+        raise BrainError("request without words")
+    if len(words) > MAX_WORDS:
+        raise BrainError(f"{MAX_WORDS} characters at most")
+    structured = run_claude(
+        _template("plan.md", words=words),
+        system="You draw up the courses of Tagnan, a little ink musketeer who quizzes someone"
+        " on what they want to learn. You know certification exam guides well, and how to plan"
+        " a course on any subject. Answer with the requested JSON object only.",
+        schema=PLAN_SCHEMA,
+        model=cfg.brain.model,
+        effort=cfg.brain.effort,
+        timeout=PLAN_TIMEOUT,
+    )
+    if not structured.get("understood"):
+        message = " ".join(str(structured.get("message") or "").split())
+        return {"understood": False, "message": message or "I don't know how to teach that."}
+    data = {
+        **structured,
+        "kinds": ["single", "multiple"] if structured.get("multiple") else ["single"],
+    }
+    bp = blueprints.from_dict(data, blueprints.slug(str(structured.get("code") or "")))
+    return {"understood": True, "course": bp.to_dict()}
 
 
 def check(cfg: configs.Config) -> dict[str, Any]:
@@ -320,7 +421,7 @@ def check(cfg: configs.Config) -> dict[str, Any]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brain", description="Tagnan's brain")
-    parser.add_argument("action", choices=["generate", "explain", "check"])
+    parser.add_argument("action", choices=["generate", "explain", "plan", "check"])
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
     try:
@@ -329,7 +430,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = check(cfg)
         else:
             request = json.loads(sys.stdin.read() or "{}")
-            result = generate(request, cfg) if args.action == "generate" else explain(request, cfg)
+            result = {"generate": generate, "explain": explain, "plan": plan}[args.action](
+                request, cfg
+            )
     except (BrainError, ValueError, KeyError) as error:
         print(f"brain: {error}", file=sys.stderr)
         return 1

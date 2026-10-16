@@ -276,7 +276,7 @@ class Setup:
                 self.pace()
                 return
         elif self.check:
-            self.term.todo("Config", "none yet: the defaults")
+            self.term.done("Config", "the defaults (no file yet)")
             return
         else:
             current = configs.Config()
@@ -377,7 +377,7 @@ class Setup:
     def finish(self) -> None:
         self.term.heading("Last touches")
         where = "in Applications" if self.mac else "in the Start menu"
-        shortcut = self.term.confirm(f"Add Tagnan {where}?")
+        shortcut = self.term.confirm(f"Add Tagnan to {where.removeprefix('in ')}?")
         if shortcut:
             startup = self.term.confirm("Start him at each sign-in?", False)
             command = [str(REPO / "scripts" / "install-shortcut")]
@@ -393,13 +393,13 @@ class Setup:
             raise SetupError(f"Tagnan did not start: see {log}.")
         self.term.gap()
         self.term.done("Tagnan is on your desktop", "bottom right")
-        self.term.quip("Here I am! My first questions take a few minutes to write.")
+        self.term.quip("Here I am! En garde, the questions are coming.")
         self.term.note("Right-click him for a question now, progress, pace, sound or a break.")
         self.term.note(
             "Start him later: " + (f"his icon {where}, or " if shortcut else "") + "scripts/tagnan"
         )
         self.term.note("Change your answers: scripts/setup")
-        self.term.outro("En garde!")
+        self.term.outro("All set.")
 
     def log(self) -> Path:
         """Where scripts/tagnan sends the window's messages."""

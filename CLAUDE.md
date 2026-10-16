@@ -1,26 +1,26 @@
-Tagnan : un mousquetaire d'encre qui pose des questions de certification AWS sur le bureau Windows. Architecture et règles du jeu : README.md.
+Tagnan: an ink musketeer who asks AWS certification questions on the Windows desktop. Architecture and game rules: README.md.
 
-Conventions (comme Dartt) : échanges en français ; code, identifiants et commentaires en anglais. Tagnan parle anglais : questions, explications, bulle, menus et quiz en terminal (le README reste en français). Petits commits atomiques, messages en anglais au format Conventional Commits. Dépôt git 100 % local.
+Conventions: talk with the user in French; everything in the repository is in English (code, identifiers, comments, README, script and setup messages, error messages). Tagnan speaks English too: questions, explanations, bubble, menus and terminal quiz. Small atomic commits, Conventional Commits messages. Public repository: https://github.com/AlexandreN-Dev/tagnan (push only when the user asks).
 
-Contraintes non négociables :
-- Claude n'est appelé que par le CLI officiel `claude`, lancé par `scripts/brain` avec l'environnement propre et les drapeaux d'isolation de `tagnan/brain.py` (jamais d'API Anthropic directe, jamais les identifiants rangés dans `~/.claude/`).
-- Le jeu, la base et le cerveau n'utilisent que la bibliothèque standard : le même code tourne dans WSL et dans le Python Windows de la fenêtre.
-- Les calques de Tagnan sont dans `tagnan/art.py` ; la fenêtre ne dessine elle-même que l'encre et les gouttes.
+Non-negotiable constraints:
+- Claude is called only through the official `claude` CLI, started by `scripts/brain` with the clean environment and isolation flags of `tagnan/brain.py` (never the Anthropic API directly, never the credentials stored in `~/.claude/`).
+- The game, the store and the brain use the standard library only: the same code runs in WSL and in the window's Windows Python.
+- Tagnan's layers live in `tagnan/art.py`; the window itself only draws the ink and the drops.
 
-Commandes, depuis la racine du dépôt :
+Commands, from the repository root:
 
-- Installation guidée (ce que fait un nouvel utilisateur après le clone) : `scripts/setup` ; `--check` sans rien changer, `--yes` toutes les valeurs par défaut. Code dans `tagnan/setup.py`, amorce bash (WSL, uv) dans `scripts/setup`. `--check` ne touche à rien et peut se lancer à volonté ; le mode normal réécrit la config, l'allure de la fenêtre, les raccourcis et lance Tagnan : pas sur la machine de l'utilisateur sans son accord.
-- Développement : `uv sync` ; côté Windows : `scripts/ui-setup` (environnement dans `%LOCALAPPDATA%\tagnan\venv`)
-- Vérifications : `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`
-- Test réel contre `claude` (consomme un peu de quota, seulement à la demande) : `uv run pytest -m live`
-- Démarrer Tagnan (fenêtre détachée, journal dans `~/.local/state/tagnan/ui.log`) : `scripts/tagnan` ; au premier plan : `scripts/tagnan-ui`
-- Icône du menu Démarrer : `scripts/install-shortcut` ; démarrage avec Windows : `--startup` ; `--dry-run`, `--remove`
-- Quiz en terminal (base WSL, distincte de celle de la fenêtre) : `uv run python -m tagnan.cli` ; `-n 5`, `--stats`, `--import lot.json`
-- Cerveau à la main : `scripts/brain generate < requete.json`, `scripts/brain explain < requete.json`, `scripts/brain check` (un appel minuscule avec le modèle configuré)
-- Image de la fenêtre sans capturer l'écran : `scripts/tagnan-ui --demo question --snapshot <chemin Windows>` ; hors écran dans WSL : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui --demo question --snapshot build/w.png` (rendu logiciel : pas de halo)
-- Planche de référence (calques rendus par QtSvg) : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.sheet build/sheet.png`
-- Animation image par image : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.preview build/frames.png --mood happy --at 0.1 0.3 0.6`
-- CPU de la fenêtre : `scripts/tagnan-ui --measure-cpu 30`
-- Sons de Tagnan, synthétisés (réécrit `assets/sounds/`, toujours à l'identique) : `scripts/make-sounds`
-- Le halo (MultiEffect) ne se voit qu'avec un rendu GPU : sur Windows, pas hors écran dans WSL.
-- Une session Windows verrouillée fige le rendu Qt : ne pas se fier à une capture prise pendant ce temps.
+- Guided setup (what a new user runs after cloning): `scripts/setup`; `--check` changes nothing, `--yes` takes every default. Code in `tagnan/setup.py`, bash bootstrap (WSL, uv) in `scripts/setup`. `--check` touches nothing and can run at will; the normal mode rewrites the config, the window's pace and the shortcuts and starts Tagnan: not on the user's machine without their consent.
+- Development: `uv sync`; Windows side: `scripts/ui-setup` (environment in `%LOCALAPPDATA%\tagnan\venv`)
+- Checks: `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`
+- Real test against `claude` (uses a little quota, only on request): `uv run pytest -m live`
+- Start Tagnan (detached window, log in `~/.local/state/tagnan/ui.log`): `scripts/tagnan`; in the foreground: `scripts/tagnan-ui`
+- Start menu icon: `scripts/install-shortcut`; start with Windows: `--startup`; `--dry-run`, `--remove`
+- Terminal quiz (WSL database, separate from the window's): `uv run python -m tagnan.cli`; `-n 5`, `--stats`, `--import batch.json`
+- Brain by hand: `scripts/brain generate < request.json`, `scripts/brain explain < request.json`, `scripts/brain check` (one tiny call with the configured model)
+- Picture of the window without capturing the screen: `scripts/tagnan-ui --demo question --snapshot <Windows path>`; off screen in WSL: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui --demo question --snapshot build/w.png` (software rendering: no glow)
+- Reference sheet (layers rendered by QtSvg): `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.sheet build/sheet.png`
+- Animation frame by frame: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.preview build/frames.png --mood happy --at 0.1 0.3 0.6`
+- Window CPU: `scripts/tagnan-ui --measure-cpu 30`
+- Tagnan's sounds, synthesized (rewrites `assets/sounds/`, always identically): `scripts/make-sounds`
+- The glow (MultiEffect) only shows with GPU rendering: on Windows, not off screen in WSL.
+- A locked Windows session freezes Qt rendering: don't trust a capture taken meanwhile.

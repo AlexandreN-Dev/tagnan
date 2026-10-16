@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
+from PySide6.QtGui import QCursor
 
 from tagnan import art
 from tagnan import blueprint as blueprints
@@ -55,7 +56,7 @@ class Controller(QObject):
     bubbleChanged = Signal()
     statusChanged = Signal()
     prefsChanged = Signal()  # his pace, his call or his subject
-    menuRequested = Signal()
+    menuRequested = Signal(int, int)  # where the pointer is: his menu opens there
     quitRequested = Signal()
 
     def __init__(
@@ -620,7 +621,8 @@ class Controller(QObject):
 
     @Slot()
     def showMenu(self) -> None:
-        self.menuRequested.emit()
+        at = QCursor.pos()
+        self.menuRequested.emit(at.x(), at.y())
 
     @Slot()
     def quit(self) -> None:

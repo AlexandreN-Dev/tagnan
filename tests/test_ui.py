@@ -8,9 +8,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication, QMenu
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from tagnan.brain_client import BrainClient
 from tagnan.game import Game
@@ -22,6 +20,8 @@ from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
+from tagnan.ui.menu import Menu, menu_position
+from tagnan.ui.placement import Box
 from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
@@ -32,7 +32,7 @@ NOW = 1_800_000_000.0
 
 @pytest.fixture(scope="module", autouse=True)
 def qt_app() -> QApplication:
-    app = QApplication.instance() or QApplication([])  # widgets: his menu
+    app = QApplication.instance() or QApplication([])  # widgets: his tray icon
     assert isinstance(app, QApplication)
     return app
 
@@ -360,14 +360,116 @@ def test_the_subject_is_chosen_kept_and_written_for(game: Game) -> None:
     assert game.fresh_count() == 17
 
 
-def test_his_menu_names_the_subject(game: Game) -> None:
+def test_his_menu_says_where_he_stands(game: Game) -> None:
     fill(game)
     controller, _, _ = make(game)
-    tray = Tray(controller)
-    labels = [a.text() for a in tray.menu.actions()]
-    assert "Subject: AWS Certified AI Practitioner…" in labels
+    menu = Menu(controller)
+    assert menu.property("shown") is False
+    changes: list[int] = []
+    menu.changed.connect(lambda: changes.append(1))
+    controller.menuRequested.emit(300, 200)
+    assert menu.property("shown") is True
+    c = menu.property("content")
+    assert (c["grade"], c["stage"], c["share"]) == ("Inkwell", 0, 0.0)
+    assert c["points"] == "0 of 250 points to Gascon"
+    assert c["next"].startswith("next ~")
+    assert (c["subject"], c["pace"], c["paceKey"], c["call"]) == (
+        "AIF-C01",
+        "Regularly",
+        "regularly",
+        "Bugle call",
+    )
+    assert c["paces"][0]["key"] == "rarely"
+    assert c["calls"][-1] == {"key": "silent", "name": "Silent"}
     controller.setSubject("domain:2")
-    assert tray._subject.text() == "Subject: Domain 2 · Fundamentals of Generative A……"
+    assert menu.property("content")["subject"] == "Domain 2 · Fundamentals of Generative AI"
+    assert changes  # QML hears of it while open
+    menu.close()
+    assert menu.property("shown") is False
+
+
+def test_his_menu_opens_at_the_pointer_and_stays_on_the_screen() -> None:
+    area = Box(0, 0, 1920, 1040)
+    assert menu_position((100, 100), (300, 400), area) == (100, 100)
+    # Near his corner, bottom right: up and to the left of the pointer.
+    assert menu_position((1800, 1000), (300, 400), area) == (1500, 600)
+    assert menu_position((5, 1030), (300, 1200), area) == (8, 8)
+
+
+def test_his_menu_runs_its_commands(game: Game) -> None:
+    fill(game)
+    speaker = Speaker()
+    controller, worker, _ = make(game, speaker=speaker)
+    menu = Menu(controller)
+    menu.openAt(10, 10)
+    assert menu.run("pace:rarely") is False
+    assert controller.property("pace") == "rarely"
+    assert menu.property("shown") is False
+    # A call is heard, then the next, and the menu stays open meanwhile.
+    menu.openAt(10, 10)
+    assert menu.run("call:bell") is True
+    assert menu.run("call:lute") is True
+    assert menu.property("shown") is True
+    assert speaker.played == ["bell", "lute"]
+    assert controller.property("call") == "lute"
+    menu.run("stats")
+    assert controller.property("bubble")["mode"] == "stats"
+    menu.run("pause:1h")
+    assert controller.property("paused") is True
+    menu.openAt(10, 10)
+    assert menu.property("content")["paused"] is True
+    assert menu.property("content")["next"].startswith("until ")
+    menu.run("resume")
+    assert controller.property("paused") is False
+    menu.run("pause")  # no words: the break bubble
+    assert controller.property("bubble")["mode"] == "pause"
+    menu.run("learn:pottery")
+    assert worker.plans == ["pottery"]
+    menu.run("focus:RAG")
+    assert controller.property("subject") == "RAG (AIF-C01)"
+    quits: list[int] = []
+    controller.quitRequested.connect(lambda: quits.append(1))
+    menu.run("quit")
+    assert quits == [1]
+
+
+def test_a_few_words_typed_in_his_menu_find_the_command(game: Game) -> None:
+    controller, _, _ = make(game)
+    menu = Menu(controller)
+
+    def actions(text: str) -> list[str]:
+        return [s["action"] for s in menu.suggest(text)]
+
+    assert menu.suggest("  ") == []
+    first = menu.suggest("break 45")[0]
+    assert first["action"] == "pause:45"
+    assert first["label"] == "A break of 45 min"
+    assert first["sub"].startswith("Back at ")
+    assert actions("1h30")[0] == "pause:1h30"
+    assert actions("often")[0] == "pace:often"
+    assert len(actions("how often")) == 5
+    assert actions("bell") == ["call:bell"]
+    assert "call:silent" in actions("mute")
+    assert actions("learn pottery")[0] == "learn:pottery"
+    assert actions("focus RAG")[0] == "focus:RAG"
+    assert actions("quest")[0] == "ask"
+    assert "quit" in actions("quit")
+    assert "resume" not in actions("resume")  # not on a break
+    controller.pauseWith("1h")
+    assert "resume" in actions("resume")
+    assert actions("zzz") == []
+
+
+def test_his_tray_icon_opens_his_menu(game: Game) -> None:
+    fill(game)
+    controller, _, _ = make(game)
+    menu = Menu(controller)
+    tray = Tray(controller, menu)
+    tray._activated(QSystemTrayIcon.ActivationReason.Context)
+    assert menu.property("shown") is True
+    tray._activated(QSystemTrayIcon.ActivationReason.Trigger)
+    assert controller.property("bubble")["mode"] == "stats"
+    assert tray.tooltip().startswith("Tagnan · Inkwell · 0 points")
 
 
 def test_anything_can_be_learned_each_with_its_own_grade(game: Game) -> None:
@@ -567,46 +669,51 @@ def test_a_question_left_alone_goes_and_the_next_one_waits_for_the_pace(game: Ga
     assert controller.scheduler.next_at >= clock.now + 8 * 3600
 
 
-def test_his_menu_sets_the_pace_and_lets_one_hear_every_call(game: Game) -> None:
-    speaker = Speaker()
-    controller, _, _ = make(game, speaker=speaker)
-    tray = Tray(controller)
-    assert [a.text() for a in tray.menu.actions()] == [
-        "A question now",
-        "Progress",
-        "Subject: AWS Certified AI Practitioner…",
-        "",
-        "How often",
-        "Sound",
-        "",
-        "A break…",
-        "Resume",
-        "",
-        "Quit Tagnan",
-    ]
-    assert tray.paces["intensive"].text() == "Intensive training\tevery 3 to 5 min"
-    assert [k for k, a in tray.paces.items() if a.isChecked()] == ["regularly"]
-    tray.paces["rarely"].trigger()
-    assert controller.property("pace") == "rarely"
-    assert [k for k, a in tray.paces.items() if a.isChecked()] == ["rarely"]
-    assert [k for k, a in tray.calls.items() if a.isChecked()] == ["bugle"]
+def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> None:
+    from PySide6.QtCore import QObject, QUrl, qInstallMessageHandler
+    from PySide6.QtQml import QQmlApplicationEngine
+    from PySide6.QtQuick import QQuickWindow
 
-    sounds = tray.calls["bell"].parent()
-    assert isinstance(sounds, QMenu)
-    sounds.popup(QPoint(100, 100))
-    for key in ("bell", "lute"):
-        centre = QPointF(sounds.actionGeometry(tray.calls[key]).center())
-        release = QMouseEvent(
-            QEvent.Type.MouseButtonRelease,
-            centre,
-            QPointF(sounds.mapToGlobal(centre.toPoint())),
-            Qt.MouseButton.LeftButton,
-            Qt.MouseButton.NoButton,
-            Qt.KeyboardModifier.NoModifier,
+    from tagnan.ui.__main__ import QML_DIR
+    from tagnan.ui.images import LayerImages
+    from tagnan.ui.placement import Placement
+
+    fill(game)
+    controller, _, animator = make(game)
+    menu = Menu(controller)
+    warnings: list[str] = []
+    qInstallMessageHandler(lambda _kind, _context, message: warnings.append(message))
+    try:
+        engine = QQmlApplicationEngine()
+        engine.addImageProvider("tagnan", LayerImages())
+        placement = Placement()
+        engine.setInitialProperties(
+            {"controller": controller, "animator": animator, "placement": placement, "menu": menu}
         )
-        QApplication.sendEvent(sounds, release)
-        assert sounds.isVisible()  # still open, to hear the next one
-    assert speaker.played == ["bell", "lute"]
-    assert controller.property("call") == "lute"
-    assert [k for k, a in tray.calls.items() if a.isChecked()] == ["lute"]
-    sounds.close()
+        engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
+        window = engine.rootObjects()[0]
+        assert isinstance(window, QQuickWindow)
+        window.show()
+        popup: Any = next(
+            w for w in window.findChildren(QQuickWindow) if w.title() == "Tagnan — menu"
+        )
+        menu.openAt(400, 300)
+        QApplication.processEvents()
+        assert popup.isVisible()
+        assert popup.property("current") == 0
+        popup.openSub("pace", 4)
+        assert popup.property("sub") == "pace"
+        field = popup.findChild(QObject, "field")
+        field.setProperty("text", "bell")
+        assert popup.property("sub") == ""  # typing closes the list
+        assert [r["action"] for r in popup.property("rows").toVariant()] == ["call:bell"]
+        popup.activate(0)
+        assert controller.property("call") == "bell"
+        menu.close()
+        QApplication.processEvents()
+        assert not popup.isVisible()
+        window.close()
+        del engine  # before the objects it shows
+    finally:
+        qInstallMessageHandler(None)
+    assert [w for w in warnings if "qml" in w.casefold()] == []

@@ -31,7 +31,10 @@ class LayerImages(QQuickImageProvider):
             stage = int(stage_text)
         except ValueError:
             return QImage()
-        svg = art.layer(stage, name, "idle" if expression == "-" else expression)
+        if name == "still":  # the whole figure at rest, his menu's header: the icon at grade 0
+            svg: str | None = art.icon_svg() if stage == 0 else art.still_svg(stage, glow=False)
+        else:
+            svg = art.layer(stage, name, "idle" if expression == "-" else expression)
         box_w, box_h = (
             (art.RAPIER_BOX[2], art.RAPIER_BOX[3]) if name == "rapier" else (art.WIDTH, art.HEIGHT)
         )

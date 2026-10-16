@@ -1,18 +1,18 @@
-"""Tagnan in the notification area: his icon at his grade, and his menu (also on a right click
-on him)."""
+"""Tagnan in the notification area: his icon at his grade and his status in its tooltip. A right
+click opens his menu (tagnan/ui/menu.py), as a right click on him does; a left click, his
+progress (on macOS, where the menu bar knows only one click, his menu)."""
 
-from collections.abc import Callable, Sequence
+import sys
 from functools import lru_cache
 
-from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QMouseEvent, QPainter, QPixmap
-from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+from PySide6.QtCore import QObject, Qt
+from PySide6.QtGui import QCursor, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import QSystemTrayIcon
 
 from tagnan import art
-from tagnan.scheduler import PACES
-from tagnan.ui import sounds as calls
 from tagnan.ui.controller import Controller
 from tagnan.ui.images import render_svg
+from tagnan.ui.menu import Menu
 
 
 @lru_cache(maxsize=6)
@@ -33,107 +33,35 @@ def figure_icon(stage: int) -> QIcon:
     return icon
 
 
-class KeepOpen(QObject):
-    """A click on a choice picks it and leaves its menu open: one hears a sound, then the next,
-    and keeps the last. Escape or a click elsewhere closes the menu."""
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if (
-            isinstance(watched, QMenu)
-            and isinstance(event, QMouseEvent)
-            and event.type() == QEvent.Type.MouseButtonRelease
-        ):
-            action = watched.actionAt(event.position().toPoint())
-            if action is not None and action.isEnabled() and action.isCheckable():
-                action.trigger()
-                return True
-        return super().eventFilter(watched, event)
-
-
 class Tray(QObject):
-    def __init__(self, controller: Controller) -> None:
+    def __init__(self, controller: Controller, menu: Menu) -> None:
         super().__init__()
         self._controller = controller
-        self._keep_open = KeepOpen(self)
-        self.menu = QMenu()
-        self._add("A question now", controller.askNow)
-        self._add("Progress", controller.showStats)
-        self._subject = self._add("Subject…", controller.showSubject)
-        self.menu.addSeparator()
-        self.paces = self._choices(
-            "How often", [(p.key, f"{p.name}\t{p.hint}") for p in PACES], controller.setPace
-        )
-        self.calls = self._choices(
-            "Sound",
-            [*calls.CALLS, None, (calls.SILENT, "Silent")],
-            controller.setCall,
-            listen="Click one to hear it",
-        )
-        self.menu.addSeparator()
-        self._pause = self._add("A break…", controller.showPause)
-        self._resume = self._add("Resume", controller.resume)
-        self.menu.addSeparator()
-        self._add("Quit Tagnan", controller.quit)
+        self._menu = menu
         self.icon: QSystemTrayIcon | None = None
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.icon = QSystemTrayIcon(figure_icon(controller.stage))
-            self.icon.setContextMenu(self.menu)
             self.icon.activated.connect(self._activated)
             self.icon.show()
         controller.stageChanged.connect(self._restyle)
         controller.statusChanged.connect(self._restyle)
-        controller.prefsChanged.connect(self._restyle)
-        controller.menuRequested.connect(lambda: self.menu.popup(QCursor.pos()))
         self._restyle()
 
-    def _add(self, label: str, slot: object) -> QAction:
-        action = self.menu.addAction(label)
-        action.triggered.connect(slot)
-        return action
-
-    def _choices(
-        self,
-        title: str,
-        items: Sequence[tuple[str, str] | None],
-        choose: Callable[[str], None],
-        listen: str = "",
-    ) -> dict[str, QAction]:
-        """A submenu of choices, one ticked; None among the items is a separator. With
-        `listen`, a hint at its top, and a click keeps it open."""
-        submenu = self.menu.addMenu(title)
-        group = QActionGroup(submenu)  # exclusive
-        if listen:
-            submenu.addAction(listen).setEnabled(False)
-            submenu.installEventFilter(self._keep_open)
-        actions = {}
-        for item in items:
-            if item is None:
-                submenu.addSeparator()
-                continue
-            key, label = item
-            action = submenu.addAction(label)
-            action.setCheckable(True)
-            group.addAction(action)
-            action.triggered.connect(lambda _checked=False, key=key: choose(key))
-            actions[key] = action
-        return actions
-
     def _activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+        menu_click = reason == QSystemTrayIcon.ActivationReason.Context or (
+            sys.platform == "darwin" and reason == QSystemTrayIcon.ActivationReason.Trigger
+        )
+        if menu_click:
+            at = QCursor.pos()
+            self._menu.openAt(at.x(), at.y())
+        elif reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._controller.showStats()
 
-    def _restyle(self) -> None:
+    def tooltip(self) -> str:
         paused = bool(self._controller.paused)
-        self._pause.setText("Change the break…" if paused else "A break…")
-        self._resume.setVisible(paused)
-        subject = str(self._controller.subject)
-        if len(subject) > 40:
-            subject = subject[:39] + "…"
-        self._subject.setText(f"Subject: {subject}…")
-        for key, action in self.paces.items():
-            action.setChecked(key == str(self._controller.pace))
-        for key, action in self.calls.items():
-            action.setChecked(key == str(self._controller.call))
+        return str(self._controller.status) + (" · on a break" if paused else "")
+
+    def _restyle(self) -> None:
         if self.icon is not None:
             self.icon.setIcon(figure_icon(self._controller.stage))
-            self.icon.setToolTip(str(self._controller.status) + (" · on a break" if paused else ""))
+            self.icon.setToolTip(self.tooltip())

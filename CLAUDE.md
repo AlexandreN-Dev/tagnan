@@ -18,7 +18,7 @@ Commands, from the repository root:
 - Start menu icon: `scripts/install-shortcut`; start with Windows: `--startup`; `--dry-run`, `--remove` (on a Mac: `~/Applications/Tagnan.app` and the LaunchAgent `local.tagnan`, through `scripts/_mac-app`)
 - Terminal quiz (WSL database, separate from the window's; on a Mac, the same database): `uv run python -m tagnan.cli`; `-n 5`, `--stats`, `--learn pottery`, `--subject RAG`, `--import batch.json`
 - Brain by hand: `scripts/brain generate < request.json`, `scripts/brain explain < request.json`, `echo '{"words": "pottery"}' | scripts/brain plan` (a new course's outline), `scripts/brain check` (one tiny call with the configured model)
-- Picture of the window without capturing the screen: `scripts/tagnan-ui --demo question --snapshot <Windows path>`; off screen in WSL: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui --demo question --snapshot build/w.png` (software rendering: no glow)
+- Picture of the window without capturing the screen: `scripts/tagnan-ui --demo question --snapshot <Windows path>`; off screen in WSL: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui --demo question --snapshot build/w.png` (software rendering: no glow); `--demo menu` for his menu. A snapshot never calls the brain.
 - Reference sheet (layers rendered by QtSvg): `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.sheet build/sheet.png`
 - Animation frame by frame: `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.preview build/frames.png --mood happy --at 0.1 0.3 0.6`
 - Window CPU: `scripts/tagnan-ui --measure-cpu 30`

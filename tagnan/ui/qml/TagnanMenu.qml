@@ -1,0 +1,546 @@
+// Tagnan's menu, in his bubbles' style (tagnan/ui/menu.py says what it shows and does): his
+// grade and points at the top, a field to type a command ("break 45", "often", "learn pottery"),
+// then his commands. How often and Sound open their lists beside it. Arrows, Enter and Esc work
+// throughout; a click elsewhere closes it, as any menu.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Shapes
+
+Window {
+    id: win
+
+    required property QtObject menu
+    required property QtObject theme
+
+    readonly property var c: menu.content
+    readonly property int pad: 22  // room for the shadow
+    readonly property int gap: 6
+    property string sub: ""  // "pace" or "call": the list open beside the menu
+    property real subTop: 0
+    property int current: 0  // the row the keyboard is on
+    property int subCurrent: 0
+    property var suggestions: []
+    property bool keyboard: false  // the arrows were used: the row they are on is ringed
+    readonly property bool typing: field.text.trim() !== ""
+    readonly property var rows: typing ? suggestionRows() : commandRows()
+    readonly property bool subOnLeft: sub !== "" && menu.subLeft
+
+    // A popup: on top, out of the taskbar, it takes the keyboard and closes on a click elsewhere.
+    flags: Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
+    color: "transparent"
+    title: "Tagnan — menu"
+    visible: menu.shown
+    x: menu.x - pad - (subOnLeft ? subPanel.width + gap : 0)
+    y: menu.y - pad
+    width: panel.width + 2 * pad + (sub !== "" ? subPanel.width + gap : 0)
+    height: Math.max(panel.height, sub !== "" ? subPanel.y - pad + subPanel.height : 0) + 2 * pad
+
+    // Icons, 24 units square, drawn as strokes.
+    readonly property var icons: ({
+        ask: "M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2",
+        stats: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+        subject: "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5",
+        pace: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+        call: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6",
+        pause: "M8 5v14M16 5v14",
+        resume: "M7 4v16l13-8z",
+        quit: "M12 3v9M6.3 7.5a8 8 0 1 0 11.4 0",
+        learn: "M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5",
+        focus: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+        search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",
+        check: "M5 12.5l4.5 4.5L19 7"
+    })
+
+    function commandRows() {
+        const list = [
+            { action: "ask", label: "A question now", value: c.next, icon: "ask", primary: true },
+            { action: "stats", label: "Progress", icon: "stats" },
+            { action: "subject", label: "Subject", value: c.subject, icon: "subject" },
+            { separator: true },
+            { action: "sub:pace", label: "How often", value: c.pace, icon: "pace", more: true },
+            { action: "sub:call", label: "Sound", value: c.call, icon: "call", more: true },
+            { separator: true }
+        ]
+        if (c.paused) {
+            list.push({ action: "resume", label: "Resume now", value: c.next, icon: "resume" })
+            list.push({ action: "pause", label: "Change the break…", icon: "pause" })
+        } else {
+            list.push({ action: "pause", label: "A break…", icon: "pause" })
+        }
+        list.push({ action: "quit", label: "Quit Tagnan", icon: "quit", quiet: true })
+        return list
+    }
+    function suggestionRows() {
+        return suggestions.map(function(s) {
+            const verb = s.action.split(":")[0]
+            const icon = { pace: "pace", call: "call", pause: "pause", learn: "learn", focus: "focus" }[verb] || verb
+            return { action: s.action, label: s.label, value: s.sub, icon: win.icons[icon] ? icon : "search" }
+        })
+    }
+    // The rows one can land on with the arrows, by their index in `rows`.
+    function stops() {
+        const found = []
+        for (let i = 0; i < rows.length; i++)
+            if (!rows[i].separator)
+                found.push(i)
+        return found
+    }
+    function move(step) {
+        keyboard = true
+        if (sub !== "") {
+            const count = subList.count
+            subCurrent = (subCurrent + step + count) % count
+            return
+        }
+        const at = stops()
+        if (at.length === 0)
+            return
+        const here = Math.max(0, at.indexOf(current))
+        current = at[(here + step + at.length) % at.length]
+    }
+    function activate(index) {
+        const row = rows[index]
+        if (!row || row.separator)
+            return
+        if (row.action.startsWith("sub:")) {
+            openSub(row.action.slice(4), index)
+            return
+        }
+        menu.run(row.action)
+    }
+    function openSub(which, index) {
+        if (sub === which) {
+            sub = ""
+            return
+        }
+        current = index
+        const item = rowRepeater.itemAt(index)
+        subTop = item ? item.mapToItem(panel, 0, 0).y - 8 : 0
+        const choices = which === "pace" ? c.paces : c.calls
+        const chosen = which === "pace" ? c.paceKey : c.callKey
+        subCurrent = Math.max(0, choices.findIndex(function(x) { return x.key === chosen }))
+        sub = which
+        subIn.restart()
+    }
+    function choose(index) {
+        const list = sub === "pace" ? c.paces : c.calls
+        if (index < 0 || index >= list.length)
+            return
+        subCurrent = index
+        menu.run(sub + ":" + list[index].key)
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            sub = ""
+            field.text = ""
+            suggestions = []
+            current = 0
+            keyboard = false
+            Qt.callLater(function() {
+                win.menu.place(panel.width, panel.height, 230)
+                win.requestActivate()
+                field.forceActiveFocus()
+            })
+            openIn.restart()
+        } else {
+            menu.close()  // Qt closed it: a click elsewhere
+        }
+    }
+    onActiveChanged: if (!active && visible) menu.close()
+
+    component Glyph: Item {
+        property string name
+        property color tint
+        width: 18
+        height: 18
+        Shape {
+            width: 24
+            height: 24
+            scale: 0.75
+            transformOrigin: Item.TopLeft
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeColor: tint
+                strokeWidth: 2.2
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathSvg { path: win.icons[name] || "" }
+            }
+        }
+    }
+
+    // A soft shadow under each panel, as under the bubble (no effect: it shows everywhere).
+    component Shadow: Item {
+        required property Item under
+        x: under.x
+        y: under.y
+        width: under.width
+        height: under.height
+        visible: under.visible
+        opacity: under.opacity
+        Rectangle { x: 0; y: 6; width: parent.width; height: parent.height; radius: 16; color: win.theme.shadow; opacity: 0.55 }
+        Rectangle { x: 1; y: 3; width: parent.width; height: parent.height; radius: 15; color: win.theme.shadow }
+    }
+    Shadow { under: panel }
+    Shadow { under: subPanel }
+
+    // --- The menu itself -----------------------------------------------------------------------
+    Rectangle {
+        id: panel
+        x: win.pad + (win.subOnLeft ? subPanel.width + win.gap : 0)
+        y: win.pad
+        width: 300
+        height: column.implicitHeight + 16
+        radius: 14
+        color: win.theme.panel
+        border.color: win.theme.line
+        opacity: 0
+        transform: Translate { id: panelShift; y: 0 }
+
+        Column {
+            id: column
+            x: 8
+            y: 8
+            width: parent.width - 16
+            spacing: 2
+
+            // His grade, his points towards the next one.
+            Row {
+                spacing: 12
+                leftPadding: 8
+                topPadding: 6
+                bottomPadding: 8
+                Image {
+                    width: 40
+                    height: 40
+                    fillMode: Image.PreserveAspectFit
+                    source: "image://tagnan/" + win.c.stage + "/still/-"
+                    sourceSize: Qt.size(80, 80)
+                    smooth: true
+                }
+                Column {
+                    width: column.width - 76
+                    spacing: 5
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        text: win.c.grade || ""
+                        color: win.theme.text
+                        font.family: win.theme.display
+                        font.pixelSize: 17
+                        font.bold: true
+                    }
+                    Rectangle {
+                        width: parent.width
+                        height: 5
+                        radius: 2.5
+                        color: win.theme.choice
+                        Rectangle {
+                            width: parent.width * (win.c.share || 0)
+                            height: parent.height
+                            radius: 2.5
+                            color: win.theme.gold
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        elide: Text.ElideRight
+                        text: win.c.points || ""
+                        color: win.theme.muted
+                        font.family: win.theme.body
+                        font.pixelSize: 12
+                    }
+                }
+            }
+
+            // Type a command.
+            TextField {
+                id: field
+                objectName: "field"
+                width: column.width
+                height: 36
+                leftPadding: 34
+                placeholderText: "Type: break 45, often, learn pottery…"
+                placeholderTextColor: win.theme.muted
+                color: win.theme.text
+                font.family: win.theme.body
+                font.pixelSize: 13
+                Accessible.name: "Tell Tagnan what to do"
+                background: Rectangle {
+                    radius: 9
+                    color: win.theme.choice
+                    border.color: field.activeFocus && win.typing ? win.theme.ink : "transparent"
+                }
+                Glyph {
+                    name: "search"
+                    tint: win.theme.muted
+                    x: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                onTextChanged: {
+                    win.sub = ""
+                    win.suggestions = win.menu.suggest(text)
+                    win.current = 0
+                }
+                Keys.onUpPressed: win.move(-1)
+                Keys.onDownPressed: win.move(1)
+                Keys.onRightPressed: (event) => {
+                    const row = win.rows[win.current]
+                    if (win.sub === "" && row && row.more && field.cursorPosition === field.text.length)
+                        win.activate(win.current)
+                    else
+                        event.accepted = false
+                }
+                Keys.onLeftPressed: (event) => {
+                    if (win.sub !== "")
+                        win.sub = ""
+                    else
+                        event.accepted = false
+                }
+                Keys.onReturnPressed: win.sub !== "" ? win.choose(win.subCurrent) : win.activate(win.current)
+                Keys.onEnterPressed: win.sub !== "" ? win.choose(win.subCurrent) : win.activate(win.current)
+                Keys.onEscapePressed: {
+                    if (win.sub !== "")
+                        win.sub = ""
+                    else if (win.typing)
+                        field.text = ""
+                    else
+                        win.menu.close()
+                }
+            }
+            Item { width: 1; height: 4 }
+
+            Text {
+                visible: win.typing && win.rows.length === 0
+                width: column.width
+                leftPadding: 10
+                rightPadding: 10
+                topPadding: 6
+                bottomPadding: 8
+                wrapMode: Text.Wrap
+                text: "I don't follow. Try “break 1h”, “often”, “bell” or “learn pottery”."
+                color: win.theme.muted
+                font.family: win.theme.body
+                font.pixelSize: 13
+            }
+
+            Repeater {
+                id: rowRepeater
+                model: win.rows
+                delegate: Item {
+                    id: rowItem
+                    required property var modelData
+                    required property int index
+                    readonly property bool on: win.current === index && !modelData.separator
+                    width: column.width
+                    readonly property bool twoLines: win.typing && (modelData.value || "") !== ""
+                    height: modelData.separator ? 9 : (modelData.primary ? 40 : twoLines ? 46 : 36)
+                    Accessible.role: modelData.separator ? Accessible.Separator : Accessible.MenuItem
+                    Accessible.name: modelData.label || ""
+
+                    Rectangle {
+                        visible: rowItem.modelData.separator === true
+                        x: 6
+                        width: parent.width - 12
+                        height: 1
+                        y: 4
+                        color: win.theme.line
+                    }
+                    Rectangle {
+                        visible: !rowItem.modelData.separator
+                        anchors.fill: parent
+                        radius: 9
+                        color: rowItem.modelData.primary ? win.theme.ink
+                             : (rowItem.on || (win.sub !== "" && rowItem.modelData.action === "sub:" + win.sub))
+                               ? win.theme.choiceHover : "transparent"
+                        border.width: rowItem.modelData.primary && rowItem.on && win.keyboard ? 2 : 0
+                        border.color: win.theme.gold
+                        Behavior on color { ColorAnimation { duration: 90 } }
+                    }
+                    Row {
+                        visible: !rowItem.modelData.separator
+                        x: 10
+                        spacing: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 20
+                        Glyph {
+                            name: rowItem.modelData.icon || ""
+                            tint: rowItem.modelData.primary ? win.theme.panel : win.theme.muted
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            id: label
+                            width: parent.width - 30 - (value.visible ? value.width + 12 : 0)
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: rowItem.twoLines ? -8 : 0
+                            elide: Text.ElideRight
+                            text: rowItem.modelData.label || ""
+                            color: rowItem.modelData.primary ? win.theme.panel
+                                 : rowItem.modelData.quiet ? win.theme.muted : win.theme.text
+                            font.family: win.theme.body
+                            font.pixelSize: rowItem.modelData.quiet ? 13 : 14
+                            font.weight: rowItem.modelData.primary ? Font.DemiBold : Font.Normal
+                        }
+                        Text {
+                            id: value
+                            visible: !rowItem.twoLines
+                            width: Math.min(implicitWidth, 130)
+                            anchors.verticalCenter: parent.verticalCenter
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignRight
+                            text: (rowItem.modelData.value || "") + (rowItem.modelData.more ? "  ›" : "")
+                            color: rowItem.modelData.primary ? win.theme.panel : win.theme.muted
+                            opacity: rowItem.modelData.primary ? 0.8 : 1
+                            font.family: win.theme.body
+                            font.pixelSize: 12
+                        }
+                    }
+                    Text {
+                        visible: rowItem.twoLines
+                        x: 40
+                        y: 25
+                        width: parent.width - 50
+                        elide: Text.ElideRight
+                        text: rowItem.modelData.value || ""
+                        color: win.theme.muted
+                        font.family: win.theme.body
+                        font.pixelSize: 12
+                    }
+                    MouseArea {
+                        enabled: !rowItem.modelData.separator
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        // Only a mouse that moves takes the row: rows made anew under a still
+                        // pointer, as one types, leave the keyboard's choice alone.
+                        onPositionChanged: {
+                            if (win.current === rowItem.index)
+                                return
+                            win.current = rowItem.index
+                            if (rowItem.modelData.more && win.sub !== "" && win.sub !== rowItem.modelData.action.slice(4))
+                                win.openSub(rowItem.modelData.action.slice(4), rowItem.index)
+                        }
+                        onClicked: win.activate(rowItem.index)
+                    }
+                }
+            }
+        }
+    }
+
+    // --- How often, or Sound, beside the menu ---------------------------------------------------
+    Rectangle {
+        id: subPanel
+        visible: win.sub !== ""
+        x: win.subOnLeft ? win.pad : panel.x + panel.width + win.gap
+        y: Math.max(win.pad, win.pad + win.subTop)
+        width: 230
+        height: subColumn.implicitHeight + 16
+        radius: 14
+        color: win.theme.panel
+        border.color: win.theme.line
+
+        Column {
+            id: subColumn
+            x: 8
+            y: 8
+            width: parent.width - 16
+            spacing: 2
+            Text {
+                leftPadding: 10
+                topPadding: 4
+                bottomPadding: 6
+                text: win.sub === "pace" ? "How often?" : "His call"
+                color: win.theme.text
+                font.family: win.theme.display
+                font.pixelSize: 14
+                font.bold: true
+            }
+            Text {
+                visible: win.sub === "call"
+                leftPadding: 10
+                bottomPadding: 4
+                text: "A click plays it and keeps it."
+                color: win.theme.muted
+                font.family: win.theme.body
+                font.pixelSize: 12
+            }
+            Repeater {
+                id: subList
+                model: win.sub === "pace" ? win.c.paces : win.sub === "call" ? win.c.calls : []
+                delegate: Rectangle {
+                    id: choice
+                    required property var modelData
+                    required property int index
+                    readonly property bool chosen: modelData.key === (win.sub === "pace" ? win.c.paceKey : win.c.callKey)
+                    width: subColumn.width
+                    height: hint.visible ? 46 : 34
+                    radius: 9
+                    color: chosen ? win.theme.choiceOn : (win.subCurrent === index ? win.theme.choiceHover : "transparent")
+                    Accessible.role: Accessible.RadioButton
+                    Accessible.name: modelData.name
+                    Accessible.checked: chosen
+                    Behavior on color { ColorAnimation { duration: 90 } }
+                    Glyph {
+                        x: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "check"
+                        tint: win.theme.ink
+                        visible: choice.chosen
+                    }
+                    Column {
+                        x: 32
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
+                        Text {
+                            text: choice.modelData.name
+                            color: win.theme.text
+                            font.family: win.theme.body
+                            font.pixelSize: 13
+                            font.weight: choice.chosen ? Font.DemiBold : Font.Normal
+                        }
+                        Text {
+                            id: hint
+                            visible: (choice.modelData.hint || "") !== ""
+                            text: choice.modelData.hint || ""
+                            color: win.theme.muted
+                            font.family: win.theme.body
+                            font.pixelSize: 12
+                        }
+                    }
+                    Glyph {
+                        visible: win.sub === "call" && choice.modelData.key !== "silent"
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "call"
+                        tint: win.subCurrent === choice.index ? win.theme.ink : win.theme.muted
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onPositionChanged: win.subCurrent = choice.index
+                        onClicked: win.choose(choice.index)
+                    }
+                }
+            }
+        }
+    }
+
+    // A short fade and rise as it opens, as today's menus do.
+    ParallelAnimation {
+        id: openIn
+        NumberAnimation { target: panel; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.OutCubic }
+        NumberAnimation { target: panelShift; property: "y"; from: 6; to: 0; duration: 160; easing.type: Easing.OutCubic }
+    }
+    NumberAnimation {
+        id: subIn
+        target: subPanel
+        property: "opacity"
+        from: 0
+        to: 1
+        duration: 110
+        easing.type: Easing.OutCubic
+    }
+}

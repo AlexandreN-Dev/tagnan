@@ -25,11 +25,12 @@ class BrainWorker(QObject):
         super().__init__()
         self._client = client
         self.generating = False
+        self.offline = False  # development snapshots: no batch, no quota spent
         self.planning = ""  # the words of the course being drawn up
 
     def generate(self, request: dict[str, Any]) -> bool:
         """Start writing a batch, unless one is on its way."""
-        if self.generating:
+        if self.generating or self.offline:
             return False
         self.generating = True
 

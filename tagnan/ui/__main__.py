@@ -46,6 +46,7 @@ from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
 from tagnan.ui.images import LayerImages
+from tagnan.ui.menu import Menu
 from tagnan.ui.outside import OutsideClicks
 from tagnan.ui.placement import Placement
 from tagnan.ui.sounds import Sounds
@@ -139,6 +140,8 @@ def demo(controller: Controller, what: str) -> None:
         controller.showPause()
     elif what == "subject":
         controller.showSubject()
+    elif what == "menu":
+        controller.showMenu()
 
 
 def main() -> int:
@@ -154,7 +157,16 @@ def main() -> int:
     parser.add_argument("--snapshot-delay", type=int, default=2500, help="in milliseconds")
     parser.add_argument(
         "--demo",
-        choices=["question", "result-right", "result-wrong", "stats", "quip", "pause", "subject"],
+        choices=[
+            "question",
+            "result-right",
+            "result-wrong",
+            "stats",
+            "quip",
+            "pause",
+            "subject",
+            "menu",
+        ],
         help="development: show a bubble right away",
     )
     parser.add_argument("--grade", type=int, choices=range(6), help="development: force a grade")
@@ -206,6 +218,7 @@ def main() -> int:
         else BrainClient.local()
     )
     worker = BrainWorker(client)
+    worker.offline = args.snapshot is not None or args.measure_cpu is not None
     rig = Rig(rng, reduced_motion=args.reduced_motion)
     rig.wobble_rate = max(1, args.ripple_rate)
     animator = Animator(rig, frame_ms=round(1000 / max(1, args.fps)))
@@ -214,7 +227,8 @@ def main() -> int:
         game, scheduler, worker, animator, rng, settings=settings, sounds=Sounds()
     )
     placement = Placement()
-    tray = Tray(controller)
+    menu = Menu(controller)
+    tray = Tray(controller, menu)
 
     def leave(code: int = 0) -> None:
         """Every way out ends the process at once: Qt's own teardown waits for its render
@@ -229,7 +243,7 @@ def main() -> int:
     engine = QQmlApplicationEngine()
     engine.addImageProvider("tagnan", LayerImages())
     engine.setInitialProperties(
-        {"controller": controller, "animator": animator, "placement": placement}
+        {"controller": controller, "animator": animator, "placement": placement, "menu": menu}
     )
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     roots = engine.rootObjects()
@@ -286,7 +300,7 @@ def main() -> int:
     heartbeat = QTimer()  # lets Python see Ctrl+C now and then
     heartbeat.timeout.connect(lambda: None)
     heartbeat.start(250)
-    keep: list[QObject] = [tray, placement, outside, animator, controller, worker]  # QML's
+    keep: list[QObject] = [tray, menu, placement, outside, animator, controller, worker]  # QML's
     app.exec()
     del keep
     leave()

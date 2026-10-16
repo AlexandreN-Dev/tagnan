@@ -1,6 +1,7 @@
 // Two windows: Tagnan's, just his size, that can be dragged anywhere on the screen; and his
 // bubble's, placed beside him (tagnan/ui/placement.py) on the screen he stands on. Both are
-// frameless, transparent, always on top, and never take the keyboard.
+// frameless, transparent, always on top, and never take the keyboard. His menu (TagnanMenu.qml) is a
+// popup of its own.
 import QtQuick
 
 Window {
@@ -9,6 +10,7 @@ Window {
     required property QtObject controller
     required property QtObject animator
     required property QtObject placement
+    required property QtObject menu
 
     readonly property var content: controller.bubble
     readonly property bool bubbleShown: content.mode !== "hidden"
@@ -117,6 +119,11 @@ Window {
                     })
             }
         }
+    }
+
+    TagnanMenu {
+        menu: win.menu
+        theme: theme
     }
 
     onBubbleShownChanged: place()

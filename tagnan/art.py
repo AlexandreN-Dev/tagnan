@@ -309,7 +309,7 @@ def figure(stage: int) -> dict[str, Any]:
             fall=[],
             staticDrips=[],
             eyes=[[60 - 11.0, 107.5], [60 + 11.0, 107.5]],
-            eyeRadius=8.13,
+            eyeRadius=7.31,
             mouth=[60.0, 118.5],
             quill=list(QUILL[0]),
         )
@@ -855,7 +855,7 @@ def _face(stage: int) -> Face:
     if stage == 0:
         # The inkwell's face, made to read at tray size: big, wide-set eyes, a flatter grin
         # without teeth.
-        return Face(107.5, 1.26, 1.1, 118.5, 0.68, mouth_depth=0.795, teeth=False)
+        return Face(107.5, 1.134, 1.1, 118.5, 0.68, mouth_depth=0.795, teeth=False)
     if stage == 1:
         return Face(86, 1.0, 1.0, 100, 1.0)
     return Face(76, 1.0, 1.0, 91, 1.0)

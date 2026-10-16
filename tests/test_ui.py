@@ -722,6 +722,16 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         assert popup.property("current") == progress
         QTest.mouseMove(popup, row_centre(subject))
         assert popup.property("current") == subject
+        # Resting on How often opens its list, with no click; moving on to a plain row
+        # closes it, a moment later.
+        pace = next(i for i, r in enumerate(rows) if r.get("action") == "sub:pace")
+        QTest.mouseMove(popup, row_centre(pace))
+        assert popup.property("sub") == ""  # not at once: one may only be crossing it
+        QTest.qWait(300)
+        assert popup.property("sub") == "pace"
+        QTest.mouseMove(popup, row_centre(progress))
+        QTest.qWait(300)
+        assert popup.property("sub") == ""
         # Rows made anew under the still pointer, as one types, leave the first one lit.
         popup.findChild(QObject, "field").setProperty("text", "how often")
         assert popup.property("current") == 0

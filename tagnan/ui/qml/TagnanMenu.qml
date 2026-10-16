@@ -17,6 +17,7 @@ Window {
     readonly property int gap: 6
     property string sub: ""  // "pace" or "call": the list open beside the menu
     property real subTop: 0
+    property int subRow: -1  // the row whose list is open
     property int current: 0  // the row the keyboard is on
     property int subCurrent: 0
     property var suggestions: []
@@ -124,10 +125,10 @@ Window {
         menu.run(row.action)
     }
     function openSub(which, index) {
-        if (sub === which) {
-            sub = ""
-            return
-        }
+        hover.stop()
+        subRow = index
+        if (sub === which)
+            return  // already open: a click on its row keeps it so
         current = index
         const item = rowRepeater.itemAt(index)
         subTop = item ? item.mapToItem(panel, 0, 0).y - 8 : 0
@@ -148,6 +149,7 @@ Window {
     onVisibleChanged: {
         if (visible) {
             sub = ""
+            hover.stop()
             field.text = ""
             suggestions = []
             current = 0
@@ -464,11 +466,15 @@ Window {
                             if (!win.moved(rowMouse, mouse) || win.current === rowItem.index)
                                 return
                             win.current = rowItem.index
-                            // A list open beside follows the row the mouse is on, or closes.
-                            if (win.sub !== "" && !rowItem.modelData.more)
-                                win.sub = ""
-                            else if (rowItem.modelData.more && win.sub !== "" && win.sub !== rowItem.modelData.action.slice(4))
-                                win.openSub(rowItem.modelData.action.slice(4), rowItem.index)
+                            // Resting on How often or Sound opens its list; on another row, closes
+                            // the list open. Both wait a moment, so that one can cross a row on the
+                            // way to the list without losing it, as Windows' own menus do.
+                            hover.want = rowItem.modelData.more ? rowItem.modelData.action.slice(4) : ""
+                            hover.row = rowItem.index
+                            if (hover.want === win.sub)
+                                hover.stop()
+                            else
+                                hover.restart()
                         }
                         onClicked: win.activate(rowItem.index)
                     }
@@ -489,6 +495,11 @@ Window {
         radius: 14
         color: win.theme.panel
         border.color: win.theme.line
+
+        // Anywhere on the list, its title too, the mouse keeps it open.
+        HoverHandler {
+            onHoveredChanged: if (hovered) hover.stop()
+        }
 
         Hilite {
             target: { win.subCurrent; subList.count; return subList.itemAt(win.subCurrent) }
@@ -577,13 +588,30 @@ Window {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onPositionChanged: (mouse) => {
-                            if (win.moved(choiceMouse, mouse) && win.subCurrent !== choice.index)
+                            if (!win.moved(choiceMouse, mouse))
+                                return
+                            hover.stop()  // reached the list: it stays, its row lit again
+                            win.current = win.subRow
+                            if (win.subCurrent !== choice.index)
                                 win.subCurrent = choice.index
                         }
                         onClicked: win.choose(choice.index)
                     }
                 }
             }
+        }
+    }
+
+    Timer {
+        id: hover
+        property string want: ""  // the list to open, "" to close the one open
+        property int row: -1
+        interval: 220
+        onTriggered: {
+            if (want === "")
+                win.sub = ""
+            else
+                win.openSub(want, row)
         }
     }
 

@@ -752,7 +752,12 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         list_top = popup.y() + box.y()
         assert list_bottom <= bottom - 15
         assert list_top >= QApplication.primaryScreen().availableGeometry().top() + 15
-        assert popup.y() + popup.height() <= bottom + 1 + popup.property("pad")
+        # Its window covers the screen's free area and stays put as the list opens and closes.
+        geometry = popup.geometry()
+        popup.setProperty("sub", "")
+        QApplication.processEvents()
+        assert popup.geometry() == geometry
+        assert geometry == QApplication.primaryScreen().availableGeometry()
         field = popup.findChild(QObject, "field")
         field.setProperty("text", "bell")
         assert popup.property("sub") == ""  # typing closes the list

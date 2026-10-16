@@ -1,7 +1,8 @@
 // Tagnan's menu, in his bubbles' style (tagnan/ui/menu.py says what it shows and does): his
 // grade and points at the top, a field to type a command ("break 45", "often", "learn pottery"),
 // then his commands. How often and Sound open their lists beside it. Arrows, Enter and Esc work
-// throughout; a click elsewhere closes it, as any menu.
+// throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
+// while it is open and never moves: only the panels move within it, so nothing jumps.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
@@ -13,7 +14,6 @@ Window {
     required property QtObject theme
 
     readonly property var c: menu.content
-    readonly property int pad: 22  // room for the shadow
     readonly property int gap: 6
     property string sub: ""  // "pace" or "call": the list open beside the menu
     property real subTop: 0
@@ -25,22 +25,28 @@ Window {
     property point pointer: Qt.point(-1, -1)  // where the mouse last was, in the window
     readonly property bool typing: field.text.trim() !== ""
     readonly property var rows: typing ? suggestionRows() : commandRows()
-    readonly property bool subOnLeft: sub !== "" && menu.subLeft
+    readonly property bool subOnLeft: menu.subLeft
     // Where the list beside starts, from the menu's top: by its row, but kept on the screen,
-    // above the taskbar; when it must start above the menu, the window grows upwards (lift).
+    // above the taskbar.
     readonly property real subRel: sub === "" ? 0
         : Math.max(menu.areaTop - menu.y, Math.min(subTop, menu.areaBottom - menu.y - subPanel.height))
-    readonly property real lift: Math.max(0, -subRel)
 
     // A popup: on top, out of the taskbar, it takes the keyboard and closes on a click elsewhere.
     flags: Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
     color: "transparent"
     title: "Tagnan — menu"
     visible: menu.shown
-    x: menu.x - pad - (subOnLeft ? subPanel.width + gap : 0)
-    y: menu.y - pad - lift
-    width: panel.width + 2 * pad + (sub !== "" ? subPanel.width + gap : 0)
-    height: lift + Math.max(panel.height, sub !== "" ? subRel + subPanel.height : 0) + 2 * pad
+    x: menu.area[0]
+    y: menu.area[1]
+    width: menu.area[2]
+    height: menu.area[3]
+
+    // A click on the screen around the menu closes it (the window covers it, invisible).
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onPressed: win.menu.close()
+    }
 
     // Icons, 24 units square, drawn as strokes.
     readonly property var icons: ({
@@ -227,8 +233,8 @@ Window {
     // --- The menu itself -----------------------------------------------------------------------
     Rectangle {
         id: panel
-        x: win.pad + (win.subOnLeft ? subPanel.width + win.gap : 0)
-        y: win.pad + win.lift
+        x: win.menu.x - win.x
+        y: win.menu.y - win.y
         width: 300
         height: column.implicitHeight + 16
         radius: 14
@@ -238,6 +244,8 @@ Window {
         transform: Translate { id: panelShift; y: 0 }
         // Taller or shorter (a break, words typed): placed again, still on the screen.
         onHeightChanged: if (win.visible) win.menu.place(width, height, subPanel.width)
+        // Clicks on the panel itself stay in it (the screen around it closes the menu).
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
 
         // One highlight for the whole menu, that slides from row to row: never two rows lit at
         // once, as each row's own fade would leave them for a moment.
@@ -488,14 +496,16 @@ Window {
         id: subPanel
         objectName: "list"
         visible: win.sub !== ""
-        x: win.subOnLeft ? win.pad : panel.x + panel.width + win.gap
-        y: win.pad + win.lift + win.subRel
+        x: win.subOnLeft ? panel.x - win.gap - width : panel.x + panel.width + win.gap
+        y: panel.y + win.subRel
         width: 230
         height: subColumn.implicitHeight + 16
         radius: 14
         color: win.theme.panel
         border.color: win.theme.line
 
+        // Clicks on the panel itself stay in it (the screen around it closes the menu).
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
         // Anywhere on the list, its title too, the mouse keeps it open.
         HoverHandler {
             onHoveredChanged: if (hovered) hover.stop()

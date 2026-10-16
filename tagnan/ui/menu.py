@@ -74,6 +74,8 @@ class Menu(QObject):
         self._x = self._y = 0
         self._sub_left = False
         self._area = Box(0, 0, 1920, 1080)
+        self._size = (300, 430)  # the panel's, as QML last laid it out
+        self._sub_width = 230
         controller.menuRequested.connect(self.openAt)
         for signal in (controller.prefsChanged, controller.statusChanged, controller.stageChanged):
             signal.connect(self._refresh)
@@ -96,6 +98,13 @@ class Menu(QObject):
     def subLeft(self) -> bool:
         """The pace's and the call's lists open on the left: no room on the right."""
         return self._sub_left
+
+    @Property(list, notify=changed)
+    def area(self) -> list[int]:
+        """The screen's free area (taskbar left out): the menu's window covers all of it while
+        open and never moves or resizes, lest the panel jump as the lists open and close."""
+        a = self._area
+        return [a.x, a.y, a.width, a.height]
 
     @Property(int, notify=changed)
     def areaTop(self) -> int:
@@ -149,8 +158,11 @@ class Menu(QObject):
 
     @Slot(int, int)
     def openAt(self, x: int, y: int) -> None:
+        """Open at the pointer: placed at once with the panel's last size, so that its window
+        is where it belongs from its first frame."""
         self._anchor = (x, y)
         self._shown = True
+        self._layout()
         self.changed.emit()
 
     @Slot()
@@ -163,12 +175,18 @@ class Menu(QObject):
     def place(self, width: int, height: int, sub_width: int) -> None:
         """The panel's size, known once QML has laid it out; the lists' width, to know their
         side."""
-        area = screen_area(QPoint(*self._anchor))
-        x, y = menu_position(self._anchor, (width, height), area)
-        sub_left = x + width + GAP + sub_width > area.right - MARGIN
-        if (x, y, sub_left, area) != (self._x, self._y, self._sub_left, self._area):
-            self._x, self._y, self._sub_left, self._area = x, y, sub_left, area
+        before = (self._x, self._y, self._sub_left, self._area)
+        self._size, self._sub_width = (width, height), sub_width
+        self._layout()
+        if (self._x, self._y, self._sub_left, self._area) != before:
             self.changed.emit()
+
+    def _layout(self) -> None:
+        area = screen_area(QPoint(*self._anchor))
+        width = self._size[0]
+        self._x, self._y = menu_position(self._anchor, self._size, area)
+        self._sub_left = self._x + width + GAP + self._sub_width > area.right - MARGIN
+        self._area = area
 
     def _refresh(self) -> None:
         if self._shown:

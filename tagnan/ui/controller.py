@@ -13,7 +13,7 @@ from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan.game import Game, Outcome
 from tagnan.model import Question
-from tagnan.scheduler import Scheduler
+from tagnan.scheduler import Scheduler, find_pace
 from tagnan.ui import desktop
 from tagnan.ui.animator import Animator
 from tagnan.ui.worker import BrainWorker
@@ -48,6 +48,7 @@ class Controller(QObject):
     stageChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
+    prefsChanged = Signal()  # his pace
     menuRequested = Signal()
     quitRequested = Signal()
 
@@ -59,6 +60,7 @@ class Controller(QObject):
         animator: Animator,
         rng: random.Random | None = None,
         clock: Callable[[], float] = time.time,
+        settings: desktop.Settings | None = None,
     ) -> None:
         super().__init__()
         self.game = game
@@ -67,6 +69,11 @@ class Controller(QObject):
         self.animator = animator
         self._rng = rng or random.Random()  # noqa: S311 - which interjection: not a secret
         self._clock = clock
+        self.settings = settings or desktop.Settings(None)
+        # The pace chosen in his menu wins over the config file's gaps.
+        saved = find_pace(str(self.settings.get("pace", "")))
+        if saved is not None:
+            scheduler.set_rhythm(scheduler.rhythm.paced(saved), clock())
         self._stage = game.progress.grade
         self._spec = art.figure(self._stage)
         self._bubble: dict[str, Any] = {"mode": "hidden"}
@@ -122,6 +129,12 @@ class Controller(QObject):
     @Property(bool, notify=statusChanged)
     def paused(self) -> bool:
         return self.scheduler.paused_until > self._clock()
+
+    @Property(str, notify=prefsChanged)
+    def pace(self) -> str:
+        """The pace he asks at, or "" for gaps of one's own in the config file."""
+        current = self.scheduler.rhythm.pace
+        return current.key if current else ""
 
     @Property(str, notify=statusChanged)
     def status(self) -> str:
@@ -380,6 +393,29 @@ class Controller(QObject):
         self.statusChanged.emit()
         return True
 
+    @Slot(str)
+    def setPace(self, key: str) -> None:
+        chosen = find_pace(key)
+        if chosen is None:
+            return
+        now = self._clock()
+        self.scheduler.set_rhythm(self.scheduler.rhythm.paced(chosen), now)
+        self.settings.set("pace", chosen.key)
+        logger.info("pace: %s", chosen.key)
+        self.prefsChanged.emit()
+        self.statusChanged.emit()
+        if self._bubble["mode"] in ("question", "thinking"):
+            return  # not a word over a question: his menu shows the pace
+        if self.scheduler.paused_until > now:
+            text = f"{chosen.sentence}, once your break is over."
+        else:
+            text = (
+                f"{chosen.sentence}. The next one around "
+                f"{pauses.clock(self.scheduler.next_at, now)}."
+            )
+        self._show({"mode": "message", "title": "As you wish!", "text": text})
+        self._hide_timer.start(6000)
+
     @Slot(int)
     def pause(self, minutes: int) -> None:
         self.pauseWith(f"{minutes} min")
@@ -519,4 +555,5 @@ class Controller(QObject):
     def _unanswered(self) -> None:
         if self._bubble["mode"] == "question":
             logger.info("question left unanswered: put off")
-            self.later()
+            self.scheduler.missed(self._clock())
+            self._close()

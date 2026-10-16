@@ -41,20 +41,26 @@ def mouse_down() -> bool:
 
 
 class Settings:
-    """The window's own settings (its place on the screen), as JSON next to the database."""
+    """The window's own settings (its place on the screen, his pace, his call), as JSON next to
+    the database; without a path, kept in memory only."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path | None) -> None:
         self._path = path
-        try:
-            self._data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            self._data = {}
+        self._data: dict[str, Any] = {}
+        if path is not None:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = {}
+            self._data = data if isinstance(data, dict) else {}
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
         self._data[key] = value
+        if self._path is None:
+            return
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(json.dumps(self._data, indent=2), encoding="utf-8")

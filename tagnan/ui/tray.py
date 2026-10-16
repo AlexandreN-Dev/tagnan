@@ -1,13 +1,15 @@
 """Tagnan in the notification area: his icon at his grade, and his menu (also on a right click
 on him)."""
 
+from collections.abc import Callable, Sequence
 from functools import lru_cache
 
 from PySide6.QtCore import QObject, Qt
-from PySide6.QtGui import QAction, QCursor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from tagnan import art
+from tagnan.scheduler import PACES
 from tagnan.ui.controller import Controller
 from tagnan.ui.images import render_svg
 
@@ -35,6 +37,10 @@ class Tray(QObject):
         self._add("A question now", controller.askNow)
         self._add("Progress", controller.showStats)
         self.menu.addSeparator()
+        self.paces = self._choices(
+            "How often", [(p.key, f"{p.name}\t{p.hint}") for p in PACES], controller.setPace
+        )
+        self.menu.addSeparator()
         self._pause = self._add("A break…", controller.showPause)
         self._resume = self._add("Resume", controller.resume)
         self.menu.addSeparator()
@@ -47,6 +53,7 @@ class Tray(QObject):
             self.icon.show()
         controller.stageChanged.connect(self._restyle)
         controller.statusChanged.connect(self._restyle)
+        controller.prefsChanged.connect(self._restyle)
         controller.menuRequested.connect(lambda: self.menu.popup(QCursor.pos()))
         self._restyle()
 
@@ -54,6 +61,28 @@ class Tray(QObject):
         action = self.menu.addAction(label)
         action.triggered.connect(slot)
         return action
+
+    def _choices(
+        self,
+        title: str,
+        items: Sequence[tuple[str, str] | None],
+        choose: Callable[[str], None],
+    ) -> dict[str, QAction]:
+        """A submenu of choices, one ticked; None among the items is a separator."""
+        submenu = self.menu.addMenu(title)
+        group = QActionGroup(submenu)  # exclusive
+        actions = {}
+        for item in items:
+            if item is None:
+                submenu.addSeparator()
+                continue
+            key, label = item
+            action = submenu.addAction(label)
+            action.setCheckable(True)
+            group.addAction(action)
+            action.triggered.connect(lambda _checked=False, key=key: choose(key))
+            actions[key] = action
+        return actions
 
     def _activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -63,6 +92,8 @@ class Tray(QObject):
         paused = bool(self._controller.paused)
         self._pause.setText("Change the break…" if paused else "A break…")
         self._resume.setVisible(paused)
+        for key, action in self.paces.items():
+            action.setChecked(key == str(self._controller.pace))
         if self.icon is not None:
             self.icon.setIcon(figure_icon(self._controller.stage))
             self.icon.setToolTip(str(self._controller.status) + (" · on a break" if paused else ""))

@@ -1,12 +1,13 @@
 import os
 import random
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication
 
 from tagnan.brain_client import BrainClient
 from tagnan.game import Game
@@ -16,6 +17,8 @@ from tagnan.ui.animation.rig import Rig
 from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
+from tagnan.ui.desktop import Settings
+from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
 from tests.conftest import question_data
 
@@ -23,9 +26,9 @@ NOW = 1_800_000_000.0
 
 
 @pytest.fixture(scope="module", autouse=True)
-def qt_app() -> QGuiApplication:
-    app = QGuiApplication.instance() or QGuiApplication([])
-    assert isinstance(app, QGuiApplication)
+def qt_app() -> QApplication:
+    app = QApplication.instance() or QApplication([])  # widgets: his menu
+    assert isinstance(app, QApplication)
     return app
 
 
@@ -135,14 +138,26 @@ class Clock:
         return self.now
 
 
-def make(game: Game, clock: Clock | None = None) -> tuple[Controller, FakeWorker, Animator]:
+def make(
+    game: Game,
+    clock: Clock | None = None,
+    settings: Settings | None = None,
+) -> tuple[Controller, FakeWorker, Animator]:
     clock = clock or Clock()
     worker = FakeWorker()
     animator = Animator(Rig(random.Random(5)))
     scheduler = Scheduler(
         Rhythm(weekends=True, start_hour=0, end_hour=24), random.Random(6), clock()
     )
-    controller = Controller(game, scheduler, worker, animator, random.Random(7), clock)
+    controller = Controller(
+        game,
+        scheduler,
+        worker,
+        animator,
+        random.Random(7),
+        clock,
+        settings=settings,
+    )
     return controller, worker, animator
 
 
@@ -317,3 +332,64 @@ def test_outside_clicks_count_presses_outside_only() -> None:
     assert clicks == [True]
     watcher.watch(False)
     assert not watcher.watching
+
+
+# --- How often -----------------------------------------------------------------------------
+
+
+def test_how_often_he_asks_is_chosen_and_kept(game: Game, tmp_path: Path) -> None:
+    fill(game)
+    clock = Clock()
+    path = tmp_path / "settings.json"
+    controller, _, _ = make(game, clock, settings=Settings(path))
+    controller.setPace("intensive")
+    assert clock.now + 3 * 60 <= controller.scheduler.next_at <= clock.now + 5 * 60
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "As you wish!"
+    assert bubble["text"].startswith("A question every 3 to 5 min. The next one around ")
+    controller.setPace("rarely")
+    assert controller.property("bubble")["text"].startswith("2 or 3 questions a day.")
+    controller.setPace("sometimes")
+    assert controller.property("pace") == "rarely"
+    controller.askNow()
+    controller.setPace("often")  # not a word over a question
+    assert controller.property("bubble")["mode"] == "question"
+    controller.pauseWith("1h")
+    controller.setPace("now-and-then")
+    assert controller.property("bubble")["text"].endswith("once your break is over.")
+    assert controller.scheduler.next_at >= clock.now + 3600
+    again, _, _ = make(game, clock, settings=Settings(path))
+    assert again.property("pace") == "now-and-then"
+    assert again.scheduler.next_at >= clock.now + 45 * 60
+
+
+def test_a_question_left_alone_goes_and_the_next_one_waits_for_the_pace(game: Game) -> None:
+    fill(game)
+    clock = Clock()
+    controller, _, _ = make(game, clock)
+    controller.setPace("rarely")  # hours 0 to 24 here: 2 or 3 a day is every 8 to 12 hours
+    controller.askNow()
+    controller._unanswered()
+    assert controller.property("bubble")["mode"] == "hidden"
+    assert controller.scheduler.next_at >= clock.now + 8 * 3600
+
+
+def test_his_menu_sets_the_pace(game: Game) -> None:
+    controller, _, _ = make(game)
+    tray = Tray(controller)
+    assert [a.text() for a in tray.menu.actions()] == [
+        "A question now",
+        "Progress",
+        "",
+        "How often",
+        "",
+        "A break…",
+        "Resume",
+        "",
+        "Quit Tagnan",
+    ]
+    assert tray.paces["intensive"].text() == "Intensive training\tevery 3 to 5 min"
+    assert [k for k, a in tray.paces.items() if a.isChecked()] == ["regularly"]
+    tray.paces["rarely"].trigger()
+    assert controller.property("pace") == "rarely"
+    assert [k for k, a in tray.paces.items() if a.isChecked()] == ["rarely"]

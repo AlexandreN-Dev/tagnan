@@ -206,8 +206,8 @@ def main() -> int:
     rig = Rig(rng, reduced_motion=args.reduced_motion)
     rig.wobble_rate = max(1, args.ripple_rate)
     animator = Animator(rig, frame_ms=round(1000 / max(1, args.fps)))
-    controller = Controller(game, scheduler, worker, animator, rng)
     settings = Settings(state_dir() / "settings.json")
+    controller = Controller(game, scheduler, worker, animator, rng, settings=settings)
     placement = Placement()
     tray = Tray(controller)
 

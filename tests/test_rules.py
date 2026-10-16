@@ -1,5 +1,6 @@
 import random
-from datetime import datetime
+from collections import Counter
+from datetime import date, datetime
 
 import pytest
 
@@ -7,7 +8,7 @@ from tagnan import progress
 from tagnan.blueprint import Blueprint
 from tagnan.model import parse_question
 from tagnan.progress import GRADES, Progress, after_answer, after_review, grade_for
-from tagnan.scheduler import Rhythm, Scheduler
+from tagnan.scheduler import PACES, Pace, Rhythm, Scheduler, find_pace
 from tests.conftest import question_data
 
 
@@ -170,3 +171,76 @@ def test_snooze_pause_and_resume() -> None:
     s.resume(at(12, 11, 30))
     assert s.paused_until == 0
     assert s.next_at <= at(12, 11, 30) + 25 * 60
+
+
+def a_pace(key: str) -> Pace:
+    found = find_pace(key)
+    assert found is not None
+    return found
+
+
+def questions_a_day(chosen: Pace, rhythm: Rhythm, seed: int, weeks: int = 2) -> list[int]:
+    """Questions asked each working day, each answered at once, from a Monday at the first
+    working hour."""
+    start = datetime(2026, 10, 12, rhythm.start_hour).timestamp()
+    s = Scheduler(rhythm.paced(chosen), random.Random(seed), start)
+    days: Counter[date] = Counter()
+    while s.next_at < start + weeks * 7 * 86400:
+        now = s.next_at
+        assert s.due(now)
+        days[datetime.fromtimestamp(now).date()] += 1
+        s.asked(now)
+    return list(days.values())
+
+
+def test_paces_go_from_rarely_to_intensive_training() -> None:
+    assert [(p.name, p.hint) for p in PACES] == [
+        ("Rarely", "2 or 3 a day"),
+        ("Now and then", "every 45 to 90 min"),
+        ("Regularly", "every 8 to 25 min"),
+        ("Often", "every 5 to 10 min"),
+        ("Intensive training", "every 3 to 5 min"),
+    ]
+    assert Rhythm().pace is find_pace("regularly")  # the rhythm he always had
+    assert Rhythm(min_minutes=2, max_minutes=3).pace is None  # gaps of one's own
+    assert find_pace("whenever") is None
+    intensive = a_pace("intensive")
+    assert Rhythm().paced(intensive).pace is intensive
+
+
+@pytest.mark.parametrize("hours", [(9, 19), (8, 20), (10, 16)])
+def test_rarely_is_two_or_three_questions_a_day(hours: tuple[int, int]) -> None:
+    rhythm = Rhythm(start_hour=hours[0], end_hour=hours[1])
+    counts = [n for seed in range(30) for n in questions_a_day(a_pace("rarely"), rhythm, seed)]
+    assert set(counts) == {2, 3}
+    assert len(counts) == 30 * 10  # every working day, none at the weekend
+
+
+def test_intensive_training_asks_every_three_to_five_minutes() -> None:
+    intensive = a_pace("intensive")
+    counts = questions_a_day(intensive, Rhythm(), seed=4, weeks=1)
+    assert 120 <= min(counts) <= max(counts) <= 200
+    s = Scheduler(Rhythm().paced(intensive), random.Random(5), at(12, 10))
+    for _ in range(40):
+        asked = s.next_at
+        s.asked(asked)
+        assert 3 * 60 <= s.next_at - asked <= 5 * 60
+
+
+def test_a_new_pace_takes_effect_at_once_but_not_during_a_break() -> None:
+    s = Scheduler(Rhythm().paced(a_pace("rarely")), random.Random(6), at(12, 10))
+    assert s.next_at >= at(12, 13, 20)
+    s.set_rhythm(s.rhythm.paced(a_pace("intensive")), at(12, 10, 30))
+    assert at(12, 10, 33) <= s.next_at <= at(12, 10, 35)
+    s.pause(at(12, 10, 30), 60)
+    s.set_rhythm(s.rhythm.paced(a_pace("regularly")), at(12, 10, 40))
+    assert s.next_at >= at(12, 11, 30)
+
+
+def test_a_missed_question_does_not_call_back_soon_at_a_slow_pace() -> None:
+    s = Scheduler(Rhythm().paced(a_pace("rarely")), random.Random(7), at(12, 10))
+    s.missed(at(12, 10))
+    assert s.next_at >= at(12, 13, 20)
+    s.set_rhythm(s.rhythm.paced(a_pace("intensive")), at(12, 10))
+    s.missed(at(12, 10))
+    assert s.next_at == at(12, 10, 10)  # the snooze: longer than this pace's gaps

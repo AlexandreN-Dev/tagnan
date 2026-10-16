@@ -1,8 +1,56 @@
-"""When Tagnan asks: at random within working hours, never while paused."""
+"""When Tagnan asks: at random within working hours, at the pace one chose, never while
+paused."""
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+
+
+@dataclass(frozen=True)
+class Pace:
+    """How often Tagnan asks: a gap between two questions, in minutes, or a number of questions
+    a working day, whatever the working hours."""
+
+    key: str
+    name: str
+    every: tuple[float, float] = (0.0, 0.0)  # the shortest and longest gap, in minutes
+    per_day: tuple[int, int] | None = None  # the fewest and most questions a working day
+
+    def gaps(self, day_minutes: float) -> tuple[float, float]:
+        """n to m questions a day: gaps between an m-th and an n-th of the day. The day's first
+        question comes within its first m-th (Scheduler._place), so there is never one more
+        than m, and never fewer than n unless one starts late or answers late."""
+        if self.per_day is None:
+            return self.every
+        fewest, most = self.per_day
+        return day_minutes / most, day_minutes / fewest
+
+    @property
+    def hint(self) -> str:
+        """« 2 or 3 a day », « every 3 to 5 min »: beside its name, in his menu."""
+        if self.per_day is not None:
+            return f"{self.per_day[0]} or {self.per_day[1]} a day"
+        return f"every {self.every[0]:g} to {self.every[1]:g} min"
+
+    @property
+    def sentence(self) -> str:
+        if self.per_day is not None:
+            return f"{self.per_day[0]} or {self.per_day[1]} questions a day"
+        return f"A question {self.hint}"
+
+
+# From the slowest to the fastest; Regularly is the rhythm Tagnan always had.
+PACES = (
+    Pace("rarely", "Rarely", per_day=(2, 3)),
+    Pace("now-and-then", "Now and then", every=(45, 90)),
+    Pace("regularly", "Regularly", every=(8, 25)),
+    Pace("often", "Often", every=(5, 10)),
+    Pace("intensive", "Intensive training", every=(3, 5)),
+)
+
+
+def find_pace(key: str) -> Pace | None:
+    return next((p for p in PACES if p.key == key), None)
 
 
 @dataclass(frozen=True)
@@ -19,6 +67,21 @@ class Rhythm:
             raise ValueError("rythme : il faut 0 < min_minutes <= max_minutes")
         if not 0 <= self.start_hour < self.end_hour <= 24:
             raise ValueError("rythme : il faut 0 <= start_hour < end_hour <= 24")
+
+    @property
+    def day_minutes(self) -> float:
+        return (self.end_hour - self.start_hour) * 60.0
+
+    def paced(self, chosen: Pace) -> "Rhythm":
+        """The same hours, at another pace."""
+        low, high = chosen.gaps(self.day_minutes)
+        return replace(self, min_minutes=low, max_minutes=high)
+
+    @property
+    def pace(self) -> Pace | None:
+        """The pace these gaps are, if any: gaps of one's own in the config file may be none."""
+        gaps = (self.min_minutes, self.max_minutes)
+        return next((p for p in PACES if p.gaps(self.day_minutes) == gaps), None)
 
 
 class Scheduler:
@@ -44,6 +107,19 @@ class Scheduler:
 
     def snooze(self, now: float) -> None:
         self.next_at = self._place(now + self.rhythm.snooze_minutes * 60)
+
+    def missed(self, now: float) -> None:
+        """A question left unanswered (one is away, maybe): the next one waits a snooze, or a
+        gap of the pace if that is longer, lest he call every twenty minutes at a slow pace."""
+        self.next_at = self._place(now + max(self.rhythm.snooze_minutes * 60, self._gap()))
+
+    def set_rhythm(self, rhythm: Rhythm, now: float) -> None:
+        """Another pace: the next question comes after a gap of the new one (and after the
+        break, if one is on)."""
+        self.rhythm = rhythm
+        self.next_at = self._place(now + self._gap())
+        if self.paused_until > now:
+            self.next_at = max(self.next_at, self._place(self.paused_until + self._gap() / 3))
 
     def postpone(self, now: float, minutes: float) -> None:
         """Not now (a full-screen application, a locked session): try again a little later."""

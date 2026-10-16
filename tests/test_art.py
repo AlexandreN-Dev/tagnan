@@ -28,6 +28,7 @@ def test_still_figure_is_valid_svg(stage: int) -> None:
 
 def test_grades_gain_their_pieces() -> None:
     assert art.layer_names(0) == (
+        "glow",
         "ground",
         "glass",
         "quill",
@@ -53,20 +54,12 @@ def test_outline_ripples_and_closes() -> None:
     assert art.blob_path(0, 0.0) != art.blob_path(0, math.pi / 2)  # the ink sloshes
 
 
-def test_arm_poses_match_the_reference() -> None:
+def test_rapier_floats_between_rest_and_guard() -> None:
     spec = art.figure(5)
-    sx, sy = spec["shoulder"]
-
-    def hand(angle: float, length: float) -> tuple[float, float]:
-        a = math.radians(angle)
-        return sx + length * math.cos(a), sy + length * math.sin(a)
-
-    up = hand(spec["armUp"], spec["armLengthUp"])
-    down = hand(spec["armDown"], spec["armLength"])
-    assert math.dist(up, (98.68, 82.80)) < 0.01  # the reference's raised arm
-    assert math.dist(down, (99.82, 93.45)) < 0.01  # and lowered one
-    assert spec["armUp"] < 0 < spec["armDown"]
-    assert art.figure(2)["armUp"] == art.figure(2)["armDown"]  # nothing to raise yet
+    assert "arms" not in spec
+    assert spec["rapierDown"] == [100.0, 92.0, 155.0]  # the reference's lowered rapier
+    assert spec["rapierUp"] == [101.0, 76.0, 24.0]  # and raised one
+    assert not art.figure(3)["hasRapier"]
 
 
 def test_burst_is_fixed_and_rises_higher_than_it_falls() -> None:

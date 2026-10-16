@@ -30,7 +30,7 @@ SCALES = (0.84, 0.84, 0.88, 0.93, 0.97, 1.0)
 EXPRESSIONS = ("idle", "ask", "happy", "angry", "wink", "annoyed", "sulk")
 # The rapier layer is drawn in the rapier's own frame: guard at (0, 0), blade towards -y.
 RAPIER_BOX = (-12.0, -50.0, 24.0, 68.0)
-RAPIER_GRIP = (0.0, 0.5)  # where the hand holds it, just under the guard
+RAPIER_GRIP = (0.0, 0.0)  # the point it floats and turns around: its guard
 
 
 def n(value: float) -> str:
@@ -191,39 +191,8 @@ def _rotate(x: float, y: float, cx: float, cy: float, degrees: float) -> tuple[f
     return cx + dx * math.cos(a) - dy * math.sin(a), cy + dx * math.sin(a) + dy * math.cos(a)
 
 
-def _bar(cx: float, cy: float, length: float, width: float, degrees: float) -> list[float]:
-    """A rounded bar (an SVG rect with rx = width / 2, rotated) as a round-capped segment:
-    [x1, y1, x2, y2, width], from the shoulder to the hand."""
-    half = (length - width) / 2
-    a = math.radians(degrees)
-    return [
-        cx - half * math.cos(a),
-        cy - half * math.sin(a),
-        cx + half * math.cos(a),
-        cy + half * math.sin(a),
-        width,
-    ]
-
-
-def _right_arm(down: list[float], up: list[float] | None = None) -> dict[str, Any]:
-    """The arm that holds the rapier turns around its shoulder (the lowered arm's), between the
-    reference's two poses: the angle and length of each, exact at both ends."""
-    sx, sy = down[0], down[1]
-    hands = [down] if up is None else [down, up]
-    angles = [math.degrees(math.atan2(h[3] - sy, h[2] - sx)) for h in hands]
-    lengths = [math.hypot(h[2] - sx, h[3] - sy) for h in hands]
-    return {
-        "shoulder": [sx, sy],
-        "armWidth": down[4],
-        "armDown": angles[0],
-        "armUp": angles[-1],
-        "armLength": lengths[0],
-        "armLengthUp": lengths[-1],
-    }
-
-
 def figure(stage: int) -> dict[str, Any]:
-    """Pivots, arms, droplets and the like, for the window (plain lists and numbers)."""
+    """Pivots, droplets, the floating rapier and the like, for the window (lists and numbers)."""
     blob = blob_for(stage)
     spec: dict[str, Any] = {
         "stage": stage,
@@ -244,13 +213,6 @@ def figure(stage: int) -> dict[str, Any]:
     }
     if stage == 0:
         spec.update(
-            arms=[_bar(38, 110, 12, 6, 90 + 24), _bar(82, 110, 12, 6, 90 - 24)],
-            shoulder=[],
-            armLength=0.0,
-            armLengthUp=0.0,
-            armWidth=0.0,
-            armDown=0.0,
-            armUp=0.0,
             drops=[],
             drip=[],
             fall=[],
@@ -262,8 +224,6 @@ def figure(stage: int) -> dict[str, Any]:
         )
     elif stage == 1:
         spec.update(
-            arms=[_bar(27, 104, 20, 8, -22)],
-            **_right_arm(_bar(93, 104, 20, 8, 22)),
             drops=[[106, 74, 4], [20, 114, 4.5], [100, 118, 3], [30, 66, 3], [90, 50, 2.5]],
             drip=[72, 122, 2.4],
             fall=[72, 128, 2.2],
@@ -273,14 +233,7 @@ def figure(stage: int) -> dict[str, Any]:
             mouth=[60.0, 100.0],
         )
     else:
-        right = (
-            _right_arm(_bar(94, 92, 20, 8, 14), _bar(94, 88, 22, 8, -48))
-            if stage >= 4
-            else _right_arm(_bar(94, 102, 20, 8, 22))
-        )
         spec.update(
-            arms=[_bar(26, 102, 20, 8, -22)],
-            **right,
             drops=[[114, 64, 4], [18, 104, 5], [110, 102, 3.5], [26, 56, 3]],
             drip=[84, 121, 2.4],
             fall=[84, 127, 2.2],
@@ -299,8 +252,10 @@ def figure(stage: int) -> dict[str, Any]:
                     -8,
                 )
             ),
-            rapierUp=24.0,
-            rapierDown=155.0,
+            # The rapier floats beside him, as Dartt's does: guard (x, y) and angle, at rest
+            # (point down) and en garde (raised).
+            rapierDown=[100.0, 92.0, 155.0],
+            rapierUp=[101.0, 76.0, 24.0],
             rapierScale=0.9,
             rapierBox=list(RAPIER_BOX),
             rapierGrip=list(RAPIER_GRIP),
@@ -620,6 +575,18 @@ def glass() -> str:
     )
 
 
+def glow(stage: int) -> str:
+    """Dartt's glow, as a still layer: the ink's silhouette, blurred, in the grade's glow colour
+    (gold for the captain). The window fades it in and out; it does not ripple with the edge,
+    which no one could tell under so soft a blur."""
+    colour = GOLD_GLOW if stage >= 5 else GLOW
+    return (
+        '<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">'
+        '<feGaussianBlur stdDeviation="6.6"/></filter></defs>'
+        f'<path d="{blob_path(stage, 0)}" fill="{colour}" filter="url(#glow)"/>'
+    )
+
+
 def ground(stage: int) -> str:
     """What lies on the desk and never moves: the cap and a blot (grade 0), the knocked-over
     inkwell (grade 1)."""
@@ -643,6 +610,7 @@ def ground(stage: int) -> str:
 # --- Layers -----------------------------------------------------------------------------------
 
 LAYERS = (
+    "glow",
     "ground",
     "glass",
     "quill",
@@ -662,6 +630,7 @@ BY_EXPRESSION = frozenset({"eye-left", "eye-right", "mouth", "royale", "decor"})
 
 def layer_names(stage: int) -> tuple[str, ...]:
     present = {
+        "glow": True,
         "ground": stage <= 1,
         "glass": stage == 0,
         "quill": stage == 0,
@@ -694,6 +663,8 @@ def layer_body(stage: int, name: str, expression: str = "idle") -> str:
         return ""
     ex, ey, es, my, ms = _face(stage)
     match name:
+        case "glow":
+            return glow(stage)
         case "ground":
             return ground(stage)
         case "glass":
@@ -738,43 +709,19 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True) -> str:
     """The whole figure at rest, in one SVG: tray icon, reference sheet, tests.
 
     The pose follows the expression as the window's does at rest: rapier en garde when asking
-    or cheering, down otherwise. The glow is a filter (browsers; QtSvg ignores it).
+    or cheering, point down otherwise.
     """
     spec = figure(stage)
     k, lift = spec["scale"], spec["lift"]
-    defs, glow_attr = "", ""
-    if glow:
-        glow_attr = ' filter="url(#glow)"'
-        defs = (
-            '<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">'
-            '<feGaussianBlur in="SourceAlpha" stdDeviation="6.6" result="b"/>'
-            f'<feFlood flood-color="{spec["glow"]}" flood-opacity="0.45"/>'
-            '<feComposite in2="b" operator="in" result="g"/>'
-            '<feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
-        )
     outline = blob_path(stage, 0)
     dx, dy = spec["shadeOffset"]
-    ink = [
+    parts = [layer_body(stage, "glow")] if glow else []
+    parts += [
         f'<path d="{outline}" fill="{INK_SHADE}" transform="translate({pt(dx, dy)})"/>',
         f'<path d="{outline}" fill="{INK}"/>',
     ]
-    arms = list(spec["arms"])
-    guard = stage >= 4 and expression in ("ask", "happy")
-    hand = None
-    if spec["shoulder"]:
-        sx, sy = spec["shoulder"]
-        angle = math.radians(spec["armUp"] if guard else spec["armDown"])
-        length = spec["armLengthUp"] if guard else spec["armLength"]
-        hand = (sx + length * math.cos(angle), sy + length * math.sin(angle))
-        arms.append([sx, sy, *hand, spec["armWidth"]])
-    for x1, y1, x2, y2, w in arms:
-        ink.append(
-            f'<path d="M{pt(x1, y1)} L{pt(x2, y2)}" stroke="{INK}" stroke-width="{n(w)}" '
-            'stroke-linecap="round"/>'
-        )
     for x, y, r in spec["staticDrips"] + ([spec["drip"]] if spec["drip"] else []):
-        ink.append(f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>')
-    parts = [f"<g{glow_attr}>{''.join(ink)}</g>"]
+        parts.append(f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>')
     parts += [
         f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(r)}" fill="{INK}"/>' for x, y, r in spec["drops"]
     ]
@@ -784,17 +731,18 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True) -> str:
     else:
         names = ("cross", "eye-left", "eye-right", "mouth", "moustache", "royale", "plume", "hat")
     parts += [layer_body(stage, name, expression) for name in names]
-    if hand and spec["hasRapier"]:
-        theta = spec["rapierUp"] if guard else spec["rapierDown"]
+    if spec["hasRapier"]:
+        guard = expression in ("ask", "happy")
+        x, y, theta = spec["rapierUp"] if guard else spec["rapierDown"]
         gx, gy = RAPIER_GRIP
         parts.append(
-            f'<g transform="translate({pt(*hand)}) rotate({n(theta)}) scale({n(spec["rapierScale"])}) '
+            f'<g transform="translate({pt(x, y)}) rotate({n(theta)}) scale({n(spec["rapierScale"])}) '
             f'translate({pt(-gx, -gy)})">{rapier(stage)}</g>'
         )
     scaled = f"translate(60 132) scale({n(k)}) translate(-60 -132)"
     shadow = f'<ellipse cx="60" cy="133.5" rx="{n(28 * k)}" ry="3.6" fill="#000" opacity=".16"/>'
     return _svg(
-        f'{defs}{shadow}<g transform="{scaled}">{layer_body(stage, "ground")}'
+        f'{shadow}<g transform="{scaled}">{layer_body(stage, "ground")}'
         f'<g transform="translate(0 {n(-lift)})">{"".join(parts)}</g></g>'
         f"{layer_body(stage, 'decor', expression)}"
     )

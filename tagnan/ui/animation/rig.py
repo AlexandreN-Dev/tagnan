@@ -29,6 +29,8 @@ TAP_SQUASH = 0.16
 SACCADE = 2.0
 # The edge's new outline re-blurs the glow: 15 times a second is enough for so slow a wave.
 WOBBLE_RATE = 15
+# His whole animation runs 10 % slower than real time (taps are still counted in real time).
+TEMPO = 0.9
 DRIP_PERIOD = 7.0
 GLOW_PERIOD = 3.4
 BURST_LENGTH = 1.2
@@ -47,6 +49,7 @@ SHAKE = (6.0, 9.0, 0.7)  # amplitude, frequency, duration of his rage
 HUFF = (3.0, 12.0, 0.5)
 SULK_TURN = (9.0, 6.0)  # he turns away: offset, angle
 
+SWORD_FLOAT = (1.6, 3.3)  # the floating rapier bobs: amplitude, period
 DROP_FLOAT = ((4.1, 0.0), (3.6, -1.0), (4.6, -2.0), (3.9, -0.5), (4.3, -1.6))
 DROP_DRIFT = (1.6, -3.2)
 
@@ -68,8 +71,9 @@ class Pose:
     plume: float = 0.0
     hat: float = 0.0
     quill: float = 0.0
-    guard: float = 0.0  # 0: rapier down at his side; 1: en garde
+    guard: float = 0.0  # 0: rapier floating point down; 1: raised en garde
     sword: float = 0.0  # swing on top of the guard's angle
+    sword_y: float = 0.0  # the floating rapier bobs
     drops: tuple[float, ...] = (0.0,) * 10
     drip: float = 0.0  # 0 to 1 along the drip's cycle
     burst: float = -1.0  # seconds since a tap splashed droplets, -1 when none
@@ -126,7 +130,10 @@ class Rig:
     def __init__(self, rng: random.Random | None = None, reduced_motion: bool = False) -> None:
         self._rng = rng or random.Random()  # noqa: S311 - animation, not secrets
         self.reduced_motion = reduced_motion
-        self.now = 0.0
+        self.tempo = TEMPO
+        self.wobble_rate = WOBBLE_RATE
+        self.now = 0.0  # animation time
+        self.real_now = 0.0  # wall time, for counting taps
         self.stage = 0
         self.mood = "idle"
         self._mood_since = 0.0
@@ -182,7 +189,7 @@ class Rig:
             self._moustache.kick(400)
 
     def tap(self) -> Mood:
-        mood = self._taps.tap(self.now)
+        mood = self._taps.tap(self.real_now)
         if self.reduced_motion:
             return mood
         self._burst_at = self.now
@@ -210,15 +217,17 @@ class Rig:
 
     @property
     def tap_mood(self) -> Mood:
-        return self._taps.mood(self.now)
+        return self._taps.mood(self.real_now)
 
     # --- Frame ------------------------------------------------------------------------------
 
     def step(self, dt: float) -> Pose:
         dt = min(max(dt, 0.0), 0.1)
+        self.real_now += dt
+        dt *= self.tempo
         self.now += dt
         now = self.now
-        overlay = self._taps.mood(now)
+        overlay = self._taps.mood(self.real_now)
         expression = overlay.value if overlay is not Mood.NONE else self.mood
         if self.reduced_motion:
             return Pose(expression=expression, guard=1.0 if self._en_garde(expression) else 0.0)
@@ -292,7 +301,7 @@ class Rig:
             body_x=body_x,
             body_y=hop_y,
             body_turn=body_turn,
-            wobble=2 * math.pi * math.floor(now * WOBBLE_RATE) / WOBBLE_RATE,
+            wobble=2 * math.pi * math.floor(now * self.wobble_rate) / self.wobble_rate,
             eye_open=eye_open,
             wink=wink,
             gaze_x=gaze_x,
@@ -303,6 +312,7 @@ class Rig:
             quill=3.0 * math.sin(2 * math.pi * now / 4.2),
             guard=guard,
             sword=sword,
+            sword_y=SWORD_FLOAT[0] * math.sin(2 * math.pi * now / SWORD_FLOAT[1]),
             drops=self._drops(now, hop_y),
             drip=(now % DRIP_PERIOD) / DRIP_PERIOD,
             burst=burst,

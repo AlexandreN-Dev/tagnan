@@ -33,7 +33,7 @@ class Animator(QObject):
     moodChanged = Signal()
     tapped = Signal(str)  # the tap's mood: wink, annoyed or sulk
 
-    def __init__(self, rig: Rig | None = None, stage: int = 0) -> None:
+    def __init__(self, rig: Rig | None = None, stage: int = 0, frame_ms: int = FRAME_MS) -> None:
         super().__init__()
         self._rig = rig or Rig()
         self._rig.set_stage(stage)
@@ -43,7 +43,8 @@ class Animator(QObject):
         self._cursor: QPointF | None = None
         self._last = time.monotonic()
         self._timer = QTimer(self)
-        self._timer.setInterval(FRAME_MS)
+        self._frame_ms = frame_ms
+        self._timer.setInterval(frame_ms)
         self._timer.timeout.connect(self._frame)
 
     def start(self) -> None:
@@ -56,8 +57,8 @@ class Animator(QObject):
     def advance(self, seconds: float) -> None:
         """Development: step the rig as if this much time had passed (snapshots, tests)."""
         while seconds > 0:
-            self._apply(self._rig.step(min(seconds, FRAME_MS / 1000)))
-            seconds -= FRAME_MS / 1000
+            self._apply(self._rig.step(min(seconds, self._frame_ms / 1000)))
+            seconds -= self._frame_ms / 1000
 
     # --- Inputs from the window -------------------------------------------------------------
 
@@ -148,6 +149,7 @@ class Animator(QObject):
     quill = _pose_property("quill", float, poseChanged)
     guard = _pose_property("guard", float, poseChanged)
     sword = _pose_property("sword", float, poseChanged)
+    swordY = _pose_property("sword_y", float, poseChanged)
     drops = _pose_property("drops", list, poseChanged)
     drip = _pose_property("drip", float, poseChanged)
     burst = _pose_property("burst", float, poseChanged)

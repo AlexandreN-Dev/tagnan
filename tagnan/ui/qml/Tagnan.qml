@@ -4,7 +4,6 @@
 // resolution, so nothing blurs when the figure is scaled up.
 import QtQuick
 import QtQuick.Shapes
-import QtQuick.Effects
 
 Item {
     id: root
@@ -18,14 +17,12 @@ Item {
     // Device pixels per unit of the drawing, at this grade's scale.
     readonly property real px: unit * Screen.devicePixelRatio * spec.scale
     readonly property real guard: animator.guard
-    // The rapier's hand, between the lowered and the raised pose.
-    readonly property bool armed: spec.shoulder.length > 0
-    readonly property real armAngle: armed ? spec.armDown + (spec.armUp - spec.armDown) * guard : 0
-    readonly property real armLength: armed ? spec.armLength + (spec.armLengthUp - spec.armLength) * guard : 0
-    readonly property point hand: armed
-        ? Qt.point(spec.shoulder[0] + armLength * Math.cos(armAngle * Math.PI / 180),
-                   spec.shoulder[1] + armLength * Math.sin(armAngle * Math.PI / 180))
-        : Qt.point(0, 0)
+    // The rapier floats beside him, as Dartt's: from its rest (point down) to en garde.
+    readonly property var rapierAt: spec.hasRapier
+        ? [spec.rapierDown[0] + (spec.rapierUp[0] - spec.rapierDown[0]) * guard,
+           spec.rapierDown[1] + (spec.rapierUp[1] - spec.rapierDown[1]) * guard,
+           spec.rapierDown[2] + (spec.rapierUp[2] - spec.rapierDown[2]) * guard]
+        : [0, 0, 0]
     // The drip grows, lets go and falls, once every few seconds.
     readonly property real dripScale: {
         const v = animator.drip
@@ -92,20 +89,6 @@ Item {
             PathSvg { path: d }
         }
     }
-    // An arm: a round-capped stroke of ink.
-    component Bar: Shape {
-        property var seg: [0, 0, 0, 0, 1]
-        anchors.fill: parent
-        preferredRendererType: Shape.CurveRenderer
-        ShapePath {
-            fillColor: "transparent"
-            strokeColor: root.spec.ink
-            strokeWidth: seg[4]
-            capStyle: ShapePath.RoundCap
-            PathSvg { path: root.segment(seg) }
-        }
-    }
-
     Item {
         id: box
         width: 120
@@ -147,6 +130,9 @@ Item {
                     Translate { x: root.animator.bodyX; y: root.animator.bodyY }
                 ]
 
+                // Dartt's glow: a blurred silhouette that breathes in and out.
+                Layer { name: "glow"; opacity: Math.min(1, root.animator.glow * 1.25) }
+
                 // Droplets floating around him.
                 Repeater {
                     model: root.spec.drops
@@ -167,30 +153,11 @@ Item {
                     }
                 }
 
-                // The ink, its shade, the arms and the drip, with Dartt's glow.
+                // The ink, its shade and the drip.
                 Item {
                     id: ink
                     width: 120
                     height: 140
-                    layer.enabled: true
-                    layer.sourceRect: Qt.rect(-24, -24, 168, 188)
-                    layer.textureSize: Qt.size(Math.ceil(168 * root.px), Math.ceil(188 * root.px))
-                    layer.smooth: true
-                    // The software renderer (offscreen previews) has no shaders: ink without its glow.
-                    layer.effect: GraphicsInfo.api === GraphicsInfo.Software ? null : glow
-
-                    Component {
-                        id: glow
-                        MultiEffect {
-                            shadowEnabled: true
-                            shadowColor: root.spec.glow
-                            shadowOpacity: Math.min(1, root.animator.glow * 1.35)
-                            blurMax: 64
-                            shadowBlur: Math.min(1, 15 * root.px / 64)
-                            shadowHorizontalOffset: 0
-                            shadowVerticalOffset: 0
-                        }
-                    }
 
                     Ink {
                         d: root.animator.inkPath
@@ -198,17 +165,6 @@ Item {
                         transform: Translate { x: root.spec.shadeOffset[0]; y: root.spec.shadeOffset[1] }
                     }
                     Ink { d: root.animator.inkPath }
-                    Repeater {
-                        model: root.spec.arms
-                        Bar {
-                            required property var modelData
-                            seg: modelData
-                        }
-                    }
-                    Bar {
-                        visible: root.armed
-                        seg: root.armed ? [root.spec.shoulder[0], root.spec.shoulder[1], root.hand.x, root.hand.y, root.spec.armWidth] : [0, 0, 0, 0, 1]
-                    }
                     Repeater {
                         model: root.spec.staticDrips
                         Ink {
@@ -346,15 +302,13 @@ Item {
                     Layer { name: "hat"; visible: root.spec.hasHat }
                 }
 
-                // The rapier, in the hand: down at his side, raised en garde, swinging.
+                // The rapier, floating beside him: point down at rest, raised en garde, swaying.
                 Item {
                     visible: root.spec.hasRapier
-                    x: root.hand.x
-                    y: root.hand.y
+                    x: root.rapierAt[0]
+                    y: root.rapierAt[1] + root.animator.swordY
                     transformOrigin: Item.TopLeft
-                    rotation: root.spec.hasRapier
-                        ? root.spec.rapierDown + (root.spec.rapierUp - root.spec.rapierDown) * root.guard + root.animator.sword
-                        : 0
+                    rotation: root.rapierAt[2] + root.animator.sword
                     scale: root.spec.hasRapier ? root.spec.rapierScale : 1
                     Image {
                         readonly property var frame: root.spec.hasRapier ? root.spec.rapierBox : [0, 0, 1, 1]

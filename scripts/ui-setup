@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Create the window's Windows environment (%LOCALAPPDATA%\tagnan\venv) and install its pinned,
+# hashed dependencies (tagnan/ui/requirements.txt). Run it once, and after a version change.
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_windows.sh"
+
+base="$(windows_base_python)"
+venv_dir="$(windows_venv_dir)"
+if [[ ! -x "$base" ]]; then
+  echo "Python Windows introuvable : $base (définis TAGNAN_WIN_PYTHON pour un autre chemin)." >&2
+  exit 1
+fi
+cd /mnt/c
+if [[ ! -x "$venv_dir/Scripts/python.exe" ]]; then
+  echo "Création de l'environnement Windows dans $(wslpath -w "$venv_dir")"
+  "$base" -m venv "$(wslpath -w "$venv_dir")"
+fi
+echo "Installation des dépendances (versions et empreintes vérifiées)…"
+"$venv_dir/Scripts/python.exe" -m pip install --quiet --disable-pip-version-check --require-hashes \
+  --no-deps -r "$(wslpath -w "$repo/tagnan/ui/requirements.txt")"
+echo "Environnement Windows prêt. Lance Tagnan avec scripts/tagnan."

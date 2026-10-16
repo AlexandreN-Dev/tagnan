@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# A « Tagnan » entry in the Windows Start menu, and with --startup one in the Startup folder too
+# (he then comes along at each logon). The shortcut starts the window's pythonw.exe (no console)
+# on this repository, read through \\wsl.localhost; it calls the brain back through wsl.exe.
+#   scripts/install-shortcut [--startup]   create them (or update them)
+#   scripts/install-shortcut --dry-run     say what would be written, write nothing
+#   scripts/install-shortcut --remove      remove both shortcuts and the icon
+# Outside the repository it writes only the shortcuts and the icon, all named here.
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_windows.sh"
+
+mode="install"
+startup=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) mode="dry-run" ;;
+    --remove) mode="remove" ;;
+    --startup) startup=true ;;
+    *) echo "Usage : scripts/install-shortcut [--startup] [--dry-run | --remove]" >&2; exit 2 ;;
+  esac
+done
+
+appdata="$(windows_env APPDATA)"
+programs="$appdata\\Microsoft\\Windows\\Start Menu\\Programs"
+links=("$programs\\Tagnan.lnk")
+if [[ "$startup" == true || "$mode" == "remove" ]]; then
+  links+=("$programs\\Startup\\Tagnan.lnk")
+fi
+icon="$(windows_localappdata)\\tagnan\\tagnan.ico"
+
+if [[ "$mode" == "remove" ]]; then
+  for link in "${links[@]}"; do rm -f "$(wslpath -u "$link")"; done
+  rm -f "$(wslpath -u "$icon")"
+  echo "Raccourcis retirés."
+  exit 0
+fi
+
+python="$(require_windows_venv)"
+pythonw="$(wslpath -w "$(dirname "$python")/pythonw.exe")"
+mapfile -t where < <(window_arguments "$repo")
+arguments="-B -m tagnan.ui"
+for value in "${where[@]}"; do arguments+=" \"$value\""; done
+workdir="$(wslpath -w "$repo")"
+
+for link in "${links[@]}"; do echo "Raccourci : $link"; done
+echo "  cible     : $pythonw"
+echo "  arguments : $arguments"
+echo "  dossier   : $workdir"
+echo "  icône     : $icon"
+if [[ "$mode" == "dry-run" ]]; then
+  echo "(--dry-run : rien n'est écrit)"
+  exit 0
+fi
+
+# The icon: Tagnan the musketeer, drawn by the window's own code.
+mkdir -p "$(dirname "$(wslpath -u "$icon")")"
+(cd "$repo" && "$python" -B -m tagnan.ui.icon "$icon")
+
+# The shortcuts, through PowerShell's WScript.Shell; the script goes by a temporary file, so
+# that nothing in it needs quoting twice.
+quote() { printf "'%s'" "${1//\'/\'\'}"; }
+script="$(mktemp --suffix=.ps1 -p "$(wslpath -u "$(windows_env TEMP)")")"
+trap 'rm -f "$script"' EXIT
+{
+  for link in "${links[@]}"; do
+    cat <<EOF
+\$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($(quote "$link"))
+\$shortcut.TargetPath = $(quote "$pythonw")
+\$shortcut.Arguments = $(quote "$arguments")
+\$shortcut.WorkingDirectory = $(quote "$workdir")
+\$shortcut.IconLocation = $(quote "$icon")
+\$shortcut.Description = 'Tagnan, ton mousquetaire de révision AWS'
+\$shortcut.Save()
+EOF
+  done
+} >"$script"
+(cd /mnt/c && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$(wslpath -w "$script")")
+echo "C'est fait : « Tagnan » est dans le menu Démarrer$([[ "$startup" == true ]] && echo ", et démarre avec Windows")."

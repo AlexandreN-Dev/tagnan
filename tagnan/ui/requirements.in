@@ -1,0 +1,2 @@
+# Tagnan's window, on Windows: Qt only (the game uses the standard library).
+PySide6-Essentials==6.12.0

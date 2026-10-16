@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# The window, in the foreground (its messages in this terminal, Ctrl+C quits): Windows Python
+# runs the code of this WSL repository and calls the brain back through wsl.exe.
+#   scripts/tagnan-ui [--demo question|result-wrong|stats] [--snapshot WINDOWS_PATH] ...
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo/scripts/_windows.sh"
+
+python="$(require_windows_venv)"
+mapfile -t where < <(window_arguments "$repo")
+# The Windows process starts in \\wsl.localhost\...\tagnan, so `-m tagnan.ui` finds the package.
+# -B: no .pyc written on the WSL share.
+cd "$repo"
+exec "$python" -B -m tagnan.ui "${where[@]}" "$@"

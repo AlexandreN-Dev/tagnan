@@ -15,7 +15,7 @@ scripts/tagnan               # Tagnan arrive en bas à droite de l'écran
 scripts/install-shortcut --startup   # facultatif : une icône « Tagnan » au menu Démarrer, et au démarrage de Windows
 ```
 
-Au premier lancement, il écrit ses dix premières questions (une minute environ), puis pose la première peu après. Ensuite il demande toutes les 8 à 25 minutes, de 9 h à 19 h en semaine. L'allure se change dans son menu, les heures dans `config.example.toml`.
+Au premier lancement, il écrit ses dix premières questions (une minute environ), puis pose la première peu après. Ensuite il demande toutes les 8 à 25 minutes, de 9 h à 19 h en semaine, et sonne du clairon à chaque question. L'allure et le son se changent dans son menu, les heures dans `config.example.toml`.
 
 Il faut : Claude Code installé et connecté dans WSL (`~/.local/bin/claude`), uv, et Python 3.12 côté Windows (le même que pour Dartt).
 
@@ -26,9 +26,10 @@ Il faut : Claude Code installé et connecté dans WSL (`~/.local/bin/claude`), u
 - **Une question douteuse** : « Report » l'écarte pour de bon, sans points.
 - **Une pause** : clic droit sur Tagnan (ou icône de notification), « A break… ». Des boutons pour 30 min, 1 h, 2 h ou jusqu'à demain, et un champ où dire une durée (`1h`, `1h30`, `45 min`) ou une heure de rendez-vous (`15h30`, `16:45`, `3pm`, `noon`). Il affiche ce qu'il a compris avant que tu valides. Une heure seule encore à venir est une heure de retour (`15h`), un petit nombre d'heures une durée (`1h`), une heure passée vise le lendemain ; « for » / « pendant » et « until » / « jusqu'à » tranchent.
 - **L'allure** : clic droit sur Tagnan, « How often ». « Rarely » : 2 ou 3 questions par jour, quelles que soient les heures de travail ; « Now and then » : toutes les 45 à 90 min ; « Regularly » : toutes les 8 à 25 min, l'allure de départ ; « Often » : toutes les 5 à 10 min ; « Intensive training » : toutes les 3 à 5 min. Il le dit dans sa bulle, avec l'heure de la question suivante, et s'en souvient.
+- **Son appel** : quand il pose une question de lui-même, il sonne, pour qu'on l'entende loin de l'écran. Au choix dans « Sound » : « Bugle call » (la charge de cavalerie, par défaut), « Clashing rapiers », « Bell », « Lute », « Kalimba » ou « Silent ». Un clic joue le son et le choisit ; le menu reste ouvert pour écouter les autres, Échap ou un clic ailleurs le ferme. Une question demandée (« A question now ») ne sonne pas. Le volume est celui de Python dans le mélangeur de volume de Windows.
 - **Fermer une bulle** : un clic n'importe où ailleurs suffit, sauf pour une question, qui reste jusqu'à ta réponse ou « Later ».
-- **Clic sur Tagnan** : il cligne de l'œil et éclabousse (pendant une pause, il te dit jusqu'à quand) ; trois clics de suite l'agacent, six le font bouder. **Glisser** le déplace (il retient sa place). **Clic droit** ou icône de la zone de notification : une question maintenant, la progression, l'allure, une pause, quitter.
-- Il ne se montre pas pendant une application en plein écran, une présentation ou quand la session est verrouillée.
+- **Clic sur Tagnan** : il cligne de l'œil et éclabousse (pendant une pause, il te dit jusqu'à quand) ; trois clics de suite l'agacent, six le font bouder. **Glisser** le déplace (il retient sa place). **Clic droit** ou icône de la zone de notification : une question maintenant, la progression, l'allure, le son, une pause, quitter.
+- Il ne se montre pas pendant une application en plein écran, une présentation ou quand la session est verrouillée, et donc ne sonne pas non plus : si Windows verrouille la session après quelques minutes sans toi, il se tait jusqu'à ton retour.
 
 ## Les grades
 
@@ -55,9 +56,10 @@ Windows                                          WSL (Ubuntu)
 └──────────────────────────────────────┘   JSON   └──────────────────────────────────┘
 ```
 
-- **La fenêtre** (`tagnan/ui/`) tourne avec le Python Windows et lit le code de ce dépôt par `\\wsl.localhost`. Elle porte tout l'état : la base SQLite des questions, des réponses et des révisions, et ses réglages (sa place, son allure, dans `settings.json`), dans `%LOCALAPPDATA%\tagnan`. L'allure choisie au menu remplace les intervalles du fichier de configuration.
+- **La fenêtre** (`tagnan/ui/`) tourne avec le Python Windows et lit le code de ce dépôt par `\\wsl.localhost`. Elle porte tout l'état : la base SQLite des questions, des réponses et des révisions, et ses réglages (sa place, son allure, son appel, dans `settings.json`), dans `%LOCALAPPDATA%\tagnan`. L'allure choisie au menu remplace les intervalles du fichier de configuration.
 - **Le cerveau** (`tagnan/brain.py`, `scripts/brain`) tourne dans WSL et n'a aucun état : une requête JSON sur l'entrée, une réponse JSON sur la sortie. Il lance `claude -p` comme le relais de Dartt (variables d'environnement en liste blanche, `--setting-sources user`, `--strict-mcp-config`, `disableAllHooks`), avec `--tools ""` et un dossier vide, et valide la sortie par `--json-schema`. Les questions sont écrites par lots de dix, en tâche de fond, quand il en reste moins de cinq : on n'attend jamais Claude pour une question.
 - **Le jeu** (`tagnan/game.py`, `progress.py`, `scheduler.py`, `pause.py`, `store.py`, `model.py`) n'utilise que la bibliothèque standard, testé dans WSL. Chaque question générée est vérifiée (domaine, tâche, nombre de bonnes réponses, une explication par mauvais choix) et ses choix sont mélangés avant d'être gardés. Chaque question porte sa langue : celles écrites en français avant le passage à l'anglais restent en base mais ne sont plus posées.
+- **Les sons** (`assets/sounds/`) sont synthétisés par `scripts/make-sounds`, comme ceux de Dartt : bibliothèque standard, aucune banque de sons, même volume perçu pour tous (−16 LUFS). La fenêtre les joue avec `winsound`, sans Qt Multimedia.
 - **Le référentiel** de l'examen (`exam/aif-c01.toml`) donne les cinq domaines, leurs poids et les notions de chaque tâche, d'après le guide d'examen officiel. Pour un autre examen, un autre fichier et `exam = "…"` dans la config.
 - **Tagnan** (`tagnan/art.py`) est dessiné à plat, dans la direction artistique de Dartt, et découpé en calques : la fenêtre dessine l'encre qui ondule (la formule de Dartt) et les gouttes, et anime les calques SVG (yeux, bouche, chapeau, plumes, rapière…) au rythme d'un rig repris de celui de Dartt (`tagnan/ui/animation/`) : ressorts, clignements, regard qui suit la souris, gestes au hasard, tapes.
 

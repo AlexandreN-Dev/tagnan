@@ -7,6 +7,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 EXAMS_DIR = REPO / "exam"
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+SOUNDS_DIR = REPO / "assets" / "sounds"  # written by scripts/make-sounds
 
 
 def state_dir() -> Path:

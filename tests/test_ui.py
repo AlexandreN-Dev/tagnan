@@ -1,3 +1,4 @@
+import json
 import os
 import random
 from pathlib import Path
@@ -7,10 +8,13 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QApplication, QMenu
 
 from tagnan.brain_client import BrainClient
 from tagnan.game import Game
+from tagnan.paths import SOUNDS_DIR
 from tagnan.progress import Progress
 from tagnan.scheduler import Rhythm, Scheduler
 from tagnan.ui.animation.rig import Rig
@@ -18,6 +22,7 @@ from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
+from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
 from tests.conftest import question_data
@@ -138,10 +143,22 @@ class Clock:
         return self.now
 
 
+class Speaker:
+    """What would have played."""
+
+    def __init__(self) -> None:
+        self.played: list[str] = []
+
+    def __call__(self, path: Path) -> None:
+        assert path.parent == SOUNDS_DIR
+        self.played.append(path.stem)
+
+
 def make(
     game: Game,
     clock: Clock | None = None,
     settings: Settings | None = None,
+    speaker: Speaker | None = None,
 ) -> tuple[Controller, FakeWorker, Animator]:
     clock = clock or Clock()
     worker = FakeWorker()
@@ -157,6 +174,7 @@ def make(
         random.Random(7),
         clock,
         settings=settings,
+        sounds=Sounds(speaker or Speaker()),
     )
     return controller, worker, animator
 
@@ -334,7 +352,51 @@ def test_outside_clicks_count_presses_outside_only() -> None:
     assert not watcher.watching
 
 
-# --- How often -----------------------------------------------------------------------------
+# --- How often, and his call ------------------------------------------------------------------
+
+
+def test_every_call_ships() -> None:
+    from tagnan.ui.sounds import CALLS
+
+    for key, _ in CALLS:
+        assert (SOUNDS_DIR / f"{key}.wav").stat().st_size > 50_000
+
+
+def test_he_sounds_his_call_only_when_he_asks_of_his_own_accord(game: Game) -> None:
+    fill(game)
+    clock = Clock()
+    speaker = Speaker()
+    controller, _, _ = make(game, clock, speaker=speaker)
+    controller.askNow()
+    assert speaker.played == []  # asked for: one is at the screen
+    controller.later()
+    clock.now = controller.scheduler.next_at
+    controller._tick()
+    assert controller.property("bubble")["mode"] == "question"
+    assert speaker.played == ["bugle"]
+    controller.later()
+    controller.setCall("silent")
+    clock.now = controller.scheduler.next_at
+    controller._tick()
+    assert controller.property("bubble")["mode"] == "question"
+    assert speaker.played == ["bugle"]
+
+
+def test_his_call_is_chosen_by_ear_and_kept(game: Game, tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"figure": [10, 20], "pace": 3, "call": ["bell"]}))
+    speaker = Speaker()
+    controller, _, _ = make(game, settings=Settings(path), speaker=speaker)
+    assert controller.property("call") == "bugle"  # what is not a call is ignored
+    assert controller.property("pace") == "regularly"
+    controller.setCall("bell")
+    assert speaker.played == ["bell"]  # heard at once
+    controller.setCall("klaxon")
+    controller.setCall("silent")
+    assert speaker.played == ["bell"]
+    again, _, _ = make(game, settings=Settings(path))
+    assert again.property("call") == "silent"
+    assert json.loads(path.read_text())["figure"] == [10, 20]
 
 
 def test_how_often_he_asks_is_chosen_and_kept(game: Game, tmp_path: Path) -> None:
@@ -374,14 +436,16 @@ def test_a_question_left_alone_goes_and_the_next_one_waits_for_the_pace(game: Ga
     assert controller.scheduler.next_at >= clock.now + 8 * 3600
 
 
-def test_his_menu_sets_the_pace(game: Game) -> None:
-    controller, _, _ = make(game)
+def test_his_menu_sets_the_pace_and_lets_one_hear_every_call(game: Game) -> None:
+    speaker = Speaker()
+    controller, _, _ = make(game, speaker=speaker)
     tray = Tray(controller)
     assert [a.text() for a in tray.menu.actions()] == [
         "A question now",
         "Progress",
         "",
         "How often",
+        "Sound",
         "",
         "A break…",
         "Resume",
@@ -393,3 +457,24 @@ def test_his_menu_sets_the_pace(game: Game) -> None:
     tray.paces["rarely"].trigger()
     assert controller.property("pace") == "rarely"
     assert [k for k, a in tray.paces.items() if a.isChecked()] == ["rarely"]
+    assert [k for k, a in tray.calls.items() if a.isChecked()] == ["bugle"]
+
+    sounds = tray.calls["bell"].parent()
+    assert isinstance(sounds, QMenu)
+    sounds.popup(QPoint(100, 100))
+    for key in ("bell", "lute"):
+        centre = QPointF(sounds.actionGeometry(tray.calls[key]).center())
+        release = QMouseEvent(
+            QEvent.Type.MouseButtonRelease,
+            centre,
+            QPointF(sounds.mapToGlobal(centre.toPoint())),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        QApplication.sendEvent(sounds, release)
+        assert sounds.isVisible()  # still open, to hear the next one
+    assert speaker.played == ["bell", "lute"]
+    assert controller.property("call") == "lute"
+    assert [k for k, a in tray.calls.items() if a.isChecked()] == ["lute"]
+    sounds.close()

@@ -20,5 +20,6 @@ Commandes, depuis la racine du dépôt :
 - Planche de référence (calques rendus par QtSvg) : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.sheet build/sheet.png`
 - Animation image par image : `QT_QPA_PLATFORM=offscreen uv run python -m tagnan.ui.preview build/frames.png --mood happy --at 0.1 0.3 0.6`
 - CPU de la fenêtre : `scripts/tagnan-ui --measure-cpu 30`
+- Sons de Tagnan, synthétisés (réécrit `assets/sounds/`, toujours à l'identique) : `scripts/make-sounds`
 - Le halo (MultiEffect) ne se voit qu'avec un rendu GPU : sur Windows, pas hors écran dans WSL.
 - Une session Windows verrouillée fige le rendu Qt : ne pas se fier à une capture prise pendant ce temps.

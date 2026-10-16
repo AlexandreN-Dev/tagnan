@@ -48,6 +48,7 @@ from tagnan.ui.desktop import Settings
 from tagnan.ui.images import LayerImages
 from tagnan.ui.outside import OutsideClicks
 from tagnan.ui.placement import Placement
+from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
 
@@ -207,7 +208,9 @@ def main() -> int:
     rig.wobble_rate = max(1, args.ripple_rate)
     animator = Animator(rig, frame_ms=round(1000 / max(1, args.fps)))
     settings = Settings(state_dir() / "settings.json")
-    controller = Controller(game, scheduler, worker, animator, rng, settings=settings)
+    controller = Controller(
+        game, scheduler, worker, animator, rng, settings=settings, sounds=Sounds()
+    )
     placement = Placement()
     tray = Tray(controller)
 

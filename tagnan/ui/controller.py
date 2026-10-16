@@ -15,7 +15,9 @@ from tagnan.game import Game, Outcome
 from tagnan.model import Question
 from tagnan.scheduler import Scheduler, find_pace
 from tagnan.ui import desktop
+from tagnan.ui import sounds as calls
 from tagnan.ui.animator import Animator
+from tagnan.ui.sounds import Sounds
 from tagnan.ui.worker import BrainWorker
 
 logger = logging.getLogger(__name__)
@@ -48,7 +50,7 @@ class Controller(QObject):
     stageChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
-    prefsChanged = Signal()  # his pace
+    prefsChanged = Signal()  # his pace or his call
     menuRequested = Signal()
     quitRequested = Signal()
 
@@ -61,6 +63,7 @@ class Controller(QObject):
         rng: random.Random | None = None,
         clock: Callable[[], float] = time.time,
         settings: desktop.Settings | None = None,
+        sounds: Sounds | None = None,
     ) -> None:
         super().__init__()
         self.game = game
@@ -70,10 +73,13 @@ class Controller(QObject):
         self._rng = rng or random.Random()  # noqa: S311 - which interjection: not a secret
         self._clock = clock
         self.settings = settings or desktop.Settings(None)
+        self.sounds = sounds or Sounds()
         # The pace chosen in his menu wins over the config file's gaps.
         saved = find_pace(str(self.settings.get("pace", "")))
         if saved is not None:
             scheduler.set_rhythm(scheduler.rhythm.paced(saved), clock())
+        call = self.settings.get("call", calls.DEFAULT)
+        self._call = call if isinstance(call, str) and call in calls.CHOICES else calls.DEFAULT
         self._stage = game.progress.grade
         self._spec = art.figure(self._stage)
         self._bubble: dict[str, Any] = {"mode": "hidden"}
@@ -136,6 +142,10 @@ class Controller(QObject):
         current = self.scheduler.rhythm.pace
         return current.key if current else ""
 
+    @Property(str, notify=prefsChanged)
+    def call(self) -> str:
+        return self._call
+
     @Property(str, notify=statusChanged)
     def status(self) -> str:
         p = self.game.progress
@@ -152,7 +162,8 @@ class Controller(QObject):
         if desktop.busy():
             self.scheduler.postpone(now, BUSY_RETRY_MINUTES)
             return
-        self._ask(now)
+        if self._ask(now):
+            self.sounds.play(self._call)  # to be heard away from the screen
 
     def _ask(self, now: float) -> bool:
         question = self.game.next_question(now)
@@ -415,6 +426,17 @@ class Controller(QObject):
             )
         self._show({"mode": "message", "title": "As you wish!", "text": text})
         self._hide_timer.start(6000)
+
+    @Slot(str)
+    def setCall(self, key: str) -> None:
+        """His call, played at once: one chooses it by ear."""
+        if key not in calls.CHOICES:
+            return
+        self._call = key
+        self.settings.set("call", key)
+        logger.info("call: %s", key)
+        self.prefsChanged.emit()
+        self.sounds.play(key)
 
     @Slot(int)
     def pause(self, minutes: int) -> None:

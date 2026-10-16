@@ -4,12 +4,13 @@ on him)."""
 from collections.abc import Callable, Sequence
 from functools import lru_cache
 
-from PySide6.QtCore import QObject, Qt
-from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QMouseEvent, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from tagnan import art
 from tagnan.scheduler import PACES
+from tagnan.ui import sounds as calls
 from tagnan.ui.controller import Controller
 from tagnan.ui.images import render_svg
 
@@ -29,16 +30,40 @@ def figure_icon(stage: int) -> QIcon:
     return icon
 
 
+class KeepOpen(QObject):
+    """A click on a choice picks it and leaves its menu open: one hears a sound, then the next,
+    and keeps the last. Escape or a click elsewhere closes the menu."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if (
+            isinstance(watched, QMenu)
+            and isinstance(event, QMouseEvent)
+            and event.type() == QEvent.Type.MouseButtonRelease
+        ):
+            action = watched.actionAt(event.position().toPoint())
+            if action is not None and action.isEnabled() and action.isCheckable():
+                action.trigger()
+                return True
+        return super().eventFilter(watched, event)
+
+
 class Tray(QObject):
     def __init__(self, controller: Controller) -> None:
         super().__init__()
         self._controller = controller
+        self._keep_open = KeepOpen(self)
         self.menu = QMenu()
         self._add("A question now", controller.askNow)
         self._add("Progress", controller.showStats)
         self.menu.addSeparator()
         self.paces = self._choices(
             "How often", [(p.key, f"{p.name}\t{p.hint}") for p in PACES], controller.setPace
+        )
+        self.calls = self._choices(
+            "Sound",
+            [*calls.CALLS, None, (calls.SILENT, "Silent")],
+            controller.setCall,
+            listen="Click one to hear it",
         )
         self.menu.addSeparator()
         self._pause = self._add("A break…", controller.showPause)
@@ -67,10 +92,15 @@ class Tray(QObject):
         title: str,
         items: Sequence[tuple[str, str] | None],
         choose: Callable[[str], None],
+        listen: str = "",
     ) -> dict[str, QAction]:
-        """A submenu of choices, one ticked; None among the items is a separator."""
+        """A submenu of choices, one ticked; None among the items is a separator. With
+        `listen`, a hint at its top, and a click keeps it open."""
         submenu = self.menu.addMenu(title)
         group = QActionGroup(submenu)  # exclusive
+        if listen:
+            submenu.addAction(listen).setEnabled(False)
+            submenu.installEventFilter(self._keep_open)
         actions = {}
         for item in items:
             if item is None:
@@ -94,6 +124,8 @@ class Tray(QObject):
         self._resume.setVisible(paused)
         for key, action in self.paces.items():
             action.setChecked(key == str(self._controller.pace))
+        for key, action in self.calls.items():
+            action.setChecked(key == str(self._controller.call))
         if self.icon is not None:
             self.icon.setIcon(figure_icon(self._controller.stage))
             self.icon.setToolTip(str(self._controller.status) + (" · on a break" if paused else ""))

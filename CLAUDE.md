@@ -10,7 +10,7 @@ Non-negotiable constraints:
 
 Commands, from the repository root:
 
-- Guided setup (what a new user runs after cloning): `scripts/setup`; `--check` changes nothing, `--yes` takes every default. Code in `tagnan/setup.py`, bash bootstrap (WSL, uv) in `scripts/setup`. `--check` touches nothing and can run at will; the normal mode rewrites the config, the window's pace and the shortcuts and starts Tagnan: not on the user's machine without their consent.
+- Guided setup (what a new user runs after cloning): `scripts/setup`; `--check` changes nothing, `--yes` takes every default. Steps in `tagnan/setup.py`, terminal interface (rail of steps, arrow keys, spinners, log in `~/.local/state/tagnan/setup.log`) in `tagnan/setup_ui.py`, bash bootstrap (WSL, uv) in `scripts/setup`. `--check` touches nothing and can run at will; the normal mode rewrites the config, the window's pace and the shortcuts and starts Tagnan: not on the user's machine without their consent.
 - Development: `uv sync`; Windows side: `scripts/ui-setup` (environment in `%LOCALAPPDATA%\tagnan\venv`; on a Mac, `~/Library/Application Support/tagnan/venv`)
 - Checks: `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`
 - Real test against `claude` (uses a little quota, only on request): `uv run pytest -m live`

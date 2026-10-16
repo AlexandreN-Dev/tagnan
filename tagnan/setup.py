@@ -4,7 +4,7 @@ It checks each thing Tagnan needs, installs what is missing with the user's cons
 their Claude account, writes their settings, tries the brain for real and starts Tagnan. It can
 run again at will: what is already done is skipped.
 
-    scripts/setup            a question at each choice, with a default in brackets
+    scripts/setup            a question at each choice (arrow keys), with a default
     scripts/setup --yes      every default, installs included
     scripts/setup --check    what is ready and what is missing; changes nothing
 """
@@ -17,15 +17,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any
 
 from tagnan import config as configs
 from tagnan.paths import EXAMS_DIR, REPO, config_file, state_dir
 from tagnan.scheduler import PACES
+from tagnan.setup_ui import Terminal
+
+__all__ = ["Setup", "SetupError", "Terminal", "main"]
 
 LOCAL_BIN = Path.home() / ".local" / "bin"
 # Where the brain finds programs: it runs through `wsl.exe -e`, or from the Finder or launchd on
@@ -60,12 +62,6 @@ MODELS = (
     ("claude-opus-5-5", "max", "Opus 5.5, effort max", "the finest questions, minutes per batch"),
     ("claude-sonnet-5-5", "high", "Sonnet 5.5, effort high", "quick, lighter on your usage limits"),
 )
-
-TAGNAN = r"""      .-~~-.   ,
-  ___/______\_/__
-     ( o  o )  /
-     (  ~~  ) /
-      '-..-' /"""
 
 
 class SetupError(Exception):
@@ -116,105 +112,6 @@ def exams() -> list[str]:
     return sorted(p.stem for p in EXAMS_DIR.glob("*.toml"))
 
 
-class Terminal:
-    """What the setup says and asks, with a line from Tagnan now and then."""
-
-    def __init__(
-        self,
-        *,
-        assume_yes: bool = False,
-        out: TextIO = sys.stdout,
-        read: Callable[[str], str] = input,
-    ) -> None:
-        self.assume_yes = assume_yes
-        self.out = out
-        self.read = read
-        self.color = out.isatty() and "NO_COLOR" not in os.environ
-
-    def paint(self, text: str, code: str) -> str:
-        return f"\033[{code}m{text}\033[0m" if self.color else text
-
-    def line(self, text: str = "") -> None:
-        print(text, file=self.out, flush=True)
-
-    def banner(self) -> None:
-        art = TAGNAN.splitlines()
-        side = ["", self.paint("Tagnan", "1"), self.paint("guided setup", "2"), "", ""]
-        for drawing, words in zip(art, side, strict=True):
-            self.line(f"{self.paint(drawing.ljust(19), '38;5;111')} {words}".rstrip())
-        self.line()
-        self.quip("En garde! Let's set up my quarters.")
-        self.line()
-
-    def quip(self, text: str) -> None:
-        self.line("  " + self.paint(f"\u201c{text}\u201d", "3;38;5;111"))
-
-    def section(self, title: str, hint: str = "") -> None:
-        self.line()
-        self.line(self.paint(title, "1") + (f"  {self.paint(hint, '2')}" if hint else ""))
-
-    def status(self, mark: str, name: str, detail: str = "") -> None:
-        self.line(f"{mark} {name.ljust(22)} {self.paint(detail, '2')}".rstrip())
-
-    def ok(self, name: str, detail: str = "") -> None:
-        self.status(self.paint("✓", "32"), name, detail)
-
-    def todo(self, name: str, detail: str = "") -> None:
-        self.status(self.paint("•", "33"), name, detail)
-
-    def fail(self, name: str, detail: str = "") -> None:
-        self.status(self.paint("✗", "31"), name, detail)
-
-    def note(self, text: str) -> None:
-        for row in text.splitlines():
-            self.line(f"  {row}")
-
-    def _ask(self, prompt: str) -> str | None:
-        """The answer typed, None for the default (Enter, --yes, or no terminal left)."""
-        if self.assume_yes:
-            return None
-        try:
-            answer = self.read(f"  {prompt}").strip()
-        except EOFError:
-            self.line()
-            return None
-        return answer or None
-
-    def yes(self, question: str, default: bool = True) -> bool:
-        while True:
-            answer = self._ask(f"{question} [{'Y/n' if default else 'y/N'}]: ")
-            if answer is None:
-                return default
-            if answer.lower() in ("o", "oui", "y", "yes"):
-                return True
-            if answer.lower() in ("n", "non", "no"):
-                return False
-            self.note("Answer y or n.")
-
-    def choose(self, question: str, options: Sequence[tuple[str, str]], default: int = 0) -> int:
-        self.note(question)
-        for i, (label, hint) in enumerate(options, 1):
-            number = self.paint(str(i), "1") if i == default + 1 else str(i)
-            self.note(f"  {number} {label.ljust(24)} {self.paint(hint, '2')}".rstrip())
-        while True:
-            answer = self._ask(f"Choice [{default + 1}]: ")
-            if answer is None:
-                return default
-            if answer.isdigit() and 1 <= int(answer) <= len(options):
-                return int(answer) - 1
-            self.note(f"A number from 1 to {len(options)}.")
-
-    def hour(self, question: str, default: int) -> int:
-        while True:
-            answer = self._ask(f"{question} [{default}]: ")
-            if answer is None:
-                return default
-            answer = answer.lower().removesuffix("h")
-            if answer.isdigit() and 0 <= int(answer) <= 24:
-                return int(answer)
-            self.note("An hour from 0 to 24, like 9 or 18.")
-
-
 def run(command: Sequence[str], **options: Any) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - argument lists built here, no shell
         list(command), text=True, check=False, **options
@@ -257,7 +154,12 @@ class Setup:
 
     def offer(self, question: str) -> bool:
         """Whether to change something: never in --check, else the user's say (yes by default)."""
-        return not self.check and self.term.yes(question)
+        return not self.check and self.term.confirm(question)
+
+    def install(self, label: str, command: Sequence[str], **options: Any) -> bool:
+        """A long step behind a spinner; False if it failed (the terminal shows why)."""
+        done, _ = self.term.task(label, command, **options)
+        return done.returncode == 0
 
     # --- The steps ----------------------------------------------------------------------------
 
@@ -269,22 +171,22 @@ class Setup:
                     f"macOS {version}: my window needs macOS {MIN_MACOS[0]} (Sonoma) or later.\n"
                     "Update the Mac, then run scripts/setup again."
                 )
-            self.term.ok("macOS", version)
+            self.term.done("macOS", version)
         else:
-            self.term.ok("WSL", os.environ.get("WSL_DISTRO_NAME", ""))
+            self.term.done("WSL", os.environ.get("WSL_DISTRO_NAME", ""))
         uv = run(["uv", "--version"], capture_output=True).stdout.split()
-        self.term.ok("uv", uv[1] if len(uv) > 1 else "")
+        self.term.done("uv", uv[1] if len(uv) > 1 else "")
 
     def claude(self) -> None:
         program = self.find_claude()
         if program is None:
-            self.term.todo("Claude Code", "missing")
+            self.term.todo("Claude Code", "not installed")
             self.term.quip("I need a quill to write my questions.")
-            self.term.note("I write my questions with Claude Code, Anthropic's official CLI.")
-            if not self.offer(f"Install it ({CLAUDE_INSTALLER})?"):
+            self.term.note("I write them with Claude Code, Anthropic's official CLI.")
+            if not self.offer("Install Claude Code?"):
                 self.missing.append("Claude Code")
                 return
-            if run(["bash", "-c", CLAUDE_INSTALLER]).returncode != 0 or not (
+            if not self.install("Installing Claude Code", ["bash", "-c", CLAUDE_INSTALLER]) or not (
                 program := self.find_claude()
             ):
                 raise SetupError(
@@ -295,38 +197,38 @@ class Setup:
             self.term.todo("Claude Code", f"in {program.parent}, out of the window's reach")
             self.term.note(
                 "The window calls Claude without your login shell, so it must be in\n"
-                "~/.local/bin (or Homebrew's). The native build installs there (claude install)."
+                "~/.local/bin (or Homebrew's). The native build installs there."
             )
             if not self.offer("Install the native build?"):
                 self.missing.append("Claude Code in ~/.local/bin")
                 return
-            run([str(program), "install"])
+            self.install("Installing the native build", [str(program), "install"])
             program = LOCAL_BIN / "claude"
             if not program.exists():
                 raise SetupError("claude install did not put claude in ~/.local/bin.")
         version = run([str(program), "--version"], capture_output=True).stdout.split()
+        self.term.done("Claude Code", version[0] if version else "")
         signed_in, detail = account(self.auth_status(program))
         if not signed_in:
-            self.term.todo("Claude Code", f"{version[0] if version else ''}, not signed in")
-            self.term.note(
-                "Connect your Claude account (Pro, Max, Team or Enterprise): a sign-in page\n"
-                "will open. If no browser opens, open the link shown below."
-            )
+            self.term.todo("Claude account", "not signed in")
+            self.term.note("Pro, Max, Team or Enterprise: questions come out of your plan.")
             if not self.offer("Sign in now?"):
                 self.missing.append("Claude sign-in")
                 return
+            self.term.handover(
+                "Your browser opens Claude's sign-in page. No browser? Open the link below."
+            )
             run([str(program), "auth", "login", "--claudeai"])
             signed_in, detail = account(self.auth_status(program))
             if not signed_in:
                 raise SetupError("Still not signed in: run scripts/setup again to retry.")
-            self.term.ok("  signed in", detail)
-        else:
-            self.term.ok("Claude Code", f"{version[0] if version else ''}, {detail}")
         if "API" in detail:
+            self.term.todo("Claude account", detail)
             self.term.note(
-                "This account pays for Claude by usage. To use your subscription instead:\n"
-                "claude auth logout, then run scripts/setup again."
+                "To use your subscription instead: claude auth logout, then scripts/setup."
             )
+        else:
+            self.term.done("Claude account", detail)
 
     @staticmethod
     def find_claude() -> Path | None:
@@ -346,22 +248,21 @@ class Setup:
         return status if isinstance(status, dict) else {}
 
     def windows_python(self) -> None:
-        python = Path(windows("windows_base_python"))
-        if python.exists():
-            self.term.ok("Windows Python 3.12", "found")
+        if Path(windows("windows_base_python")).exists():
+            self.term.done("Windows Python 3.12", "found")
             return
-        self.term.todo("Windows Python 3.12", "missing")
-        self.term.note("My window runs on Windows' Python, installed once.")
-        if not self.offer("Install it with winget (for you only, no admin rights)?"):
+        self.term.todo("Windows Python 3.12", "not installed")
+        self.term.note("My window runs on Windows' own Python. Installed for you only, no admin.")
+        if not self.offer("Install it with winget?"):
             self.missing.append("Windows Python 3.12")
             return
-        run(WINGET_PYTHON, cwd="/mnt/c")
+        self.install("Installing Python 3.12 with winget", WINGET_PYTHON, cwd="/mnt/c")
         if not Path(windows("windows_base_python")).exists():
             raise SetupError(
                 "Still no Python 3.12 on the Windows side. Install it from\n"
                 "https://www.python.org/downloads/windows/ (for you only), then run this again."
             )
-        self.term.ok("  installed")
+        self.term.done("Windows Python 3.12", "installed")
 
     def window(self) -> None:
         venv = (
@@ -371,33 +272,34 @@ class Setup:
         )
         if self.check:
             if venv.exists():
-                self.term.ok("Window (PySide6)", "ready")
+                self.term.done("Window", "ready")
             else:
-                self.term.todo("Window (PySide6)", "to prepare")
+                self.term.todo("Window", "to prepare")
                 self.missing.append("the window's environment")
             return
         if "Windows Python 3.12" in self.missing:
             self.missing.append("the window's environment")
             return
-        self.term.todo("Window (PySide6)", "ready, checking" if venv.exists() else "")
-        if run([str(REPO / "scripts" / "ui-setup")]).returncode != 0:
-            raise SetupError("scripts/ui-setup failed: its message is just above.")
-        self.term.ok("Window (PySide6)", "ready")
+        label = "Checking the window" if venv.exists() else "Preparing the window (Qt, ~60 MB)"
+        if not self.install(label, [str(REPO / "scripts" / "ui-setup")]):
+            raise SetupError("Preparing the window failed: its last messages are above.")
+        self.term.done("Window", "ready")
 
     def settings(self) -> None:
         path = config_file()
-        self.term.section("Settings", "(Enter keeps the value in brackets)")
+        shown = str(path).replace(str(Path.home()), "~")
+        self.term.heading("Settings")
         if path.exists():
             try:
                 current = configs.load(path)
             except ValueError as error:
                 raise SetupError(f"{error}\nFix or delete {path}, then run this again.") from None
-            self.term.ok("Config", str(path).replace(str(Path.home()), "~"))
-            if self.check or self.term.yes("Keep it as it is?"):
+            self.term.done("Config", shown)
+            if self.check or self.term.confirm("Keep your current settings?"):
                 self.pace()
                 return
         elif self.check:
-            self.term.todo("Config", "none: the defaults")
+            self.term.todo("Config", "none yet: the defaults")
             return
         else:
             current = configs.Config()
@@ -405,10 +307,10 @@ class Setup:
         exam = current.exam if current.exam in names else names[0]
         if len(names) > 1:
             options = [(n, "") for n in names]
-            exam = names[self.term.choose("Which exam?", options, names.index(exam))]
+            exam = names[self.term.select("Which exam?", options, names.index(exam))]
         known = [m for m, _, _, _ in MODELS]
         model = MODELS[
-            self.term.choose(
+            self.term.select(
                 "Which model writes the questions?",
                 [(label, hint) for _, _, label, hint in MODELS],
                 known.index(current.brain.model) if current.brain.model in known else 0,
@@ -417,7 +319,7 @@ class Setup:
         rhythm = current.rhythm
         start = self.term.hour("Questions from what hour?", rhythm.start_hour)
         end = self.term.hour("Until what hour?", rhythm.end_hour)
-        weekends = self.term.yes("On weekends too?", rhythm.weekends)
+        weekends = self.term.confirm("On weekends too?", rhythm.weekends)
         text = config_text(Choices(exam, model[0], model[1], start, end, weekends))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
@@ -425,8 +327,8 @@ class Setup:
             configs.load(path)
         except ValueError as error:
             raise SetupError(f"{error}\nRun scripts/setup again with other answers.") from None
-        self.term.ok("Config written", str(path).replace(str(Path.home()), "~"))
         self.pace()
+        self.term.done("Settings saved", shown)
 
     def pace(self) -> None:
         """His starting pace, kept by the window in its settings.json; the menu changes it later."""
@@ -439,11 +341,11 @@ class Setup:
         keys = [p.key for p in PACES]
         current = str(saved.get("pace")) if saved.get("pace") in keys else "regularly"
         if self.check:
-            self.term.ok("Pace", next(p.name for p in PACES if p.key == current))
+            self.term.done("Pace", next(p.name for p in PACES if p.key == current))
             return
         chosen = PACES[
-            self.term.choose(
-                'At what pace? (his "How often" menu changes it later)',
+            self.term.select(
+                "How often should he ask?",
                 [(p.name, p.hint) for p in PACES],
                 keys.index(current),
             )
@@ -472,63 +374,57 @@ class Setup:
         return command, {"cwd": "/mnt/c"}
 
     def trial(self) -> None:
-        """One tiny real call, the way the window makes them: scripts/brain, through wsl.exe from
-        Windows."""
-        self.term.section("Trial")
+        """One tiny real call, the way the window makes them."""
+        self.term.heading("Trial")
         if self.check or self.missing:
-            if self.missing:
-                self.term.note("No trial while something is missing.")
-            else:
-                self.term.note("Skipped with --check (it uses a little of your usage).")
+            self.term.note(
+                "Waits until nothing is missing."
+                if self.missing
+                else "Skipped with --check: it uses a little of your plan."
+            )
             return
-        self.term.quip("Let me dip my quill.")
         command, options = self.brain_call()
-        began = time.monotonic()
-        done = run(command, capture_output=True, stdin=subprocess.DEVNULL, **options)
-        seconds = time.monotonic() - began
+        done, seconds = self.term.task("Asking Claude for a first word", command, **options)
         try:
             answer = json.loads(done.stdout)
         except json.JSONDecodeError:
             answer = {}
         if done.returncode != 0 or not answer.get("ok"):
-            lines = done.stderr.strip().splitlines()
             raise SetupError(
-                f"Claude did not answer as expected: {lines[-1] if lines else 'no message'}\n"
-                "If your plan does not include this model, run scripts/setup again and\n"
-                "choose Sonnet. If you have reached your usage limits, try again later."
+                "Claude did not answer as expected. If your plan does not include this\n"
+                "model, run scripts/setup again and choose Sonnet. If you have reached your\n"
+                "usage limits, try again later."
             )
-        self.term.ok("Claude answers", f"{answer.get('model', '')}, {seconds:.0f} s")
+        self.term.done("Claude answers", f"{answer.get('model', '')} · {seconds:.0f}s")
 
     def finish(self) -> None:
-        self.term.section("Shortcuts")
-        if self.check:
-            return
-        where = "in Applications (Launchpad, Spotlight)" if self.mac else "in the Start menu"
-        startup = False
-        shortcut = self.term.yes(f'A "Tagnan" icon {where}?')
+        self.term.heading("Last touches")
+        where = "in Applications" if self.mac else "in the Start menu"
+        shortcut = self.term.confirm(f"Add Tagnan {where}?")
         if shortcut:
-            startup = self.term.yes(
-                "And bring him along at each sign-in?"
-                if self.mac
-                else "And bring him along at each Windows sign-in?",
-                False,
-            )
+            startup = self.term.confirm("Start him at each sign-in?", False)
             command = [str(REPO / "scripts" / "install-shortcut")]
-            if run([*command, "--startup"] if startup else command).returncode != 0:
-                self.term.fail("Shortcuts", "see the message above; Tagnan works without them")
+            if self.install(
+                "Creating the shortcut", [*command, "--startup"] if startup else command
+            ):
+                place = "Applications" if self.mac else "Start menu"
+                self.term.done("Shortcut", place + (", and at each sign-in" if startup else ""))
+            else:
                 shortcut = False
-        self.term.line()
-        if self.term.yes("Bring Tagnan in now?"):
-            if run([str(REPO / "scripts" / "tagnan")]).returncode != 0:
-                log = str(self.log()).replace(str(Path.home()), "~")
-                raise SetupError(f"Tagnan did not start: see {log}.")
-            self.term.line()
-            self.term.quip("Here I am. My first questions take a few minutes to write.")
+        started = self.term.confirm("Bring Tagnan in now?")
+        if started and not self.install("Calling Tagnan", [str(REPO / "scripts" / "tagnan")]):
+            log = str(self.log()).replace(str(Path.home()), "~")
+            raise SetupError(f"Tagnan did not start: see {log}.")
+        self.term.gap()
+        if started:
+            self.term.done("Tagnan is on your desktop", "bottom right")
+            self.term.quip("Here I am! My first questions take a few minutes to write.")
+        self.term.note("Right-click him for a question now, progress, pace, sound or a break.")
         self.term.note(
-            "Right-click him: a question now, progress, pace, sound, a break.\n"
-            "To start him again later: scripts/tagnan"
-            + (f", or his icon {where}." if shortcut else ".")
+            "Start him later: " + (f"his icon {where}, or " if shortcut else "") + "scripts/tagnan"
         )
+        self.term.note("Change your answers: scripts/setup")
+        self.term.outro("En garde!")
 
     def log(self) -> Path:
         """Where scripts/tagnan sends the window's messages."""
@@ -538,7 +434,9 @@ class Setup:
         return (Path(state) if state else Path.home() / ".local" / "state") / "tagnan" / "ui.log"
 
     def all(self) -> int:
-        self.term.banner()
+        self.term.intro("Tagnan", "guided setup")
+        self.term.quip("En garde! Let's set up my quarters.")
+        self.term.gap()
         self.prerequisites()
         self.claude()
         if not self.mac:
@@ -547,17 +445,25 @@ class Setup:
         self.settings()
         self.trial()
         if self.missing:
-            self.term.line()
+            self.term.gap()
             self.term.fail("Missing", ", ".join(self.missing))
-            if not self.check:
-                self.term.note("Run scripts/setup again whenever you like: the rest is kept.")
+            self.term.outro(
+                "Run scripts/setup again whenever you like: the rest is kept.", ok=False
+            )
             return 1
         if self.check:
-            self.term.line()
-            self.term.ok("All set")
+            self.term.gap()
+            self.term.outro("All set.")
             return 0
         self.finish()
         return 0
+
+
+def setup_log() -> Path:
+    """The raw output of the setup's long steps, for when one fails."""
+    state = os.environ.get("XDG_STATE_HOME")
+    base = Path(state) if state else Path.home() / ".local" / "state"
+    return (state_dir() if sys.platform == "darwin" else base / "tagnan") / "setup.log"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -566,17 +472,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     mode.add_argument("--yes", action="store_true", help="take every default, installs included")
     mode.add_argument("--check", action="store_true", help="say what is missing, change nothing")
     args = parser.parse_args(argv)
-    term = Terminal(assume_yes=args.yes)
+    term = Terminal(assume_yes=args.yes, log=setup_log())
     try:
         return Setup(term, check=args.check).all()
     except SetupError as error:
-        term.line()
+        term.gap()
         term.fail("Stopped")
         term.note(str(error))
+        term.outro("Run scripts/setup again once it is fixed: what is done is kept.", ok=False)
         return 1
     except KeyboardInterrupt:
-        term.line()
-        term.note("Interrupted. Run scripts/setup again whenever you like: what is done is kept.")
+        term.raw("\033[?25h\n")
+        term.fail("Cancelled")
+        term.outro("Run scripts/setup again whenever you like: what is done is kept.", ok=False)
         return 130
 
 

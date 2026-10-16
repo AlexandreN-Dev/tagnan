@@ -22,16 +22,17 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 if ! command -v uv >/dev/null; then
   installer="curl -LsSf https://astral.sh/uv/install.sh | sh"
   if [[ " $* " == *" --check "* ]]; then
-    echo "✗ uv is missing: scripts/setup installs it." >&2
+    echo "■  uv is missing: scripts/setup installs it." >&2
     exit 1
   fi
-  echo "Tagnan needs uv, which provides his Python 3.12."
+  echo
+  echo "◆  Tagnan needs uv, which provides his Python 3.12."
   answer=""
   if [[ " $* " != *" --yes "* ]]; then
-    read -r -p "  Install it ($installer)? [Y/n]: " answer || true
+    read -r -p "│  Install it ($installer)? [Y/n]: " answer || true
   fi
   if [[ "$answer" == [nN]* ]]; then  # not ${answer,,}: macOS has bash 3.2
-    echo "Nothing to do without uv: run scripts/setup again whenever you like." >&2
+    echo "└  Nothing to do without uv: run scripts/setup again whenever you like." >&2
     exit 1
   fi
   curl -LsSf https://astral.sh/uv/install.sh | sh

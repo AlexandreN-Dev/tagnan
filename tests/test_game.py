@@ -117,3 +117,8 @@ def test_config_defaults_and_errors(tmp_path: Path) -> None:
     path.write_text("[rhythm]\nmin_minutes = 30\n")
     with pytest.raises(ValueError, match="min_minutes"):
         config.load(path)
+    path.write_text('[brain]\nmodel = "sonnet"\nexplain_effort = "low"\n')
+    assert config.load(path).brain == config.Brain(model="sonnet", explain_effort="low")
+    path.write_text('[brain]\neffort = "maximal"\n')
+    with pytest.raises(ValueError, match="\\[brain\\] : effort doit être l'un de"):
+        config.load(path)

@@ -65,8 +65,8 @@ class BrainClient:
             raise BrainError("réponse inattendue du cerveau")
         return answer
 
-    def generate(self, request: Mapping[str, Any], timeout: float = 330.0) -> dict[str, Any]:
+    def generate(self, request: Mapping[str, Any], timeout: float = 630.0) -> dict[str, Any]:
         return self.call("generate", request, timeout)
 
-    def explain(self, request: Mapping[str, Any], timeout: float = 150.0) -> str:
+    def explain(self, request: Mapping[str, Any], timeout: float = 270.0) -> str:
         return str(self.call("explain", request, timeout).get("text", ""))

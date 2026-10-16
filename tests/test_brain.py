@@ -69,7 +69,8 @@ def test_generate_runs_claude_isolated(fake_claude: Path) -> None:
     for flag in ("-p", "--no-session-persistence", "--strict-mcp-config", "--json-schema"):
         assert flag in argv
     assert argv[argv.index("--tools") + 1] == ""
-    assert argv[argv.index("--model") + 1] == "sonnet"
+    assert argv[argv.index("--model") + 1] == "claude-opus-5-5"
+    assert argv[argv.index("--effort") + 1] == "max"
     assert argv[argv.index("--settings") + 1] == '{"disableAllHooks": true}'
     env = log["env"]
     assert isinstance(env, dict)

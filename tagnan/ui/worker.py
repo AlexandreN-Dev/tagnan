@@ -1,5 +1,5 @@
-"""The brain's calls, off the window's thread: a batch takes a minute, an explanation ten
-seconds."""
+"""The brain's calls, off the window's thread: a batch takes minutes, an explanation up to a
+minute."""
 
 import logging
 import threading

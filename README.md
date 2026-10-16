@@ -60,4 +60,4 @@ Windows                                          WSL (Ubuntu)
 
 ## Quota
 
-Un lot de dix questions coûte un appel Sonnet d'environ 40 secondes ; une vingtaine de questions par jour, c'est deux ou trois appels, plus les « Explique-moi plus ». Le tout passe par ton abonnement Claude, jamais par une clé d'API.
+Un lot de dix questions coûte un appel Opus 5.5 en effort max, qui prend quelques minutes ; une vingtaine de questions par jour, c'est deux ou trois appels, plus les « Explique-moi plus ». Le tout passe par ton abonnement Claude, jamais par une clé d'API.

@@ -40,7 +40,8 @@ ISOLATION_FLAGS = (
     "--settings",
     '{"disableAllHooks": true}',
 )
-GENERATE_TIMEOUT, EXPLAIN_TIMEOUT = 300.0, 120.0
+# Opus at max effort thinks long: a batch of ten can take minutes, an explanation a minute.
+GENERATE_TIMEOUT, EXPLAIN_TIMEOUT = 600.0, 240.0
 DIFFICULTY_NAMES = {"facile": "faciles", "moyen": "moyennes", "difficile": "difficiles"}
 
 QUESTION_SCHEMA: dict[str, Any] = {
@@ -111,7 +112,13 @@ def claude_binary() -> str:
 
 
 def run_claude(
-    prompt: str, *, system: str, schema: Mapping[str, Any], model: str, timeout: float
+    prompt: str,
+    *,
+    system: str,
+    schema: Mapping[str, Any],
+    model: str,
+    effort: str,
+    timeout: float,
 ) -> dict[str, Any]:
     """One non-interactive turn; the object that matches the schema."""
     command = [
@@ -121,6 +128,8 @@ def run_claude(
         "json",
         "--model",
         model,
+        "--effort",
+        effort,
         "--tools",
         "",
         "--no-session-persistence",
@@ -232,6 +241,7 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
         system=system_prompt(bp),
         schema=BATCH_SCHEMA,
         model=cfg.brain.model,
+        effort=cfg.brain.effort,
         timeout=GENERATE_TIMEOUT,
     )
     questions, rejected = [], []
@@ -257,6 +267,7 @@ def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
         system=system_prompt(bp),
         schema=EXPLAIN_SCHEMA,
         model=cfg.brain.explain_model,
+        effort=cfg.brain.explain_effort,
         timeout=EXPLAIN_TIMEOUT,
     )
     text = " ".join(str(structured.get("text", "")).split())

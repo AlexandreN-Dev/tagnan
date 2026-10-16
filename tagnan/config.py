@@ -10,11 +10,20 @@ from typing import Any
 
 from tagnan.scheduler import Rhythm
 
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")  # claude --effort
+
 
 @dataclass(frozen=True)
 class Brain:
-    model: str = "sonnet"  # writes the questions
-    explain_model: str = "sonnet"  # « Explique-moi plus »
+    model: str = "claude-opus-5-5"  # writes the questions
+    explain_model: str = "claude-opus-5-5"  # « Explique-moi plus »
+    effort: str = "max"
+    explain_effort: str = "max"
+
+    def __post_init__(self) -> None:
+        for name in ("effort", "explain_effort"):
+            if getattr(self, name) not in EFFORT_LEVELS:
+                raise ValueError(f"{name} doit être l'un de : {', '.join(EFFORT_LEVELS)}")
 
 
 @dataclass(frozen=True)

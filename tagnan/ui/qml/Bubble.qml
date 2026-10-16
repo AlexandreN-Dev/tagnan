@@ -161,7 +161,7 @@ Item {
                     color: bubble.mode === "result" ? (bubble.content.correct ? bubble.theme.good : bubble.theme.bad)
                          : bubble.theme.text
                     font.family: bubble.theme.display
-                    font.pixelSize: 21
+                    font.pixelSize: 19
                     font.bold: true
                 }
                 Rectangle {

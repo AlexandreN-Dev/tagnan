@@ -22,12 +22,13 @@ from PySide6.QtCore import (
     QMessageLogContext,
     QObject,
     QPoint,
+    QRect,
     QTimer,
     QtMsgType,
     QUrl,
     qInstallMessageHandler,
 )
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QImage, QPainter
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -45,13 +46,13 @@ from tagnan.ui.animator import Animator
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
 from tagnan.ui.images import LayerImages
+from tagnan.ui.placement import Placement
 from tagnan.ui.tray import Tray
-from tagnan.ui.window_mask import WindowMask
 from tagnan.ui.worker import BrainWorker
 
 QML_DIR = Path(__file__).resolve().parent / "qml"
-EDGE_MARGIN = 24  # from the screen's right edge to Tagnan's
-FOOT_MARGIN = 2  # from the taskbar to his feet
+EDGE_MARGIN = 24  # from the screen's right edge to Tagnan's window
+FOOT_MARGIN = 0  # from the taskbar to his window's bottom
 
 
 def forward_qt_messages(kind: QtMsgType, context: QMessageLogContext, message: str) -> None:
@@ -61,21 +62,20 @@ def forward_qt_messages(kind: QtMsgType, context: QMessageLogContext, message: s
 
 def place(window: QQuickWindow, settings: Settings) -> None:
     """Where he was left, if that is still on a screen; else bottom right, above the taskbar."""
-    saved = settings.get("position")
+    saved = settings.get("figure")
     app = QGuiApplication.instance()
     screens = app.screens() if isinstance(app, QGuiApplication) else []
     if isinstance(saved, list) and len(saved) == 2:
-        feet = QPoint(int(saved[0]) + window.width() // 2, int(saved[1]) + window.height() - 8)
-        if any(s.availableGeometry().contains(feet) for s in screens):
+        centre = QPoint(int(saved[0]) + window.width() // 2, int(saved[1]) + window.height() // 2)
+        if any(s.availableGeometry().contains(centre) for s in screens):
             window.setPosition(int(saved[0]), int(saved[1]))
             return
     screen = QGuiApplication.primaryScreen()
     if screen is None:
         return
     area = screen.availableGeometry()
-    figure_right = window.width() // 2 + 75
     window.setPosition(
-        area.right() - EDGE_MARGIN - figure_right,
+        area.right() + 1 - EDGE_MARGIN - window.width(),
         area.bottom() + 1 - FOOT_MARGIN - window.height(),
     )
 
@@ -94,6 +94,26 @@ def setup_logging() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=handlers,
     )
+
+
+def compose(window: QQuickWindow) -> QImage:
+    """Tagnan's window and, when shown, his bubble's, as they stand on the screen: only their
+    own pixels, nothing else of the screen."""
+    windows = [window] + [w for w in window.findChildren(QQuickWindow) if w.isVisible()]
+    area = QRect()
+    for w in windows:
+        area = area.united(w.geometry())
+    ratio = window.devicePixelRatio()
+    image = QImage(
+        round(area.width() * ratio), round(area.height() * ratio), QImage.Format.Format_ARGB32
+    )
+    image.fill(0)
+    painter = QPainter(image)
+    for w in windows:
+        offset = w.geometry().topLeft() - area.topLeft()
+        painter.drawImage(round(offset.x() * ratio), round(offset.y() * ratio), w.grabWindow())
+    painter.end()
+    return image
 
 
 def demo(controller: Controller, what: str) -> None:
@@ -133,6 +153,16 @@ def main() -> int:
     parser.add_argument(
         "--measure-cpu", type=float, metavar="SECONDES", help="mesurer le CPU, puis quitter"
     )
+    parser.add_argument("--fps", type=int, default=30, help="développement : images par seconde")
+    parser.add_argument(
+        "--window-size", type=int, nargs=2, help="développement : taille de la fenêtre"
+    )
+    parser.add_argument(
+        "--ripple-rate",
+        type=int,
+        default=15,
+        help="développement : contours de l'encre par seconde",
+    )
     args = parser.parse_args()
 
     setup_logging()
@@ -166,10 +196,12 @@ def main() -> int:
         else BrainClient.local()
     )
     worker = BrainWorker(client)
-    animator = Animator(Rig(rng, reduced_motion=args.reduced_motion))
+    rig = Rig(rng, reduced_motion=args.reduced_motion)
+    rig.wobble_rate = max(1, args.ripple_rate)
+    animator = Animator(rig, frame_ms=round(1000 / max(1, args.fps)))
     controller = Controller(game, scheduler, worker, animator, rng)
     settings = Settings(state_dir() / "settings.json")
-    window_mask = WindowMask()
+    placement = Placement()
     tray = Tray(controller)
 
     def leave(code: int = 0) -> None:
@@ -185,7 +217,7 @@ def main() -> int:
     engine = QQmlApplicationEngine()
     engine.addImageProvider("tagnan", LayerImages())
     engine.setInitialProperties(
-        {"controller": controller, "animator": animator, "windowMask": window_mask}
+        {"controller": controller, "animator": animator, "placement": placement}
     )
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     roots = engine.rootObjects()
@@ -193,13 +225,14 @@ def main() -> int:
         logging.error("the window did not load")
         return 1
     window: QQuickWindow = roots[0]
+    if args.window_size:
+        window.resize(*args.window_size)
     place(window, settings)
-    window_mask.attach(window)
     window.show()
 
     save_timer = QTimer()
     save_timer.setSingleShot(True)
-    save_timer.timeout.connect(lambda: settings.set("position", [window.x(), window.y()]))
+    save_timer.timeout.connect(lambda: settings.set("figure", [window.x(), window.y()]))
     window.xChanged.connect(lambda: save_timer.start(800))
     window.yChanged.connect(lambda: save_timer.start(800))
 
@@ -217,18 +250,19 @@ def main() -> int:
         snapshot: Path = args.snapshot
 
         def save() -> None:
-            window.grabWindow().save(str(snapshot))
+            compose(window).save(str(snapshot))
             leave()
 
         QTimer.singleShot(args.snapshot_delay, save)
     if args.measure_cpu:
-        measure(args.measure_cpu, leave)
+        # After 3 s of start-up (QML, layers), as Dartt measures it.
+        QTimer.singleShot(3000, lambda: measure(args.measure_cpu, leave))
 
     signal.signal(signal.SIGINT, lambda *_: leave())
     heartbeat = QTimer()  # lets Python see Ctrl+C now and then
     heartbeat.timeout.connect(lambda: None)
     heartbeat.start(250)
-    keep: list[QObject] = [tray, window_mask, animator, controller, worker]  # alive while QML runs
+    keep: list[QObject] = [tray, placement, animator, controller, worker]  # alive while QML runs
     app.exec()
     del keep
     leave()

@@ -1,15 +1,12 @@
-"""Write Tagnan's icon (the Mousquetaire, 256 px), as .ico for Windows or .png for macOS (the
-format follows the suffix): python -m tagnan.ui.icon PATH"""
+"""Write Tagnan's icon (the inkwell drawn for small sizes, 256 px), as .ico for Windows or .png
+for macOS (the format follows the suffix): python -m tagnan.ui.icon PATH"""
 
 import sys
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication, QImage, QPainter
+from PySide6.QtGui import QGuiApplication, QImage
 
 from tagnan import art
 from tagnan.ui.images import render_svg
-
-GRADE = 3  # the Mousquetaire: casaque, cross and plume
 
 
 def main() -> int:
@@ -17,12 +14,7 @@ def main() -> int:
         print("Usage: python -m tagnan.ui.icon PATH.ico|PATH.png", file=sys.stderr)
         return 2
     app = QGuiApplication(sys.argv[:1])
-    figure = render_svg(art.still_svg(GRADE, glow=False), round(256 * 120 / 140), 256)
-    image = QImage(256, 256, QImage.Format.Format_ARGB32)
-    image.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(image)
-    painter.drawImage((256 - figure.width()) // 2, 0, figure)
-    painter.end()
+    image = render_svg(art.icon_svg(), 256, 256).convertToFormat(QImage.Format.Format_ARGB32)
     # The format comes from the .ico suffix: PySide6 refuses it as bytes, the stubs as str.
     ok = image.save(sys.argv[1])
     del app

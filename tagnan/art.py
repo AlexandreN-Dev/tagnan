@@ -710,12 +710,12 @@ def open_spline(points: list[tuple[float, float]]) -> str:
     return " ".join(d)
 
 
-def quill() -> str:
+def quill(dip: tuple[float, float] = QUILL[0], tip: tuple[float, float] = QUILL[1]) -> str:
     """The goose quill dipped in the inkwell: a vane in two tones (cream towards the light, shaded
     on the other side of the shaft), the shaft, a gold nib in the ink, and a thin dark outline all
     round, so that the cream stands out on light desktops. The vane starts just above the lip, so
     that only the bare shaft goes down the neck."""
-    (x0, y0), (x1, y1) = QUILL
+    (x0, y0), (x1, y1) = dip, tip
     width, shaft, line = 11.0, 2.2, 1.0
     start = (y0 - MOUTH[2] + 2) / (y0 - y1)
     length = math.hypot(x1 - x0, y1 - y0)
@@ -763,6 +763,39 @@ def glass() -> str:
         f'<path d="M29 88 L29 118" {light} stroke-width="3.6" opacity=".5"/>'
         f'<path d="M36 85.5 L36 93" {light} stroke-width="3" opacity=".5"/>'
         f'<path d="M44.5 68.4 L60 68.4" {light} stroke-width="1.6" opacity=".6"/>'
+    )
+
+
+# The icon (shortcut, app, tray at grade 0): the inkwell redrawn to read at 16 to 48 px. The ink
+# fills it to the shoulder, the face is bigger, the quill short and dipped above the eyes, and a
+# dark rim keeps the glass apart from light taskbars.
+ICON_BOX = (14.0, 42.0, 92.0, 92.0)
+ICON_LEVEL = 86.0
+ICON_QUILL = ((62.0, 84.0), (80.0, 46.0))
+ICON_RIM = "#1B2B52"
+
+
+def icon_svg() -> str:
+    level = n(ICON_LEVEL)
+    rim = f'fill="none" stroke="{ICON_RIM}" stroke-linejoin="round"'
+    glass_ = (
+        glass()
+        .replace('stroke-width="2"', 'stroke-width="3"')
+        .replace('stroke-width="1.8"', 'stroke-width="2.7"')
+    )
+    return _svg(
+        f'<defs><clipPath id="ink"><rect x="0" y="{level}" width="{WIDTH}" height="{HEIGHT}"/>'
+        "</clipPath></defs>"
+        f'<path d="{INKWELL}" {rim} stroke-width="7"/>'
+        f'<rect x="40" y="66" width="40" height="9.5" rx="3.5" {rim} stroke-width="6"/>'
+        f'<path d="{INKWELL}" fill="{INK}" clip-path="url(#ink)"/>'
+        f'<path d="M24 {n(ICON_LEVEL + 1)} L96 {n(ICON_LEVEL + 1)}" stroke="{INK_LIGHT}" stroke-width="2.4"/>'
+        + eye(60, 104, 1.55, "idle", -1, 1.0)
+        + eye(60, 104, 1.55, "idle", 1, 1.0)
+        + mouth(60, 118, 0.95, "idle", 1.0, False)
+        + quill(*ICON_QUILL)
+        + glass_,
+        ICON_BOX,
     )
 
 

@@ -108,3 +108,10 @@ def test_quill_goes_in_through_the_mouth_never_through_the_glass() -> None:
         start = (y0 - lip + 2) / (y0 - y1)
         _, base_y = turned(x0 + (x1 - x0) * start, y0 + (y1 - y0) * start)
         assert base_y < lip  # the vane stays out of the neck
+
+
+def test_the_icon_is_the_inkwell_drawn_for_small_sizes() -> None:
+    root = ET.fromstring(art.icon_svg())
+    assert root.get("viewBox") == "14 42 92 92"  # square, tight around the inkwell
+    assert art.ICON_RIM in art.icon_svg()
+    assert art.quill() == art.quill(*art.QUILL)  # the window's quill is unchanged

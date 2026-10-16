@@ -60,7 +60,7 @@ if [[ "$mode" == "dry-run" ]]; then
   exit 0
 fi
 
-# The icon: Tagnan the musketeer, drawn by the window's own code.
+# The icon: Tagnan's inkwell, drawn by the window's own code.
 mkdir -p "$(dirname "$(wslpath -u "$icon")")"
 (cd "$repo" && "$python" -B -m tagnan.ui.icon "$icon")
 

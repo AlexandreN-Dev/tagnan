@@ -60,7 +60,7 @@ printf '%s\n' '#!/bin/bash' \
   >"$app/Contents/MacOS/Tagnan"
 chmod +x "$app/Contents/MacOS/Tagnan"
 
-# The icon: Tagnan the musketeer, drawn by the window's own code, turned to .icns by sips.
+# The icon: Tagnan's inkwell, drawn by the window's own code, turned to .icns by sips.
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 if (cd "$repo" && "$python" -B -m tagnan.ui.icon "$work/tagnan.png") &&

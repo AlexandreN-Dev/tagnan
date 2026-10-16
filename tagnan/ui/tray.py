@@ -19,6 +19,9 @@ from tagnan.ui.images import render_svg
 def figure_icon(stage: int) -> QIcon:
     icon = QIcon()
     for size in (16, 20, 24, 32, 40, 48, 64):
+        if stage == 0:  # the inkwell has an icon of its own, drawn to read that small
+            icon.addPixmap(QPixmap.fromImage(render_svg(art.icon_svg(), size, size)))
+            continue
         # The figure is taller than wide: keep its proportions, centred in a square.
         image = render_svg(art.still_svg(stage, glow=False), round(size * 120 / 140), size)
         square = QPixmap(size, size)

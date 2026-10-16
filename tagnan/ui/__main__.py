@@ -102,16 +102,20 @@ def compose(window: QQuickWindow) -> QImage:
     windows = [window] + [w for w in window.findChildren(QQuickWindow) if w.isVisible()]
     area = QRect()
     for w in windows:
+        logging.info("snapshot: %s at %s, ratio %s", w.title(), w.geometry(), w.devicePixelRatio())
         area = area.united(w.geometry())
     ratio = window.devicePixelRatio()
     image = QImage(
         round(area.width() * ratio), round(area.height() * ratio), QImage.Format.Format_ARGB32
     )
+    image.setDevicePixelRatio(ratio)  # drawn in logical units, as the grabs are
     image.fill(0)
     painter = QPainter(image)
     for w in windows:
         offset = w.geometry().topLeft() - area.topLeft()
-        painter.drawImage(round(offset.x() * ratio), round(offset.y() * ratio), w.grabWindow())
+        grab = w.grabWindow()
+        grab.setDevicePixelRatio(w.devicePixelRatio())  # not every platform marks it
+        painter.drawImage(offset, grab)
     painter.end()
     return image
 

@@ -4,6 +4,7 @@ Tagnan's window is just his size, so that he can be dragged anywhere; the bubble
 its own, placed here whenever he moves or it changes size.
 """
 
+import logging
 from dataclasses import dataclass
 
 from PySide6.QtCore import Property, QObject, QPoint, QRect, Signal, Slot
@@ -12,7 +13,10 @@ from PySide6.QtGui import QGuiApplication
 # The bubble's window overlaps the empty margin of Tagnan's, so that its tail reaches him.
 GAP = -22
 ABOVE_FEET = 54  # the tail points at his body, this far above his feet
+ABOVE_HEAD = 24  # with no room beside him, the bubble sits on his hat's brim
 MARGIN = 8  # from the screen's edges
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,16 +38,20 @@ class Box:
 def bubble_position(figure: Box, bubble: tuple[int, int], area: Box) -> tuple[int, int, bool]:
     """Top-left corner of the bubble's window, and whether it is on Tagnan's left.
 
-    On his left by default; on his right when the screen ends there; clamped to the screen
-    either way (a bubble cut by the screen's edge is no use).
+    On his left by default, on his right when the screen ends there, above him when neither
+    side has room; always within the screen (a bubble cut by the screen's edge is no use).
     """
     width, height = bubble
-    left = (
-        figure.x - GAP - width >= area.x + MARGIN
-        or figure.right + GAP + width > area.right - MARGIN
-    )
-    x = figure.x - GAP - width if left else figure.right + GAP
-    y = figure.bottom - ABOVE_FEET - height
+    fits_left = figure.x - GAP - width >= area.x + MARGIN
+    fits_right = figure.right + GAP + width <= area.right - MARGIN
+    if fits_left or fits_right:
+        left = fits_left
+        x = figure.x - GAP - width if left else figure.right + GAP
+        y = figure.bottom - ABOVE_FEET - height
+    else:
+        left = True
+        x = figure.x + figure.width // 2 - width // 2
+        y = figure.y + ABOVE_HEAD - height
     x = max(area.x + MARGIN, min(x, area.right - MARGIN - width))
     y = max(area.y + MARGIN, min(y, area.bottom - MARGIN - height))
     return x, y, left
@@ -73,6 +81,9 @@ class Placement(QObject):
         figure = Box(fx, fy, fw, fh)
         area = screen_area(QPoint(fx + fw // 2, fy + fh // 2))
         x, y, left = bubble_position(figure, (bw, bh), area)
+        logger.debug(
+            "figure %s bubble %dx%d on %s: (%d, %d) left=%s", figure, bw, bh, area, x, y, left
+        )
         if (x, y, left) != (self._x, self._y, self._left):
             self._x, self._y, self._left = x, y, left
             self.changed.emit()

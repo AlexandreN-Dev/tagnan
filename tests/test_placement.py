@@ -1,4 +1,4 @@
-from tagnan.ui.placement import ABOVE_FEET, GAP, MARGIN, Box, bubble_position
+from tagnan.ui.placement import ABOVE_FEET, ABOVE_HEAD, GAP, MARGIN, Box, bubble_position
 
 SCREEN = Box(0, 0, 1920, 1040)  # above a 40 px taskbar
 FIGURE_W, FIGURE_H = 150, 176
@@ -33,7 +33,9 @@ def test_bubble_stays_on_the_screen() -> None:
     x, _, left = bubble_position(figure_at(1950, 500), BUBBLE, second)
     assert not left
     assert x >= second.x + MARGIN
-    # Too narrow a screen for either side: kept inside anyway.
-    narrow = Box(0, 0, 500, 900)
-    x, _, _ = bubble_position(figure_at(170, 500), BUBBLE, narrow)
+    # Too narrow a screen for either side: above him, inside the screen.
+    narrow = Box(0, 0, 800, 900)
+    figure = figure_at(339, 600)
+    x, y, _ = bubble_position(figure, BUBBLE, narrow)
     assert narrow.x + MARGIN <= x <= narrow.right - MARGIN - BUBBLE[0]
+    assert y + BUBBLE[1] <= figure.y + ABOVE_HEAD

@@ -222,7 +222,7 @@ def test_promotion_changes_his_look(game: Game) -> None:
     assert stages == [1]
     assert animator.property("stage") == 1
     assert controller.property("spec")["stage"] == 1
-    assert controller.property("bubble")["news"].startswith("Promotion ! Tagnan passe Gascon")
+    assert controller.property("bubble")["news"].startswith("Promotion\u00a0! Tagnan passe Gascon")
 
 
 def test_first_start_writes_questions_then_asks_soon(game: Game) -> None:
@@ -234,7 +234,7 @@ def test_first_start_writes_questions_then_asks_soon(game: Game) -> None:
     assert len(worker.requests[0]["slots"]) == 10
     worker.generating = False
     worker.batchReady.emit({"questions": [question_data(topic=f"t{i}") for i in range(10)]})
-    assert controller.property("bubble")["title"] == "Prêt !"
+    assert controller.property("bubble")["title"] == "Prêt\u00a0!"
     assert controller.scheduler.next_at == pytest.approx(clock.now + 20)
     assert game.store.fresh_count(game.exam) == 10
 
@@ -247,3 +247,12 @@ def test_a_tap_gets_a_quip_only_when_he_is_free(game: Game) -> None:
     controller.askNow()
     animator.tap()
     assert controller.property("bubble")["mode"] == "question"
+
+
+def test_bubble_text_keeps_marks_with_their_words() -> None:
+    from tagnan.ui.controller import typeset
+
+    assert typeset({"title": "Touché !", "list": ["Quoi ?", "a : b"]}) == {
+        "title": "Touché\u00a0!",
+        "list": ["Quoi\u00a0?", "a\u00a0: b"],
+    }

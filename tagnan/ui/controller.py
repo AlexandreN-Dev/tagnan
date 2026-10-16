@@ -43,6 +43,19 @@ RESULT_SECONDS = 15  # a right answer's bubble closes by itself, unless hovered
 QUIP_SECONDS = 1.8
 
 
+def typeset(value: Any) -> Any:
+    """French typography: a no-break space before ! ? : ; so that they never start a line."""
+    if isinstance(value, str):
+        for mark in "!?:;":
+            value = value.replace(f" {mark}", f"\u00a0{mark}")
+        return value
+    if isinstance(value, dict):
+        return {k: typeset(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [typeset(v) for v in value]
+    return value
+
+
 class Controller(QObject):
     stageChanged = Signal()
     bubbleChanged = Signal()
@@ -446,7 +459,7 @@ class Controller(QObject):
 
     def _show(self, bubble: dict[str, Any]) -> None:
         self._hide_timer.stop()
-        self._bubble = bubble
+        self._bubble = typeset(bubble)
         self.bubbleChanged.emit()
 
     def _close(self) -> None:

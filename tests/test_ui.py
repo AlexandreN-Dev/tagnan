@@ -177,6 +177,7 @@ def make(
     clock: Clock | None = None,
     settings: Settings | None = None,
     speaker: Speaker | None = None,
+    model: str = "claude-opus-5-5",
 ) -> tuple[Controller, FakeWorker, Animator]:
     clock = clock or Clock()
     worker = FakeWorker()
@@ -193,6 +194,7 @@ def make(
         clock,
         settings=settings,
         sounds=Sounds(speaker or Speaker()),
+        model=model,
     )
     return controller, worker, animator
 
@@ -782,6 +784,66 @@ def test_how_often_he_asks_is_chosen_and_kept(game: Game, tmp_path: Path) -> Non
     assert again.scheduler.next_at >= clock.now + 45 * 60
 
 
+def test_who_writes_his_questions_is_chosen_and_kept(game: Game, tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"model": "gpt-4"}))
+    controller, worker, _ = make(game, settings=Settings(path))
+    assert controller.property("model") == "claude-opus-5-5"  # the config's: gpt-4 is ignored
+    menu = Menu(controller)
+    content = menu.property("content")
+    assert (content["model"], content["modelKey"]) == ("Opus 5.5", "claude-opus-5-5")
+    assert content["models"][0]["name"] == "Fable 5.1, effort max"
+    controller._refill_if_needed(force=True)
+    assert "model" not in worker.requests[-1]  # the brain keeps to its config
+    worker.generating = False
+    menu.openAt(10, 10)
+    assert menu.run("model:claude-sonnet-5-5") is False
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Sonnet it is!"
+    assert bubble["text"].startswith("Sonnet 5.5 writes my next questions: quick, lighter")
+    assert menu.property("content")["model"] == "Sonnet 5.5"
+    controller._refill_if_needed(force=True)
+    assert worker.requests[-1]["model"] == "claude-sonnet-5-5"
+    controller.setModel("gpt-4")
+    assert controller.property("model") == "claude-sonnet-5-5"
+    again, _, _ = make(game, settings=Settings(path))
+    assert again.property("model") == "claude-sonnet-5-5"
+    # A model of one's own in the config file shows as written there.
+    own, _, _ = make(game, model="sonnet")
+    assert Menu(own).property("content")["model"] == "sonnet"
+
+
+def test_dark_or_light_is_chosen_and_kept(game: Game, tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"theme": "purple"}))
+    controller, _, _ = make(game, settings=Settings(path))
+    assert controller.property("theme") == ""  # the system's
+    menu = Menu(controller)
+    menu.openAt(10, 10)
+    assert menu.run("theme:dark") is True
+    assert controller.property("theme") == "dark"
+    assert menu.property("content")["theme"] == "dark"
+    controller.setTheme("purple")
+    assert controller.property("theme") == "dark"
+    again, _, _ = make(game, settings=Settings(path))
+    assert again.property("theme") == "dark"
+    assert menu.suggest("dark")[0]["action"] == "theme:dark"
+    assert menu.suggest("light mode")[0]["action"] == "theme:light"
+    assert [f["action"] for f in menu.suggest("theme")][:2] == ["theme:dark", "theme:light"]
+
+
+def test_a_few_words_find_a_model(game: Game) -> None:
+    controller, _, _ = make(game)
+    menu = Menu(controller)
+    found = menu.suggest("haiku")
+    assert found[0]["action"] == "model:claude-haiku-5-5"
+    assert found[0]["label"] == "Questions by Haiku 5.5"
+    assert [f["action"] for f in menu.suggest("model")] == [
+        f"model:{m}"
+        for m in ("claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+    ]
+
+
 def test_a_question_left_alone_goes_and_the_next_one_waits_for_the_pace(game: Game) -> None:
     fill(game)
     clock = Clock()
@@ -887,6 +949,25 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         QTest.keyClick(popup, Qt.Key.Key_Left)
         assert controller.property("volume") == 60
         assert popup.property("sub") == "call"  # still open, to hear the next step
+        # The button by his name turns him dark or light, the menu open to see it.
+        theme = popup.property("theme")
+        before = theme.property("dark")
+        button = next(i for i in items(popup.contentItem()) if i.objectName() == "theme")
+        centre = button.mapToScene(button.boundingRect().center())
+        QTest.mouseClick(
+            popup, Qt.MouseButton.LeftButton, pos=QPoint(round(centre.x()), round(centre.y()))
+        )
+        assert controller.property("theme") == ("light" if before else "dark")
+        assert theme.property("dark") is not before
+        assert menu.property("shown") is True
+        # Who writes his questions: the list opens on the model kept, the keyboard picks another.
+        model = next(i for i, r in enumerate(rows) if r.get("action") == "sub:model")
+        popup.openSub("model", model)
+        QApplication.processEvents()
+        assert popup.property("subCurrent") == 1  # Opus, the config's
+        QTest.keyClick(popup, Qt.Key.Key_Down)
+        QTest.keyClick(popup, Qt.Key.Key_Return)
+        assert controller.property("model") == "claude-sonnet-5-5"
         # Opened low on the screen, the list beside stays above its bottom edge, with room.
         menu.close()
         bottom = QApplication.primaryScreen().availableGeometry().bottom()

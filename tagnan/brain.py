@@ -1,15 +1,16 @@
 """The brain, in WSL: writes questions and explanations with the claude CLI.
 
-    scripts/brain generate < request.json   # {"course", "slots": [...], "avoid": [...], "subject"}
+    scripts/brain generate < request.json   # {"course", "slots", "avoid", "subject", "model"}
     scripts/brain explain < request.json    # {"course", "question": {...}, "chosen": [...]}
     scripts/brain plan < request.json       # {"words": "pottery"}: a new course's blueprint
     scripts/brain check                     # one tiny call with the configured model
 
 "course" is a blueprint (tagnan.blueprint's to_dict); a request may instead name a file of
-exam/ by its key, as "exam". It prints one JSON object on stdout; on failure, a message on
-stderr and exit code 1. Claude is reached through the official CLI only, with the user's own
-login: clean environment, no tools, no hooks, no MCP servers, in an empty folder (no CLAUDE.md,
-no project settings).
+exam/ by its key, as "exam". "model", optional, is one of config.MODELS, chosen in his menu: it
+writes the questions instead of the config's. It prints one JSON object on stdout; on failure,
+a message on stderr and exit code 1. Claude is reached through the official CLI only, with the
+user's own login: clean environment, no tools, no hooks, no MCP servers, in an empty folder (no
+CLAUDE.md, no project settings).
 """
 
 import argparse
@@ -335,12 +336,18 @@ def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     if not slots:
         raise BrainError("request without question slots")
     subject = str(request.get("subject") or "")
+    model, effort = cfg.brain.model, cfg.brain.effort
+    if request.get("model"):
+        chosen = configs.find_model(str(request["model"]))
+        if chosen is None:
+            raise BrainError(f"unknown model: {request['model']}")
+        model, effort = chosen.model, chosen.effort
     structured = run_claude(
         generate_prompt(bp, slots, request.get("avoid") or [], from_key(subject).text),
         system=system_prompt(bp),
         schema=BATCH_SCHEMA,
-        model=cfg.brain.model,
-        effort=cfg.brain.effort,
+        model=model,
+        effort=effort,
         timeout=GENERATE_TIMEOUT,
     )
     questions, rejected = [], []

@@ -46,12 +46,6 @@ MAC_APP_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 MIN_MACOS = (14, 0)
 CLAUDE_INSTALLER = "curl -fsSL https://claude.ai/install.sh | bash"
 
-# The models offered, from config.Brain's default down: (model, effort, label, hint).
-MODELS = (
-    ("claude-opus-5-5", "max", "Opus 5.5, effort max", "the finest questions, minutes per batch"),
-    ("claude-sonnet-5-5", "high", "Sonnet 5.5, effort high", "quick, lighter on your usage limits"),
-)
-
 
 class SetupError(Exception):
     """A step that cannot go on; the message says what to do."""
@@ -285,12 +279,14 @@ class Setup:
         if len(names) > 1:
             options = [(n, "") for n in names]
             exam = names[self.term.select("Which exam?", options, names.index(exam))]
-        known = [m for m, _, _, _ in MODELS]
-        model = MODELS[
+        known = [m.model for m in configs.MODELS]
+        model = configs.MODELS[
             self.term.select(
                 "Which model writes the questions?",
-                [(label, hint) for _, _, label, hint in MODELS],
-                known.index(current.brain.model) if current.brain.model in known else 0,
+                [(m.label, m.hint) for m in configs.MODELS],
+                known.index(
+                    current.brain.model if current.brain.model in known else configs.Brain.model
+                ),
             )
         ]
         rhythm = current.rhythm

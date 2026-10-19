@@ -1,8 +1,10 @@
-// The bubble's colours, after the system's light or dark mode.
+// The bubble's colours, after the system's light or dark mode, or the one chosen in his menu.
 import QtQuick
 
 QtObject {
-    readonly property bool dark: Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+    property string mode: ""  // "dark", "light", or "" to follow the system
+    readonly property bool dark: mode === "dark"
+        || (mode !== "light" && Qt.styleHints.colorScheme === Qt.ColorScheme.Dark)
 
     readonly property color panel: dark ? "#1B2232" : "#FBFAF7"
     readonly property color text: dark ? "#E7EBF3" : "#1B2232"

@@ -1,6 +1,7 @@
 """Tagnan's menu: a panel of his own, in his bubbles' style, opened by a right click on him or
-on his tray icon. What it shows (his grade, the next question, the pace, the call), what a few
-words typed at its top would do ("break 45", "often", "learn pottery"), where it opens, and
+on his tray icon. What it shows (his grade, the next question, the pace, the call, the model),
+what a few words typed at its top would do ("break 45", "often", "sonnet", "learn pottery"),
+where it opens, and
 running its commands. TagnanMenu.qml draws it.
 """
 
@@ -9,6 +10,7 @@ from typing import Any
 
 from PySide6.QtCore import Property, QObject, QPoint, Signal, Slot
 
+from tagnan import config as configs
 from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan.scheduler import PACES
@@ -39,6 +41,10 @@ COMMANDS = (
 BREAK_WORDS = ("break", "pause", "a break", "rest")
 LEARN_WORDS = ("learn", "study")
 FOCUS_WORDS = ("subject", "focus", "on")
+THEME_WORDS = {
+    "dark": ("dark", "dark mode", "night", "theme", "colours", "colors"),
+    "light": ("light", "light mode", "day", "theme", "colours", "colors"),
+}
 
 
 def menu_position(anchor: tuple[int, int], size: tuple[int, int], area: Box) -> tuple[int, int]:
@@ -110,7 +116,7 @@ class Menu(QObject):
 
     @Property(bool, notify=changed)
     def subLeft(self) -> bool:
-        """The pace's and the call's lists open on the left: no room on the right."""
+        """The lists beside (pace, call, model) open on the left: no room on the right."""
         return self._sub_left
 
     @Property(list, notify=changed)
@@ -148,6 +154,7 @@ class Menu(QObject):
         bp, subject = c.game.blueprint, c.game.subject
         pace = c.scheduler.rhythm.pace
         call = dict(calls.CALLS).get(str(c.call), "Silent")
+        model = configs.find_model(str(c.model))
         return {
             "stage": s["grade"],
             "grade": s["grade_name"],
@@ -168,7 +175,12 @@ class Menu(QObject):
             "paces": [{"key": p.key, "name": p.name, "hint": p.hint} for p in PACES],
             "calls": [{"key": k, "name": name} for k, name in calls.CALLS]
             + [{"key": calls.SILENT, "name": "Silent"}],
-            # His Update row (tagnan/ui/updater.py), None without updates.
+            # A model of one's own in the config file: its name as written there.
+            "model": model.name if model else str(c.model),
+            "modelKey": str(c.model),
+            "theme": str(c.theme),
+            "models": [{"key": m.model, "name": m.label, "hint": m.hint} for m in configs.MODELS],
+            # His Update & Restart row (tagnan/ui/updater.py), None without updates.
             "update": self._updater.row() if self._updater else None,
         }
 
@@ -261,6 +273,13 @@ class Menu(QObject):
         for key, name in [*calls.CALLS, (calls.SILENT, "Silent")]:
             if everything or name.casefold().startswith(folded) or folded in ("mute", "quiet"):
                 add(f"Sound: {name}", f"call:{key}")
+        for key, names in THEME_WORDS.items():
+            if len(folded) > 2 and any(w.startswith(folded) for w in names):
+                add(f"{key.capitalize()} mode", f"theme:{key}")
+        everything = folded in ("model", "models", "brain", "claude", "questions by")
+        for m in configs.MODELS:
+            if everything or m.name.casefold().startswith(folded):
+                add(f"Questions by {m.name}", f"model:{m.model}", m.hint)
         return found[:MAX_SUGGESTIONS]
 
     # --- Running ------------------------------------------------------------------------------
@@ -278,6 +297,9 @@ class Menu(QObject):
             if arg.isdigit():
                 c.setVolume(int(arg))
             return True  # heard at once, the list stays open to try another
+        if verb == "theme":
+            c.setTheme(arg)
+            return True  # one sees it at once, the menu open
         if verb == "update":
             if self._updater is not None:
                 self._updater.activate()
@@ -297,6 +319,8 @@ class Menu(QObject):
                 c.resume()
             case "pace":
                 c.setPace(arg)
+            case "model":
+                c.setModel(arg)
             case "learn":
                 c.learnWith(arg)
             case "focus":

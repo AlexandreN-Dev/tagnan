@@ -58,6 +58,9 @@ Window {
         call: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6",
         soft: "M4 9v6h4l5 4V5L8 9z",
         loud: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6M20 6a8 8 0 0 1 0 12",
+        model: "M20 3C11 4 6 10 5 19M5 19l-1 2M9 14h5c4-2 6-6 6-11",
+        moon: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
+        sun: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
         pause: "M8 5v14M16 5v14",
         resume: "M7 4v16l13-8z",
         quit: "M12 3v9M6.3 7.5a8 8 0 1 0 11.4 0",
@@ -77,6 +80,7 @@ Window {
             { separator: true },
             { action: "sub:pace", label: "How often", value: c.pace, icon: "pace", more: true },
             { action: "sub:call", label: "Sound", value: c.sound, icon: "call", more: true },
+            { action: "sub:model", label: "Questions by", value: c.model, icon: "model", more: true },
             { separator: true }
         ]
         if (c.paused) {
@@ -97,7 +101,8 @@ Window {
     function suggestionRows() {
         return suggestions.map(function(s) {
             const verb = s.action.split(":")[0]
-            const icon = { pace: "pace", call: "call", pause: "pause", learn: "learn", focus: "focus" }[verb] || verb
+            const icon = verb === "theme" ? (s.action === "theme:dark" ? "moon" : "sun")
+                : { pace: "pace", call: "call", pause: "pause", learn: "learn", focus: "focus" }[verb] || verb
             return { action: s.action, label: s.label, value: s.sub, icon: win.icons[icon] ? icon : "search" }
         })
     }
@@ -141,6 +146,13 @@ Window {
         }
         menu.run(row.action)
     }
+    // The lists beside: their choices, and the one kept.
+    function choicesOf(which) {
+        return which === "pace" ? c.paces : which === "call" ? c.calls : which === "model" ? c.models : []
+    }
+    function chosenOf(which) {
+        return which === "pace" ? c.paceKey : which === "call" ? c.callKey : c.modelKey
+    }
     function openSub(which, index) {
         hover.stop()
         subRow = index
@@ -149,9 +161,8 @@ Window {
         current = index
         const item = rowRepeater.itemAt(index)
         subTop = item ? item.mapToItem(panel, 0, 0).y - 8 : 0
-        const choices = which === "pace" ? c.paces : c.calls
-        const chosen = which === "pace" ? c.paceKey : c.callKey
-        subCurrent = Math.max(0, choices.findIndex(function(x) { return x.key === chosen }))
+        const chosen = chosenOf(which)
+        subCurrent = Math.max(0, choicesOf(which).findIndex(function(x) { return x.key === chosen }))
         sub = which
         subPhase = 0
         subSpeed = 1 / 0.16
@@ -169,7 +180,7 @@ Window {
             menu.run("volume:" + c.volume)  // Enter: heard again
             return
         }
-        const list = sub === "pace" ? c.paces : c.calls
+        const list = choicesOf(sub)
         if (index < 0 || index >= list.length)
             return
         subCurrent = index
@@ -380,7 +391,7 @@ Window {
                     smooth: true
                 }
                 Column {
-                    width: column.width - 76
+                    width: column.width - 76 - themeButton.width - 4
                     spacing: 5
                     anchors.verticalCenter: parent.verticalCenter
                     Text {
@@ -409,6 +420,29 @@ Window {
                         color: win.theme.muted
                         font.family: win.theme.body
                         font.pixelSize: 12
+                    }
+                }
+                // Dark or light, his bubble too: a moon in the light, a sun in the dark.
+                Rectangle {
+                    id: themeButton
+                    objectName: "theme"
+                    width: 32
+                    height: 32
+                    radius: 9
+                    color: themeMouse.containsMouse ? win.theme.choiceHover : win.theme.choice
+                    Accessible.role: Accessible.Button
+                    Accessible.name: win.theme.dark ? "Light mode" : "Dark mode"
+                    Glyph {
+                        anchors.centerIn: parent
+                        name: win.theme.dark ? "sun" : "moon"
+                        tint: win.theme.ink
+                    }
+                    MouseArea {
+                        id: themeMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: win.menu.run(win.theme.dark ? "theme:light" : "theme:dark")
                     }
                 }
             }
@@ -691,29 +725,29 @@ Window {
                 leftPadding: 10
                 topPadding: 4
                 bottomPadding: 6
-                text: win.sub === "pace" ? "How often?" : "His call"
+                text: ({ pace: "How often?", call: "His call", model: "Who writes his questions?" })[win.sub] || ""
                 color: win.theme.text
                 font.family: win.theme.display
                 font.pixelSize: 14
                 font.bold: true
             }
             Text {
-                visible: win.sub === "call"
+                visible: win.sub === "call" || win.sub === "model"
                 leftPadding: 10
                 bottomPadding: 4
-                text: "A click plays it and keeps it."
+                text: win.sub === "call" ? "A click plays it and keeps it." : "From his next batch on."
                 color: win.theme.muted
                 font.family: win.theme.body
                 font.pixelSize: 12
             }
             Repeater {
                 id: subList
-                model: win.sub === "pace" ? win.c.paces : win.sub === "call" ? win.c.calls : []
+                model: win.choicesOf(win.sub)
                 delegate: Rectangle {
                     id: choice
                     required property var modelData
                     required property int index
-                    readonly property bool chosen: modelData.key === (win.sub === "pace" ? win.c.paceKey : win.c.callKey)
+                    readonly property bool chosen: modelData.key === win.chosenOf(win.sub)
                     width: subColumn.width
                     height: hint.visible ? 46 : 34
                     radius: 9

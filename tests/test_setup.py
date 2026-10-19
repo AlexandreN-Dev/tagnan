@@ -44,11 +44,13 @@ def test_config_text_reads_back_to_the_choices(tmp_path: Path) -> None:
     assert loaded.brain == config.Brain("claude-sonnet-5-5", "claude-sonnet-5-5", "high", "high")
 
 
-def test_offered_models_start_with_the_default() -> None:
-    model, effort, _, _ = setup.MODELS[0]
-    assert (model, effort) == (config.Brain.model, config.Brain.effort)
-    for _, effort, _, _ in setup.MODELS:
-        assert effort in config.EFFORT_LEVELS
+def test_offered_models_hold_the_default() -> None:
+    default = config.find_model(config.Brain.model)
+    assert default is not None
+    assert default.effort == config.Brain.effort
+    for m in config.MODELS:
+        assert m.effort in config.EFFORT_LEVELS
+        assert m.label.startswith(m.name + ", effort ")
 
 
 def test_account_tells_subscription_from_api_billing() -> None:

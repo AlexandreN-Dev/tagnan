@@ -16,7 +16,7 @@ weekends = false
 
 [brain]
 # A model's full name, or one of Claude Code's aliases (claude --help): sonnet, opus, fable, haiku.
-model = "claude-opus-5-5"  # writes the questions, ten at a time
+model = "claude-opus-5-5"  # writes the questions, ten at a time; his menu's "Questions by" wins
 explain_model = "claude-opus-5-5"  # "Tell me more"
 # How long the model thinks (claude --effort): low, medium, high, xhigh, max.
 effort = "max"

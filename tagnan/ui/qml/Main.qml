@@ -40,7 +40,10 @@ Window {
         animator.setEyes(at.x, at.y)
     }
 
-    Theme { id: theme }
+    Theme {
+        id: theme
+        mode: win.controller.theme
+    }
 
     Tagnan {
         id: figure

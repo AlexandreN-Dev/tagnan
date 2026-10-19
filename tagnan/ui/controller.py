@@ -11,6 +11,7 @@ from PySide6.QtGui import QCursor
 
 from tagnan import art
 from tagnan import blueprint as blueprints
+from tagnan import config as configs
 from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan import subject as subjects
@@ -55,6 +56,7 @@ MAX_COURSE_WORDS = 120
 BUSY_MODES = ("question", "thinking", "result", "explanation", "pause")
 UPDATED_KEY = "updated"  # in his settings, from tagnan/ui/updater.py: what an update changed
 UPDATED_SECONDS = 30
+THEMES = ("dark", "light")  # chosen in his menu; none: the system's
 
 
 class Controller(QObject):
@@ -62,7 +64,7 @@ class Controller(QObject):
     promotionChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
-    prefsChanged = Signal()  # his pace, his call, its volume or his subject
+    prefsChanged = Signal()  # his pace, call, volume, subject, model or theme
     menuRequested = Signal(int, int)  # where the pointer is: his menu opens there
     quitRequested = Signal()
 
@@ -76,6 +78,7 @@ class Controller(QObject):
         clock: Callable[[], float] = time.time,
         settings: desktop.Settings | None = None,
         sounds: Sounds | None = None,
+        model: str = configs.Brain.model,
     ) -> None:
         super().__init__()
         self.game = game
@@ -94,6 +97,12 @@ class Controller(QObject):
         self._call = call if isinstance(call, str) and call in calls.CHOICES else calls.DEFAULT
         volume = calls.volume(self.settings.get("volume", calls.DEFAULT_VOLUME))
         self._volume = calls.DEFAULT_VOLUME if volume is None else volume
+        # The model chosen in his menu wins over the config file's (`model`).
+        self._config_model = model
+        chosen = configs.find_model(str(self.settings.get("model", "")))
+        self._model = chosen.model if chosen else ""
+        theme = self.settings.get("theme", "")
+        self._theme = theme if theme in THEMES else ""
         self._stage = game.progress.grade
         self._spec = art.figure(self._stage)
         self._promotion: dict[str, int] = {}
@@ -197,6 +206,16 @@ class Controller(QObject):
     def volume(self) -> int:
         """His call's volume, in percent."""
         return self._volume
+
+    @Property(str, notify=prefsChanged)
+    def model(self) -> str:
+        """The model that writes his questions: his menu's choice, else the config file's."""
+        return self._model or self._config_model
+
+    @Property(str, notify=prefsChanged)
+    def theme(self) -> str:
+        """His colours: "dark" or "light" as chosen in his menu, "" for the system's."""
+        return self._theme
 
     @Property(str, notify=prefsChanged)
     def subject(self) -> str:
@@ -683,6 +702,34 @@ class Controller(QObject):
         self.prefsChanged.emit()
         self.sounds.play(self._call, chosen)
 
+    @Slot(str)
+    def setModel(self, key: str) -> None:
+        """The model that writes his next questions; those already written stay."""
+        chosen = configs.find_model(key)
+        if chosen is None or chosen.model == (self._model or self._config_model):
+            return
+        self._model = chosen.model
+        self.settings.set("model", chosen.model)
+        logger.info("model: %s", chosen.model)
+        self.prefsChanged.emit()
+        if self._bubble["mode"] in BUSY_MODES:
+            return  # not a word over a question: his menu shows the model
+        text = (
+            f"{chosen.name} writes my next questions: {chosen.hint}."
+            " The ones I already hold stay as they are."
+        )
+        self._show({"mode": "message", "title": f"{chosen.name.split()[0]} it is!", "text": text})
+        self._hide_timer.start(7000)
+
+    @Slot(str)
+    def setTheme(self, key: str) -> None:
+        if key not in THEMES or key == self._theme:
+            return
+        self._theme = key
+        self.settings.set("theme", key)
+        logger.info("theme: %s", key)
+        self.prefsChanged.emit()
+
     @Slot(int)
     def pause(self, minutes: int) -> None:
         self.pauseWith(f"{minutes} min")
@@ -727,7 +774,10 @@ class Controller(QObject):
             return
         if self.game.needs_questions():
             logger.info("asking the brain for a batch")
-            self.worker.generate(self.game.batch_request())
+            request = self.game.batch_request()
+            if self._model:
+                request["model"] = self._model
+            self.worker.generate(request)
 
     def _on_batch(self, answer: object) -> None:
         questions = answer.get("questions", []) if isinstance(answer, dict) else []

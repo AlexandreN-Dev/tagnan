@@ -84,6 +84,19 @@ def test_generate_runs_claude_isolated(fake_claude: Path) -> None:
     assert "$" not in prompt  # every placeholder filled
 
 
+def test_generate_takes_the_model_chosen_in_his_menu(fake_claude: Path) -> None:
+    answer(fake_claude, {"questions": [question_data()]})
+    slots = [{"domain": 3, "difficulty": "medium", "kind": "single"}]
+    request = {"exam": "aif-c01", "slots": slots, "model": "claude-haiku-5-5"}
+    brain.generate(request, config.Config())
+    argv = call_log(fake_claude)["argv"]
+    assert isinstance(argv, list)
+    assert argv[argv.index("--model") + 1] == "claude-haiku-5-5"
+    assert argv[argv.index("--effort") + 1] == "high"  # the model's own, not the config's
+    with pytest.raises(brain.BrainError, match="unknown model"):
+        brain.generate({**request, "model": "gpt-4"}, config.Config())
+
+
 def test_explain_returns_text(fake_claude: Path) -> None:
     answer(fake_claude, {"text": "  Sacrebleu! Guardrails,\n is the guard rail. "})
     request = {"exam": "aif-c01", "question": question_data(), "chosen": [3]}

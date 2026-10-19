@@ -6,11 +6,37 @@ Every key has a default; an unknown key or a wrong value stops with a clear mess
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from tagnan.scheduler import Rhythm
 
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")  # claude --effort
+
+
+class Model(NamedTuple):
+    """A model offered to write the questions (the setup, his menu), with its effort."""
+
+    model: str
+    effort: str
+    label: str
+    hint: str
+
+    @property
+    def name(self) -> str:
+        return self.label.partition(",")[0]
+
+
+# From the most capable down to the quickest.
+MODELS = (
+    Model("claude-fable-5-1", "max", "Fable 5.1, effort max", "the most capable, the slowest"),
+    Model("claude-opus-5-5", "max", "Opus 5.5, effort max", "fine, minutes per batch"),
+    Model("claude-sonnet-5-5", "high", "Sonnet 5.5, effort high", "quick, lighter on your limits"),
+    Model("claude-haiku-5-5", "high", "Haiku 5.5, effort high", "the quickest, plainer questions"),
+)
+
+
+def find_model(model: str) -> Model | None:
+    return next((m for m in MODELS if m.model == model), None)
 
 
 @dataclass(frozen=True)

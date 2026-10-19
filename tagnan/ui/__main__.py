@@ -247,7 +247,14 @@ def main() -> int:
     animator = Animator(rig, frame_ms=round(1000 / max(1, args.fps)))
     settings = Settings(state_dir() / "settings.json")
     controller = Controller(
-        game, scheduler, worker, animator, rng, settings=settings, sounds=Sounds()
+        game,
+        scheduler,
+        worker,
+        animator,
+        rng,
+        settings=settings,
+        sounds=Sounds(),
+        model=cfg.brain.model,
     )
     placement = Placement()
     # His updates: from GitHub, through scripts/update; none in a development snapshot or measure.

@@ -53,13 +53,13 @@ def test_a_call_plays_with_afplay_and_cuts_the_one_before(
     fake.write_text("#!/bin/sh\nexec sleep 30\n")
     fake.chmod(0o755)
     monkeypatch.setattr(sounds, "AFPLAY", str(fake))
-    sounds.play_wav(SOUNDS_DIR / "bugle.wav")
+    sounds.play_wav(SOUNDS_DIR / "bugle.wav", 50)
     first = sounds._playing[0]
-    assert first.args == [str(fake), str(SOUNDS_DIR / "bugle.wav")]
+    assert first.args == [str(fake), "-v", "0.2500", str(SOUNDS_DIR / "bugle.wav")]
     sounds.play_wav(SOUNDS_DIR / "bell.wav")
     assert first.wait(5) != 0  # cut
     second = sounds._playing[0]
-    assert second.args == [str(fake), str(SOUNDS_DIR / "bell.wav")]
+    assert second.args == [str(fake), "-v", "1.0000", str(SOUNDS_DIR / "bell.wav")]
     sounds.play_wav(tmp_path / "missing.wav")  # silence, and the bell is cut too
     assert second.wait(5) != 0
     assert sounds._playing == []

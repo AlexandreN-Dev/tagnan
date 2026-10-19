@@ -57,7 +57,7 @@ class Controller(QObject):
     stageChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
-    prefsChanged = Signal()  # his pace, his call or his subject
+    prefsChanged = Signal()  # his pace, his call, its volume or his subject
     menuRequested = Signal(int, int)  # where the pointer is: his menu opens there
     quitRequested = Signal()
 
@@ -87,6 +87,8 @@ class Controller(QObject):
             scheduler.set_rhythm(scheduler.rhythm.paced(saved), clock())
         call = self.settings.get("call", calls.DEFAULT)
         self._call = call if isinstance(call, str) and call in calls.CHOICES else calls.DEFAULT
+        volume = calls.volume(self.settings.get("volume", calls.DEFAULT_VOLUME))
+        self._volume = calls.DEFAULT_VOLUME if volume is None else volume
         self._stage = game.progress.grade
         self._spec = art.figure(self._stage)
         self._bubble: dict[str, Any] = {"mode": "hidden"}
@@ -177,6 +179,11 @@ class Controller(QObject):
     def call(self) -> str:
         return self._call
 
+    @Property(int, notify=prefsChanged)
+    def volume(self) -> int:
+        """His call's volume, in percent."""
+        return self._volume
+
     @Property(str, notify=prefsChanged)
     def subject(self) -> str:
         """What he asks about: the course, or the subject within it."""
@@ -199,7 +206,7 @@ class Controller(QObject):
             self.scheduler.postpone(now, BUSY_RETRY_MINUTES)
             return
         if self._ask(now):
-            self.sounds.play(self._call)  # to be heard away from the screen
+            self.sounds.play(self._call, self._volume)  # to be heard away from the screen
 
     def _ask(self, now: float) -> bool:
         question = self.game.next_question(now)
@@ -644,7 +651,19 @@ class Controller(QObject):
         self.settings.set("call", key)
         logger.info("call: %s", key)
         self.prefsChanged.emit()
-        self.sounds.play(key)
+        self.sounds.play(key, self._volume)
+
+    @Slot(int)
+    def setVolume(self, percent: int) -> None:
+        """His call's volume, his call played at once at it: one sets it by ear."""
+        chosen = calls.volume(percent)
+        if chosen is None:
+            return
+        self._volume = chosen
+        self.settings.set("volume", chosen)
+        logger.info("volume: %s", chosen)
+        self.prefsChanged.emit()
+        self.sounds.play(self._call, chosen)
 
     @Slot(int)
     def pause(self, minutes: int) -> None:

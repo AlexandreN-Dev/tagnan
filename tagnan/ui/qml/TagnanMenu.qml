@@ -1,7 +1,7 @@
 // Tagnan's menu, in his bubbles' style (tagnan/ui/menu.py says what it shows and does): his
 // grade and points at the top, a field to type a command ("break 45", "often", "learn pottery"),
-// then his commands. How often and Sound open their lists beside it. Arrows, Enter and Esc work
-// throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
+// then his commands. How often and Sound open their lists beside it, Sound with his volume
+// under its list. Arrows, Enter and Esc work throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
 // while it is open and never moves: only the panels move within it, so nothing jumps. It grows
 // out of the pointer as it opens, its shadow with it, and fades as it closes.
 import QtQuick
@@ -20,7 +20,7 @@ Window {
     property real subTop: 0
     property int subRow: -1  // the row whose list is open
     property int current: 0  // the row the keyboard is on
-    property int subCurrent: 0
+    property int subCurrent: 0  // in his call's list, one past the last call is the volume
     property var suggestions: []
     property bool keyboard: false  // the arrows were used: the row they are on is ringed
     property point pointer: Qt.point(-1, -1)  // where the mouse last was, in the window
@@ -56,6 +56,8 @@ Window {
         subject: "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5",
         pace: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
         call: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6",
+        soft: "M4 9v6h4l5 4V5L8 9z",
+        loud: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6M20 6a8 8 0 0 1 0 12",
         pause: "M8 5v14M16 5v14",
         resume: "M7 4v16l13-8z",
         quit: "M12 3v9M6.3 7.5a8 8 0 1 0 11.4 0",
@@ -74,7 +76,7 @@ Window {
             { action: "subject", label: "Subject", value: c.subject, icon: "subject" },
             { separator: true },
             { action: "sub:pace", label: "How often", value: c.pace, icon: "pace", more: true },
-            { action: "sub:call", label: "Sound", value: c.call, icon: "call", more: true },
+            { action: "sub:call", label: "Sound", value: c.sound, icon: "call", more: true },
             { separator: true }
         ]
         if (c.paused) {
@@ -119,7 +121,7 @@ Window {
     function move(step) {
         keyboard = true
         if (sub !== "") {
-            const count = subList.count
+            const count = subList.count + (sub === "call" ? 1 : 0)
             subCurrent = (subCurrent + step + count) % count
             return
         }
@@ -155,7 +157,18 @@ Window {
         subSpeed = 1 / 0.16
         update()
     }
+    // On the volume, the arrows beside turn it up or down a step, heard at once.
+    readonly property bool onVolume: sub === "call" && subCurrent === subList.count
+    function louder(step) {
+        const next = Math.max(0, Math.min(100, c.volume + 5 * step))
+        if (next !== c.volume)
+            menu.run("volume:" + next)
+    }
     function choose(index) {
+        if (onVolume) {
+            menu.run("volume:" + c.volume)  // Enter: heard again
+            return
+        }
         const list = sub === "pace" ? c.paces : c.calls
         if (index < 0 || index >= list.length)
             return
@@ -433,13 +446,17 @@ Window {
                 Keys.onDownPressed: win.move(1)
                 Keys.onRightPressed: (event) => {
                     const row = win.rows[win.current]
-                    if (win.sub === "" && row && row.more && field.cursorPosition === field.text.length)
+                    if (win.onVolume)
+                        win.louder(1)
+                    else if (win.sub === "" && row && row.more && field.cursorPosition === field.text.length)
                         win.activate(win.current)
                     else
                         event.accepted = false
                 }
                 Keys.onLeftPressed: (event) => {
-                    if (win.sub !== "")
+                    if (win.onVolume)
+                        win.louder(-1)
+                    else if (win.sub !== "")
                         win.sub = ""
                     else
                         event.accepted = false
@@ -659,7 +676,7 @@ Window {
         }
 
         Hilite {
-            target: { win.subCurrent; subList.count; return subList.itemAt(win.subCurrent) }
+            target: { win.subCurrent; subList.count; return win.onVolume ? volumeBox : subList.itemAt(win.subCurrent) }
             shown: target !== null
             originY: subColumn.y
         }
@@ -753,6 +770,116 @@ Window {
                                 win.subCurrent = choice.index
                         }
                         onClicked: win.choose(choice.index)
+                    }
+                }
+            }
+
+            // His volume, under the calls: set by ear, his call played as one lets go.
+            Rectangle {
+                visible: win.sub === "call"
+                x: 10
+                width: subColumn.width - 20
+                height: 1
+                color: win.theme.line
+            }
+            Item { visible: win.sub === "call"; width: 1; height: 4 }
+            Item {
+                id: volumeBox
+                objectName: "volume"
+                visible: win.sub === "call"
+                width: subColumn.width
+                height: volumeColumn.implicitHeight + 8
+                Accessible.role: Accessible.Slider
+                Accessible.name: "Volume"
+                Column {
+                    id: volumeColumn
+                    x: 10
+                    y: 4
+                    width: parent.width - 20
+                    spacing: 6
+                    Item {
+                        width: parent.width
+                        height: volumeLabel.implicitHeight
+                        Text {
+                            id: volumeLabel
+                            text: "Volume"
+                            color: win.theme.text
+                            font.family: win.theme.body
+                            font.pixelSize: 13
+                        }
+                        Text {
+                            anchors.right: parent.right
+                            text: Math.round(slider.pressed ? slider.value : win.c.volume) + " %"
+                            color: win.theme.muted
+                            font.family: win.theme.body
+                            font.pixelSize: 13
+                            font.features: { "tnum": 1 }
+                        }
+                    }
+                    Row {
+                        width: parent.width
+                        spacing: 8
+                        Glyph { name: "soft"; tint: win.theme.muted; anchors.verticalCenter: parent.verticalCenter }
+                        Slider {
+                            id: slider
+                            width: parent.width - 2 * 18 - 2 * parent.spacing
+                            height: 24
+                            from: 0
+                            to: 100
+                            stepSize: 5
+                            snapMode: Slider.SnapAlways
+                            focusPolicy: Qt.NoFocus  // the keyboard stays in the field
+                            Binding on value { value: win.c.volume; when: !slider.pressed }
+                            onPressedChanged: {
+                                if (pressed) {
+                                    win.subCurrent = subList.count
+                                } else {
+                                    win.menu.run("volume:" + Math.round(value))
+                                }
+                            }
+                            background: Rectangle {
+                                x: slider.leftPadding
+                                y: slider.topPadding + (slider.availableHeight - height) / 2
+                                width: slider.availableWidth
+                                height: 4
+                                radius: 2
+                                color: win.theme.line
+                                Rectangle {
+                                    width: slider.visualPosition * parent.width
+                                    height: parent.height
+                                    radius: 2
+                                    color: win.theme.ink
+                                }
+                            }
+                            handle: Rectangle {
+                                x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
+                                y: slider.topPadding + (slider.availableHeight - height) / 2
+                                width: 16
+                                height: 16
+                                radius: 8
+                                color: win.theme.ink
+                                border.color: win.theme.panel
+                                border.width: 2
+                            }
+                        }
+                        Glyph { name: "loud"; tint: win.theme.muted; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        text: "Let go to hear it."
+                        color: win.theme.muted
+                        font.family: win.theme.body
+                        font.pixelSize: 12
+                    }
+                }
+                HoverHandler {
+                    onPointChanged: {
+                        if (hovered && win.subCurrent !== subList.count) {
+                            hover.stop()
+                            win.current = win.subRow
+                            win.subCurrent = subList.count
+                        }
                     }
                 }
             }

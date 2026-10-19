@@ -1,3 +1,4 @@
+import array
 import json
 import os
 import random
@@ -163,10 +164,12 @@ class Speaker:
 
     def __init__(self) -> None:
         self.played: list[str] = []
+        self.volumes: list[int] = []
 
-    def __call__(self, path: Path) -> None:
+    def __call__(self, path: Path, percent: int) -> None:
         assert path.parent == SOUNDS_DIR
         self.played.append(path.stem)
+        self.volumes.append(percent)
 
 
 def make(
@@ -386,6 +389,7 @@ def test_his_menu_says_where_he_stands(game: Game) -> None:
         "regularly",
         "Bugle call",
     )
+    assert (c["sound"], c["volume"]) == ("Bugle call · 65 %", 65)
     assert c["paces"][0]["key"] == "rarely"
     assert c["calls"][-1] == {"key": "silent", "name": "Silent"}
     controller.setSubject("domain:2")
@@ -664,6 +668,57 @@ def test_his_call_is_chosen_by_ear_and_kept(game: Game, tmp_path: Path) -> None:
     assert json.loads(path.read_text())["figure"] == [10, 20]
 
 
+def test_his_volume_is_set_by_ear_and_kept(game: Game, tmp_path: Path) -> None:
+    fill(game)
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"volume": "loud"}))
+    clock = Clock()
+    speaker = Speaker()
+    controller, _, _ = make(game, clock, settings=Settings(path), speaker=speaker)
+    assert controller.property("volume") == 65  # what is not a volume is ignored
+    menu = Menu(controller)
+    menu.openAt(10, 10)
+    assert menu.run("volume:32") is True  # heard, and the list stays open
+    assert controller.property("volume") == 30  # to the nearest step
+    assert (speaker.played, speaker.volumes) == (["bugle"], [30])
+    assert menu.property("content")["sound"] == "Bugle call · 30 %"
+    controller.setVolume(140)
+    assert controller.property("volume") == 100
+    menu.run("volume:loud")
+    assert controller.property("volume") == 100
+    controller.setVolume(0)
+    assert speaker.played == ["bugle", "bugle"]  # nothing to hear at 0
+    controller.setVolume(40)
+    # His own call, when he asks, comes at that volume.
+    clock.now = controller.scheduler.next_at
+    controller._tick()
+    assert speaker.volumes[-1] == 40
+    again, _, _ = make(game, settings=Settings(path))
+    assert again.property("volume") == 40
+    controller.setCall("silent")
+    assert menu.property("content")["sound"] == "Silent"
+
+
+def test_a_softer_call_is_written_once_and_only_its_latest_volume_kept(tmp_path: Path) -> None:
+    import wave
+
+    from tagnan.ui.sounds import softer
+
+    bugle = SOUNDS_DIR / "bugle.wav"
+    quiet = softer(bugle, 50, tmp_path)
+    assert quiet == tmp_path / "bugle-50.wav"
+    with wave.open(str(bugle)) as a, wave.open(str(quiet)) as b:
+        assert b.getparams() == a.getparams()
+        loud = array.array("h", a.readframes(a.getnframes()))
+        soft = array.array("h", b.readframes(b.getnframes()))
+    assert max(map(abs, soft)) == round(max(map(abs, loud)) / 4)  # 50 %: a quarter, -12 dB
+    stamp = quiet.stat().st_mtime_ns
+    assert softer(bugle, 50, tmp_path).stat().st_mtime_ns == stamp  # not written again
+    softer(bugle, 20, tmp_path)
+    softer(SOUNDS_DIR / "bell.wav", 20, tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["bell-20.wav", "bugle-20.wav"]
+
+
 def test_how_often_he_asks_is_chosen_and_kept(game: Game, tmp_path: Path) -> None:
     fill(game)
     clock = Clock()
@@ -777,6 +832,24 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         popup.findChild(QObject, "field").setProperty("text", "")
         popup.openSub("pace", 4)
         assert popup.property("sub") == "pace"
+        # His volume sits under his call's list, one stop past the calls: the arrows beside
+        # turn it up or down.
+        from PySide6.QtCore import Qt
+
+        sound = next(i for i, r in enumerate(rows) if r.get("action") == "sub:call")
+        popup.openSub("call", sound)
+        QApplication.processEvents()
+        volume = next(i for i in items(popup.contentItem()) if i.objectName() == "volume")
+        assert volume.isVisible()
+        assert popup.property("subCurrent") == 0  # on the call chosen
+        QTest.keyClick(popup, Qt.Key.Key_Up)  # round to the last stop
+        assert popup.property("onVolume") is True
+        QTest.keyClick(popup, Qt.Key.Key_Right)
+        assert controller.property("volume") == 70
+        QTest.keyClick(popup, Qt.Key.Key_Left)
+        QTest.keyClick(popup, Qt.Key.Key_Left)
+        assert controller.property("volume") == 60
+        assert popup.property("sub") == "call"  # still open, to hear the next step
         # Opened low on the screen, the list beside stays above its bottom edge, with room.
         menu.close()
         bottom = QApplication.primaryScreen().availableGeometry().bottom()

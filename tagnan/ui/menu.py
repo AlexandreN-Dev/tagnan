@@ -158,6 +158,8 @@ class Menu(QObject):
             "pace": pace.name if pace else "Your own",
             "paceKey": pace.key if pace else "",
             "call": call,
+            "sound": call if str(c.call) == calls.SILENT else f"{call} · {c.volume} %",
+            "volume": c.volume,
             "callKey": str(c.call),
             "paces": [{"key": p.key, "name": p.name, "hint": p.hint} for p in PACES],
             "calls": [{"key": k, "name": name} for k, name in calls.CALLS]
@@ -266,6 +268,10 @@ class Menu(QObject):
         if verb == "call":
             c.setCall(arg)
             return True  # one hears a call, then the next, and keeps the last
+        if verb == "volume":
+            if arg.isdigit():
+                c.setVolume(int(arg))
+            return True  # heard at once, the list stays open to try another
         if verb == "update":
             if self._updater is not None:
                 self._updater.activate()

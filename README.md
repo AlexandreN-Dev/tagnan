@@ -49,7 +49,7 @@ To work on the code: `uv sync`, then the checks listed in `CLAUDE.md`.
 
 ### Updating
 
-When a new version is out, "Update" in his menu shows a gold "New": one click and he takes it, starts again and tells you what changed. He looks for one a minute after he starts, then once a day. By hand, in a terminal: `cd ~/tagnan && scripts/update`, then quit him from his menu and start him again. Your progress, questions and settings stay: they live outside the repository. He never updates over changes of your own to his files: then `git pull` it is.
+When a new version is out, "Update & Restart" in his menu shows a gold "New": one click and he takes it, starts again and tells you what changed. He looks for one a minute after he starts, then once a day; with nothing new, the click looks once more, then simply starts him again. By hand, in a terminal: `cd ~/tagnan && scripts/update`, then "Update & Restart" in his menu. Your progress, questions and settings stay: they live outside the repository. He never updates over changes of your own to his files: then `git pull` it is.
 
 ## Living with Tagnan
 

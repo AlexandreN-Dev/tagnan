@@ -80,7 +80,7 @@ def test_a_new_version_lights_his_update_row_then_one_click_takes_it() -> None:
     up = updater(client, settings)
     restarts = heard(up.restartRequested)
     assert up.row() == {
-        "label": "Update",
+        "label": "Update & Restart",
         "value": "",
         "pill": False,
         "busy": False,
@@ -89,14 +89,14 @@ def test_a_new_version_lights_his_update_row_then_one_click_takes_it() -> None:
     up.check()
     assert up.property("state") == "new"
     assert up.row() == {
-        "label": "Update",
+        "label": "Update & Restart",
         "value": "New",
         "pill": True,
         "busy": False,
         "strong": True,
     }
     assert up.property("news") == NEWS
-    up.activate()  # his menu's Update, now that there is a new version
+    up.activate()  # his menu's Update & Restart, now that there is a new version
     assert client.calls == ["check", "apply"]  # type: ignore[attr-defined]
     assert up.property("state") == "updating"
     assert up.row()["busy"] is True  # type: ignore[index]
@@ -116,7 +116,7 @@ def test_the_window_is_made_again_when_its_pins_change() -> None:
     assert restarts == [(True,)]
 
 
-def test_up_to_date_and_nothing_new_after_all() -> None:
+def test_nothing_new_a_click_looks_again_then_restarts_him() -> None:
     client = FakeClient(
         check={"ok": True, "behind": 0, "news": []},
         apply={"ok": True, "updated": False, "news": [], "setup": False},
@@ -124,29 +124,46 @@ def test_up_to_date_and_nothing_new_after_all() -> None:
     up = updater(client)
     restarts = heard(up.restartRequested)
     up.check()
-    assert up.row()["value"] == "Up to date"  # type: ignore[index]
-    up.activate()  # up to date: looks again
+    assert up.row()["value"] == ""  # type: ignore[index]
+    assert restarts == []  # the morning look restarts nothing
+    up.activate()  # up to date: looks again, then starts him again
     assert client.calls == ["check", "check"]  # type: ignore[attr-defined]
-    up.apply()  # GitHub had nothing more by the time he asked
+    assert restarts == [(False,)]
+    up.apply()  # GitHub had nothing more by the time he asked: he starts again all the same
     assert up.property("state") == "uptodate"
-    assert restarts == []
+    assert restarts == [(False,), (False,)]
+
+
+def test_a_click_takes_what_its_own_look_finds() -> None:
+    client = FakeClient(
+        check={"ok": True, "behind": 3, "news": NEWS},
+        apply={"ok": True, "updated": True, "news": NEWS, "setup": False},
+    )
+    up = updater(client)
+    restarts = heard(up.restartRequested)
+    up.activate()  # never looked yet: looks, finds, takes, restarts, in one click
+    assert client.calls == ["check", "apply"]  # type: ignore[attr-defined]
+    assert restarts == [(False,)]
 
 
 def test_he_says_why_only_when_asked() -> None:
     client = FakeClient(check=UpdateError("cannot start scripts/update: no wsl.exe"))
     up = updater(client)
     said = heard(up.failed)
+    restarts = heard(up.restartRequested)
     up.check(asked=False)  # the morning look: no word if it fails
     assert up.property("state") == "failed"
     assert up.row()["value"] == "Try again"  # type: ignore[index]
     assert said == []
-    up.activate()  # from his menu
+    up.check(asked=True)
     assert said == [
         (
             "No update for now",
             "I couldn't reach my updates: cannot start scripts/update: no wsl.exe.",
         )
     ]
+    up.activate()  # from his menu: no updates to reach, he starts again all the same
+    assert restarts == [(False,)]
     refusal = {
         "ok": False,
         "reason": "local-changes",
@@ -189,14 +206,16 @@ def test_his_menu_shows_update_and_stays_open_while_it_runs(game: Game) -> None:
     up = updater(client)
     menu = Menu(controller, up)
     menu.openAt(10, 10)
-    assert menu.property("content")["update"]["label"] == "Update"
-    assert menu.run("update") is True  # it says how it goes, the menu open
-    assert menu.property("shown") is True
+    assert menu.property("content")["update"]["label"] == "Update & Restart"
+    up.check()
     assert menu.property("content")["update"]["pill"] is True
     assert [s["action"] for s in menu.suggest("upd")] == ["update"]
+    assert [s["action"] for s in menu.suggest("restart")] == ["update"]
     assert "update" not in [s["action"] for s in Menu(controller).suggest("upd")]
+    assert "restart" not in menu.property("content")
     restarts = heard(up.restartRequested)
-    menu.run("update")
+    assert menu.run("update") is True  # it says how it goes, the menu open
+    assert menu.property("shown") is True
     assert restarts == [(False,)]
 
 
@@ -216,7 +235,7 @@ def test_back_from_an_update_he_says_what_changed(game: Game) -> None:
     assert settings.get(NEWS_KEY) is None  # once
 
 
-def test_restart_lights_up_when_his_folder_holds_what_he_does_not_run(game: Game) -> None:
+def test_his_row_lights_up_when_his_folder_holds_what_he_does_not_run(game: Game) -> None:
     fill(game)
     controller, _, _ = make(game)
     clock = Clock()
@@ -232,23 +251,26 @@ def test_restart_lights_up_when_his_folder_holds_what_he_does_not_run(game: Game
     menu = Menu(controller, up)
     up.start()  # learns the commit he runs
     assert client.heres == [()]  # type: ignore[attr-defined]
-    row = {"label": "Restart Tagnan", "value": "", "pill": False}
-    assert menu.property("content")["restart"] == row
+    row = {"label": "Update & Restart", "value": "", "pill": False, "busy": False, "strong": False}
+    assert menu.property("content")["update"] == row
     menu.openAt(10, 10)  # opened at once: not asked again
     assert len(client.heres) == 1  # type: ignore[attr-defined]
     menu.close()
     clock.now += 60
     menu.openAt(10, 10)  # a commit since: gold
     assert client.heres[-1] == ("a1",)  # type: ignore[attr-defined]
-    assert menu.property("content")["restart"] == {**row, "value": "New", "pill": True}
-    assert [s["action"] for s in menu.suggest("restart")] == ["restart"]
+    assert menu.property("content")["update"] == {
+        **row,
+        "value": "New",
+        "pill": True,
+        "strong": True,
+    }
     restarts = heard(up.restartRequested)
-    assert menu.run("restart") is False
-    assert menu.property("shown") is False
+    menu.run("update")
+    assert client.calls == []  # type: ignore[attr-defined]  # his own commits: no GitHub
     assert restarts == [(True,)]  # its pins changed: his environment again
     assert settings.get(NEWS_KEY)["news"] == news  # he says what changed, once back
-    assert Menu(controller).property("content")["restart"] is None
-    assert "restart" not in [s["action"] for s in Menu(controller).suggest("restart")]
+    assert Menu(controller).property("content")["update"] is None
 
 
 def test_restart_without_a_folder_to_read_still_works() -> None:
@@ -256,7 +278,7 @@ def test_restart_without_a_folder_to_read_still_works() -> None:
     up = updater(client)
     restarts = heard(up.restartRequested)
     up.start()
-    assert up.restart_row() == {"label": "Restart Tagnan", "value": "", "pill": False}
+    assert up.row()["pill"] is False  # type: ignore[index]
     up.restart()
     assert restarts == [(False,)]
 
@@ -296,7 +318,7 @@ def test_his_menu_draws_the_update_row(game: Game) -> None:
         def update_row() -> dict[str, Any]:
             rows = popup.property("rows").toVariant()
             assert rows[-1]["action"] == "quit"  # Quit Tagnan stays last
-            assert rows[-2]["action"] == "restart"  # Restart just above
+            assert rows[-2]["action"] == "update"  # Update & Restart just above
             return next(r for r in rows if r.get("action") == "update")
 
         assert update_row()["value"] == ""

@@ -1,11 +1,11 @@
-"""Keeps Tagnan up to date, for his menu's Update: asks scripts/update what is new on GitHub a
-minute after he starts, then about once a day, and takes it when asked; then hands over to
-`scripts/update restart`, which outlives the window and starts him again in his new version,
+"""Keeps Tagnan up to date, for his menu's Update & Restart: asks scripts/update what is new on
+GitHub a minute after he starts, then about once a day. A click takes what is new, if anything,
+then hands over to `scripts/update restart`, which outlives the window and starts him again,
 and he says what changed once he is back.
 
-His menu's Restart goes the same way, at any time. It lights up when his folder holds commits
-his window does not run yet (one's own, as one works on him): `scripts/update here`, asked as
-he starts and as his menu opens, says which commit the folder is at."""
+The row also lights up when his folder holds commits his window does not run yet (one's own, as
+one works on him): `scripts/update here`, asked as he starts and as his menu opens, says which
+commit the folder is at; a click then simply starts him again in them."""
 
 import json
 import logging
@@ -34,14 +34,15 @@ APPLY_TIMEOUT = 180.0
 HERE_TIMEOUT = 30.0
 LOOK_AGAIN = 10.0  # seconds: his menu opened again soon after asks nothing more
 NEWS_KEY = "updated"  # in his settings: what changed, for his bubble once he is back
-# The row in his menu for each state: label, value, gold "New" pill, busy, stressed.
+# The row in his menu for each state: label, value, busy.
+LABEL = "Update & Restart"
 ROWS = {
-    "idle": ("Update", "", False, False, False),
-    "checking": ("Update", "Checking…", False, False, False),
-    "uptodate": ("Update", "Up to date", False, False, False),
-    "new": ("Update", "New", True, False, True),
-    "updating": ("Updating…", "back in a moment", False, True, False),
-    "failed": ("Update", "Try again", False, False, False),
+    "idle": (LABEL, "", False),
+    "checking": (LABEL, "Checking…", False),
+    "uptodate": (LABEL, "", False),
+    "new": (LABEL, "", False),
+    "updating": ("Updating…", "back in a moment", True),
+    "failed": (LABEL, "Try again", False),
 }
 
 
@@ -147,6 +148,7 @@ class Updater(QObject):
         self._clock = clock
         self._run = run
         self._state = "idle"
+        self._then_restart = False  # a click's check: whatever it finds, he starts again
         self._news: list[str] = []
         self._checked_at = 0.0
         # The commit his window runs, learnt as he starts; what his folder has beyond it.
@@ -178,18 +180,15 @@ class Updater(QObject):
         return list(self._news)
 
     def row(self) -> dict[str, Any] | None:
-        """His menu's Update row, None when there is nothing to update with."""
+        """His menu's Update & Restart row, None when there is nothing to update with: a gold
+        "New" for a new version on GitHub, or commits in his folder he does not run yet."""
         if self.client is None:
             return None
-        label, value, pill, busy, strong = ROWS[self._state]
-        return {"label": label, "value": value, "pill": pill, "busy": busy, "strong": strong}
-
-    def restart_row(self) -> dict[str, Any] | None:
-        """His menu's Restart row: a gold "New" when his folder holds what he does not run."""
-        if self.client is None:
-            return None
-        moved = bool(self._here["moved"])
-        return {"label": "Restart Tagnan", "value": "New" if moved else "", "pill": moved}
+        label, value, busy = ROWS[self._state]
+        fresh = not busy and (self._state == "new" or bool(self._here["moved"]))
+        if fresh:
+            value = "New"
+        return {"label": label, "value": value, "pill": fresh, "busy": busy, "strong": fresh}
 
     # --- Doing --------------------------------------------------------------------------------
 
@@ -205,7 +204,7 @@ class Updater(QObject):
 
     @Slot()
     def restart(self) -> None:
-        """His menu's Restart: he quits and comes back, in what his folder holds."""
+        """He quits and comes back, in what his folder holds."""
         if self.client is None:
             return
         news = [str(line) for line in self._here["news"]]
@@ -216,10 +215,17 @@ class Updater(QObject):
 
     @Slot()
     def activate(self) -> None:
-        """His menu's Update: take the new version, or look again for one."""
+        """His menu's Update & Restart: take the new version and start again in it. Commits of
+        one's own in his folder: start again in them. Else look for a new version first, and
+        start again whatever the answer."""
+        if self.client is None or self._state in ("checking", "updating"):
+            return
         if self._state == "new":
             self.apply()
-        elif self._state not in ("checking", "updating"):
+        elif self._here["moved"]:
+            self.restart()
+        else:
+            self._then_restart = True
             self.check(asked=True)
 
     def check(self, asked: bool = False) -> None:
@@ -252,6 +258,17 @@ class Updater(QObject):
         if action == "here":
             self._on_here(answer)
             return
+        if action == "check" and self._then_restart:
+            self._then_restart = False
+            if isinstance(answer, dict) and answer.get("ok") and int(answer.get("behind") or 0):
+                self._news = [str(line) for line in answer.get("news") or []]
+                self._set("new")
+                self.apply()
+            else:
+                logger.info("nothing to take (%s): starting again", answer)
+                self._set("uptodate" if isinstance(answer, dict) and answer.get("ok") else "failed")
+                self.restart()
+            return
         if isinstance(answer, UpdateError) or not isinstance(answer, dict):
             logger.warning("update %s failed: %s", action, answer)
             self._set("failed")
@@ -271,7 +288,8 @@ class Updater(QObject):
             self._set("new" if behind else "uptodate")
             return
         if not answer.get("updated"):
-            self._set("uptodate")
+            self._set("uptodate")  # GitHub had nothing more by the time he asked
+            self.restart()
             return
         self._news = [str(line) for line in answer.get("news") or []]
         self._settings.set(NEWS_KEY, {"news": self._news, "at": self._clock()})

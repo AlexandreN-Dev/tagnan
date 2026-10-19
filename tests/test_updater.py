@@ -27,14 +27,20 @@ def qt_app() -> QApplication:
 class FakeClient(UpdateClient):
     """scripts/update as the window would hear it, answers set by each test."""
 
-    def __init__(self, check: Any = None, apply: Any = None) -> None:
+    def __init__(self, check: Any = None, apply: Any = None, here: Any = None) -> None:
         super().__init__(("scripts/update",))
-        object.__setattr__(self, "answers", {"check": check, "apply": apply})
+        here = here or [{"ok": True, "head": "a1", "moved": False, "news": [], "setup": False}]
+        object.__setattr__(self, "answers", {"check": check, "apply": apply, "here": here})
         object.__setattr__(self, "calls", [])
+        object.__setattr__(self, "heres", [])  # the commit each `here` was asked from
 
-    def call(self, action: str, timeout: float) -> dict[str, Any]:
-        self.calls.append(action)  # type: ignore[attr-defined]
+    def call(self, action: str, timeout: float, *args: str) -> dict[str, Any]:
         answer = self.answers[action]  # type: ignore[attr-defined]
+        if action == "here":  # his folder, answer after answer (the last one stays)
+            self.heres.append(args)  # type: ignore[attr-defined]
+            answer = answer.pop(0) if len(answer) > 1 else answer[0]
+        else:
+            self.calls.append(action)  # type: ignore[attr-defined]
         if isinstance(answer, Exception):
             raise answer
         assert isinstance(answer, dict)
@@ -210,6 +216,51 @@ def test_back_from_an_update_he_says_what_changed(game: Game) -> None:
     assert settings.get(NEWS_KEY) is None  # once
 
 
+def test_restart_lights_up_when_his_folder_holds_what_he_does_not_run(game: Game) -> None:
+    fill(game)
+    controller, _, _ = make(game)
+    clock = Clock()
+    settings = Settings(None)
+    news = ["His call's volume, set by ear under his sounds"]
+    client = FakeClient(
+        here=[
+            {"ok": True, "head": "a1", "moved": False, "news": [], "setup": False},
+            {"ok": True, "head": "b2", "moved": True, "news": news, "setup": True},
+        ]
+    )
+    up = updater(client, settings, clock)
+    menu = Menu(controller, up)
+    up.start()  # learns the commit he runs
+    assert client.heres == [()]  # type: ignore[attr-defined]
+    row = {"label": "Restart Tagnan", "value": "", "pill": False}
+    assert menu.property("content")["restart"] == row
+    menu.openAt(10, 10)  # opened at once: not asked again
+    assert len(client.heres) == 1  # type: ignore[attr-defined]
+    menu.close()
+    clock.now += 60
+    menu.openAt(10, 10)  # a commit since: gold
+    assert client.heres[-1] == ("a1",)  # type: ignore[attr-defined]
+    assert menu.property("content")["restart"] == {**row, "value": "New", "pill": True}
+    assert [s["action"] for s in menu.suggest("restart")] == ["restart"]
+    restarts = heard(up.restartRequested)
+    assert menu.run("restart") is False
+    assert menu.property("shown") is False
+    assert restarts == [(True,)]  # its pins changed: his environment again
+    assert settings.get(NEWS_KEY)["news"] == news  # he says what changed, once back
+    assert Menu(controller).property("content")["restart"] is None
+    assert "restart" not in [s["action"] for s in Menu(controller).suggest("restart")]
+
+
+def test_restart_without_a_folder_to_read_still_works() -> None:
+    client = FakeClient(here=[UpdateError("no wsl.exe")])
+    up = updater(client)
+    restarts = heard(up.restartRequested)
+    up.start()
+    assert up.restart_row() == {"label": "Restart Tagnan", "value": "", "pill": False}
+    up.restart()
+    assert restarts == [(False,)]
+
+
 def test_his_menu_draws_the_update_row(game: Game) -> None:
     from PySide6.QtCore import QUrl, qInstallMessageHandler
     from PySide6.QtQml import QQmlApplicationEngine
@@ -245,6 +296,7 @@ def test_his_menu_draws_the_update_row(game: Game) -> None:
         def update_row() -> dict[str, Any]:
             rows = popup.property("rows").toVariant()
             assert rows[-1]["action"] == "quit"  # Quit Tagnan stays last
+            assert rows[-2]["action"] == "restart"  # Restart just above
             return next(r for r in rows if r.get("action") == "update")
 
         assert update_row()["value"] == ""

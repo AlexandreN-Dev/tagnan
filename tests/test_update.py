@@ -97,6 +97,30 @@ def test_an_update_fast_forwards_and_says_when_the_window_changes(
     assert update.apply(user)["setup"] is True  # his window's environment is made again
 
 
+def test_here_says_what_his_folder_holds_beyond_what_he_runs(clones: tuple[Path, Path]) -> None:
+    _, user = clones
+    running = git(user, "rev-parse", "HEAD")
+    assert update.here(user) == {
+        "ok": True,
+        "head": running,
+        "moved": False,
+        "news": [],
+        "setup": False,
+    }
+    assert update.here(user, running)["moved"] is False
+    commit(user, "art.txt", "Gascon\n", "feat(art): a finished Gascon")
+    answer = update.here(user, running)
+    assert (answer["moved"], answer["news"], answer["setup"]) == (
+        True,
+        ["A finished Gascon"],
+        False,
+    )
+    commit(user, update.PINS, "pyside6==6.13.0\n", "fix(launch): a newer window")
+    assert update.here(user, running)["setup"] is True
+    unknown = update.here(user, "0" * 40)  # gone (a rebase): moved, nothing more to tell
+    assert (unknown["moved"], unknown["news"], unknown["setup"]) == (True, [], False)
+
+
 def test_an_update_never_goes_over_changes_of_ones_own(clones: tuple[Path, Path]) -> None:
     author, user = clones
     publish(author, "art.txt", "Gascon\n", "feat(art): a finished Gascon")
@@ -142,4 +166,6 @@ def test_the_window_gets_one_line_of_json(
     assert update.main(["apply"]) == 0
     answer = json.loads(capsys.readouterr().out)
     assert (answer["ok"], answer["reason"]) == (False, "local-changes")
+    assert update.main(["here"]) == 0
+    assert json.loads(capsys.readouterr().out)["head"] == git(user, "rev-parse", "HEAD")
     assert update.main(["sideways"]) == 2

@@ -4,6 +4,8 @@
 #   scripts/update                    take what is new, then say how to see it
 #   scripts/update check              what is new (one line of JSON)
 #   scripts/update apply              take it, a fast-forward only (one line of JSON)
+#   scripts/update here [COMMIT]      what his folder holds that the window, started at COMMIT,
+#                                     does not run yet: his menu's Restart (one line of JSON)
 #   scripts/update restart [--setup]  the window has just quit: its environment again when its
 #                                     pins changed, then Tagnan in his new version
 set -euo pipefail
@@ -22,6 +24,9 @@ update() {
 case "${1:-}" in
   check | apply)
     update "$1"
+    ;;
+  here)
+    update "$@"
     ;;
   restart)
     if is_mac; then
@@ -42,7 +47,7 @@ case "${1:-}" in
     update
     ;;
   *)
-    echo "Usage: scripts/update [check | apply | restart [--setup]]" >&2
+    echo "Usage: scripts/update [check | apply | here [COMMIT] | restart [--setup]]" >&2
     exit 2
     ;;
 esac

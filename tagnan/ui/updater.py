@@ -1,7 +1,11 @@
 """Keeps Tagnan up to date, for his menu's Update: asks scripts/update what is new on GitHub a
 minute after he starts, then about once a day, and takes it when asked; then hands over to
 `scripts/update restart`, which outlives the window and starts him again in his new version,
-and he says what changed once he is back."""
+and he says what changed once he is back.
+
+His menu's Restart goes the same way, at any time. It lights up when his folder holds commits
+his window does not run yet (one's own, as one works on him): `scripts/update here`, asked as
+he starts and as his menu opens, says which commit the folder is at."""
 
 import json
 import logging
@@ -27,6 +31,8 @@ CHECK_EVERY = 20 * 3600.0  # then about once a day
 TICK_MS = 3_600_000  # he looks at the clock every hour: a laptop sleeps, timers with it
 CHECK_TIMEOUT = 90.0
 APPLY_TIMEOUT = 180.0
+HERE_TIMEOUT = 30.0
+LOOK_AGAIN = 10.0  # seconds: his menu opened again soon after asks nothing more
 NEWS_KEY = "updated"  # in his settings: what changed, for his bubble once he is back
 # The row in his menu for each state: label, value, gold "New" pill, busy, stressed.
 ROWS = {
@@ -59,13 +65,13 @@ class UpdateClient:
         """From Windows: repo is the repository's path inside WSL, e.g. /home/me/tagnan."""
         return cls(("wsl.exe", "-d", distro, "-e", f"{repo.rstrip('/')}/scripts/update"))
 
-    def call(self, action: str, timeout: float) -> dict[str, Any]:
+    def call(self, action: str, timeout: float, *args: str) -> dict[str, Any]:
         extra: dict[str, Any] = {}
         if sys.platform == "win32":
             extra["creationflags"] = subprocess.CREATE_NO_WINDOW  # no console flashing
         try:
             done = subprocess.run(  # noqa: S603 - fixed argument list, no shell
-                [*self.command, action],
+                [*self.command, action, *args],
                 capture_output=True,
                 timeout=timeout,
                 check=False,
@@ -92,6 +98,9 @@ class UpdateClient:
 
     def apply(self) -> dict[str, Any]:
         return self.call("apply", APPLY_TIMEOUT)
+
+    def here(self, running: str) -> dict[str, Any]:
+        return self.call("here", HERE_TIMEOUT, *([running] if running else []))
 
     def restart(self, setup: bool) -> None:
         """Start `scripts/update restart`, which outlives the window: it waits for it to be
@@ -140,6 +149,11 @@ class Updater(QObject):
         self._state = "idle"
         self._news: list[str] = []
         self._checked_at = 0.0
+        # The commit his window runs, learnt as he starts; what his folder has beyond it.
+        self._running = ""
+        self._here: dict[str, Any] = {"moved": False, "news": [], "setup": False}
+        self._looking = False
+        self._looked_at = float("-inf")
         self._answered.connect(self._on_answer)
         self._first = QTimer(self)
         self._first.setSingleShot(True)
@@ -149,6 +163,7 @@ class Updater(QObject):
 
     def start(self) -> None:
         if self.client is not None:
+            self.look_here()
             self._first.start(FIRST_CHECK_MS)
             self._tick.start(TICK_MS)
 
@@ -169,7 +184,35 @@ class Updater(QObject):
         label, value, pill, busy, strong = ROWS[self._state]
         return {"label": label, "value": value, "pill": pill, "busy": busy, "strong": strong}
 
+    def restart_row(self) -> dict[str, Any] | None:
+        """His menu's Restart row: a gold "New" when his folder holds what he does not run."""
+        if self.client is None:
+            return None
+        moved = bool(self._here["moved"])
+        return {"label": "Restart Tagnan", "value": "New" if moved else "", "pill": moved}
+
     # --- Doing --------------------------------------------------------------------------------
+
+    def look_here(self) -> None:
+        """Which commit his folder is at: the first answer is the one he runs."""
+        client = self.client
+        if client is None or self._looking or self._clock() - self._looked_at < LOOK_AGAIN:
+            return
+        self._looking = True
+        self._looked_at = self._clock()
+        running = self._running
+        self._run(lambda: self._work("here", lambda: client.here(running), False))
+
+    @Slot()
+    def restart(self) -> None:
+        """His menu's Restart: he quits and comes back, in what his folder holds."""
+        if self.client is None:
+            return
+        news = [str(line) for line in self._here["news"]]
+        if news:
+            self._settings.set(NEWS_KEY, {"news": news, "at": self._clock()})
+        logger.info("restarting (setup: %s)", bool(self._here["setup"]))
+        self.restartRequested.emit(bool(self._here["setup"]))
 
     @Slot()
     def activate(self) -> None:
@@ -206,6 +249,9 @@ class Updater(QObject):
         self._answered.emit(action, answer, asked)
 
     def _on_answer(self, action: str, answer: object, asked: bool) -> None:
+        if action == "here":
+            self._on_here(answer)
+            return
         if isinstance(answer, UpdateError) or not isinstance(answer, dict):
             logger.warning("update %s failed: %s", action, answer)
             self._set("failed")
@@ -231,6 +277,24 @@ class Updater(QObject):
         self._settings.set(NEWS_KEY, {"news": self._news, "at": self._clock()})
         logger.info("updated, starting again (setup: %s)", bool(answer.get("setup")))
         self.restartRequested.emit(bool(answer.get("setup")))
+
+    def _on_here(self, answer: object) -> None:
+        self._looking = False
+        if not isinstance(answer, dict) or not answer.get("ok") or not answer.get("head"):
+            logger.info("his folder unread: %s", answer)  # no signal, Restart still works
+            return
+        if not self._running:
+            self._running = str(answer["head"])
+            return
+        here = {
+            "moved": bool(answer.get("moved")),
+            "news": [str(line) for line in answer.get("news") or []],
+            "setup": bool(answer.get("setup")),
+        }
+        if here != self._here:
+            self._here = here
+            logger.info("his folder: %s", here)
+            self.changed.emit()
 
     def _set(self, state: str) -> None:
         if state != self._state:

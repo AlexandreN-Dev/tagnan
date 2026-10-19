@@ -65,6 +65,7 @@ Window {
         focus: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
         search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",
         check: "M5 12.5l4.5 4.5L19 7",
+        restart: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
         update: "M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9M18.6 3.2v4.1h-4.1M5.4 20.8v-4.1h4.1",
         spinner: "M12 3.5a8.5 8.5 0 1 1-8.1 5.9"
     })
@@ -91,6 +92,11 @@ Window {
         if (u)
             list.push({ action: "update", label: u.label, value: u.value, icon: u.busy ? "spinner" : "update",
                         pill: u.pill, busy: u.busy, strong: u.strong })
+        // Restart: at any time; gold when his folder holds commits he does not run yet.
+        const r = c.restart
+        if (r)
+            list.push({ action: "restart", label: r.label, value: r.value, icon: "restart",
+                        pill: r.pill, strong: r.pill, quiet: !r.pill })
         list.push({ action: "quit", label: "Quit Tagnan", icon: "quit", quiet: true })
         return list
     }

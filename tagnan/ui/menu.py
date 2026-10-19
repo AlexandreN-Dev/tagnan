@@ -30,6 +30,7 @@ COMMANDS = (
     ("pause", "A break…", ("break", "pause", "rest", "stop")),
     ("resume", "Resume now", ("resume", "back", "continue")),
     ("update", "Update", ("update", "upgrade", "new version", "version")),
+    ("restart", "Restart Tagnan", ("restart", "reload", "start again", "reboot")),
     ("quit", "Quit Tagnan", ("quit", "exit", "close", "bye")),
 )
 BREAK_WORDS = ("break", "pause", "a break", "rest")
@@ -166,6 +167,8 @@ class Menu(QObject):
             + [{"key": calls.SILENT, "name": "Silent"}],
             # His Update row (tagnan/ui/updater.py), None without updates.
             "update": self._updater.row() if self._updater else None,
+            # His Restart row, the same way; gold when his folder holds what he does not run.
+            "restart": self._updater.restart_row() if self._updater else None,
         }
 
     # --- Opening and closing ------------------------------------------------------------------
@@ -176,6 +179,8 @@ class Menu(QObject):
         is where it belongs from its first frame."""
         self._anchor = (x, y)
         self._shown = True
+        if self._updater is not None:
+            self._updater.look_here()  # a commit of one's own since he started lights Restart
         self._layout()
         self.changed.emit()
 
@@ -242,7 +247,9 @@ class Menu(QObject):
                 add(f"Questions on {rest}", f"focus:{rest}", preview["text"])
         paused = c.scheduler.paused_until > now
         for action, label, words in COMMANDS:
-            if (action == "resume" and not paused) or (action == "update" and not self._updates()):
+            if (action == "resume" and not paused) or (
+                action in ("update", "restart") and not self._updates()
+            ):
                 continue
             if any(w.startswith(folded) or folded in w for w in (label.casefold(), *words)):
                 add(label, action)
@@ -295,6 +302,9 @@ class Menu(QObject):
                 c.learnWith(arg)
             case "focus":
                 c.subjectWith(arg)
+            case "restart":
+                if self._updater is not None:
+                    self._updater.restart()
             case "quit":
                 c.quit()
         return False

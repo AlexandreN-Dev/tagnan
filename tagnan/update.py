@@ -4,6 +4,10 @@ on stdout. Standard library only, git for the rest.
 
     scripts/update check    what is new upstream: {"ok", "behind", "news"}
     scripts/update apply    take it, a fast-forward only: {"ok", "updated", "news", "setup"}
+    scripts/update here [COMMIT]
+                            what his folder holds that the window, started at COMMIT, does
+                            not run yet (one's own commits): {"ok", "head", "moved", "news",
+                            "setup"}; no network
 
 A refusal is an answer too: {"ok": false, "reason", "message"}, the message in his own words.
 """
@@ -102,6 +106,24 @@ def check(repo: Path = REPO) -> dict[str, Any]:
     return {"ok": True, "behind": behind, "news": news(_subjects(repo, "HEAD..@{upstream}"))}
 
 
+def here(repo: Path = REPO, running: str = "") -> dict[str, Any]:
+    """His folder's commit, and what changed since `running`, the one his window started at:
+    a restart shows it. Local only: one's own commits, or an update taken by hand."""
+    if git(repo, "rev-parse", "--is-inside-work-tree").returncode != 0:
+        raise Refusal("not-a-clone", "This copy of me wasn't installed with git.")
+    head = _output(git(repo, "rev-parse", "HEAD"))
+    moved = bool(running) and running != head
+    known = moved and git(repo, "cat-file", "-e", f"{running}^{{commit}}").returncode == 0
+    span = f"{running}..{head}"
+    return {
+        "ok": True,
+        "head": head,
+        "moved": moved,
+        "news": news(_subjects(repo, span)) if known else [],
+        "setup": known and bool(_output(git(repo, "diff", "--name-only", span, "--", PINS))),
+    }
+
+
 def apply(repo: Path = REPO) -> dict[str, Any]:
     """A fast-forward to GitHub's version, never over changes of one's own."""
     _ready(repo)
@@ -156,11 +178,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     repo = REPO
     if action == "":
         return by_hand(repo)
-    if action not in ("check", "apply"):
-        print("Usage: scripts/update [check | apply]", file=sys.stderr)
+    if action not in ("check", "apply", "here"):
+        print("Usage: scripts/update [check | apply | here [COMMIT]]", file=sys.stderr)
         return 2
     try:
-        answer = check(repo) if action == "check" else apply(repo)
+        if action == "here":
+            answer = here(repo, args[1] if len(args) > 1 else "")
+        else:
+            answer = check(repo) if action == "check" else apply(repo)
     except Refusal as refusal:
         answer = {"ok": False, "reason": refusal.reason, "message": refusal.message}
     print(json.dumps(answer, ensure_ascii=False))

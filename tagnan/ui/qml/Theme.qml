@@ -15,6 +15,8 @@ QtObject {
     readonly property color goldInk: dark ? "#E0B54E" : "#7A5A0F"
     readonly property color good: dark ? "#6FCB95" : "#2D7A4E"
     readonly property color bad: dark ? "#F07A80" : "#B3343A"
+    // Under a cross about to take something away.
+    readonly property color badSoft: dark ? "#3A2430" : "#F6DFE0"
     readonly property color choice: dark ? "#232C40" : "#EEF1F6"
     readonly property color choiceHover: dark ? "#2C3852" : "#E1E7F1"
     readonly property color choiceOn: dark ? "#33456B" : "#D3DEF2"

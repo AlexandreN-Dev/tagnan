@@ -214,3 +214,29 @@ def test_a_course_drawn_up_is_kept_and_found_again(tmp_path: Path, bp: Blueprint
         [],
         ["unknown course: nowhere"],
     )
+
+
+def test_a_course_put_away_keeps_its_progress_and_comes_back(tmp_path: Path, bp: Blueprint) -> None:
+    game = Game(Store(tmp_path / "tagnan.db"), bp, random.Random(1))
+    game.set_course(blueprint.from_dict(pottery_data()))
+    game.store.save_progress("pottery", Progress(points=500, grade=1))
+    with pytest.raises(ValueError, match="the course learned now"):
+        game.put_away("pottery")  # not the course learned now
+    with pytest.raises(KeyError):
+        game.put_away("nowhere")
+    game.set_course(bp)
+    game.put_away("pottery")
+    assert [c.key for c in game.courses()] == ["aif-c01"]
+    again = Game(Store(tmp_path / "tagnan.db"), bp, random.Random(1))
+    assert [c.key for c in again.courses()] == ["aif-c01"]
+    # Learning it again finds it, and brings it back with its grade.
+    found = again.find_course("Pottery")
+    assert found is not None
+    again.set_course(found)
+    assert again.progress.grade == 1
+    assert [c.key for c in again.courses()] == ["pottery", "aif-c01"]
+    # A course of exam/ can be put away too, and undone.
+    again.put_away("aif-c01")
+    assert [c.key for c in again.courses()] == ["pottery"]
+    again.bring_back("aif-c01")
+    assert [c.key for c in again.courses()] == ["pottery", "aif-c01"]

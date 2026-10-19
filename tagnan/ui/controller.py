@@ -444,9 +444,12 @@ class Controller(QObject):
 
     @Slot()
     def showSubject(self) -> None:
+        self._show_subject()
+
+    def _show_subject(self, put_away: blueprints.Blueprint | None = None) -> None:
         """The subject bubble: what we learn (a course learned before, or anything in one's own
         words), then what within it (all of it, a domain, a subject chosen before, or one's own
-        words)."""
+        words). put_away: the course just put away, said with a way back."""
         bp = self.game.blueprint
         whole = bp.whole
         choices = [{"label": whole[0].upper() + whole[1:], "key": ""}]
@@ -457,8 +460,18 @@ class Controller(QObject):
             {
                 "mode": "subject",
                 "title": "What shall we work on?",
-                "courses": [{"label": c.name, "key": c.key} for c in self.game.courses()],
+                "courses": [
+                    {"label": c.name, "key": c.key, "removable": c.key != bp.key}
+                    for c in self.game.courses()
+                ],
                 "course": bp.key,
+                "putAway": {}
+                if put_away is None
+                else {
+                    "key": put_away.key,
+                    "text": f"{put_away.name} put away. Learn it again and it comes back,"
+                    " progress and all.",
+                },
                 "within": f"Within {bp.name}:",
                 "choices": choices,
                 "current": self.game.subject.key,
@@ -514,6 +527,24 @@ class Controller(QObject):
             self._change_course(self.game.course(key))
         except (KeyError, ValueError):
             logger.warning("unknown course: %r", key)
+
+    @Slot(str)
+    def putAwayCourse(self, key: str) -> None:
+        """No longer offer a course learned before (its key, as showSubject gives it); its
+        questions and progress are kept."""
+        try:
+            self.game.put_away(key)
+        except (KeyError, ValueError):
+            logger.warning("cannot put away course: %r", key)
+            return
+        logger.info("course put away: %r", key)
+        self._show_subject(put_away=self.game.course(key))
+
+    @Slot(str)
+    def bringBackCourse(self, key: str) -> None:
+        """Undo putAwayCourse."""
+        self.game.bring_back(key)
+        self._show_subject()
 
     def _change_course(self, bp: blueprints.Blueprint, intro: str = "") -> None:
         if bp.key == self.game.exam:

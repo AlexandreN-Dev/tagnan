@@ -25,6 +25,7 @@ DIFFICULTY_BY_GRADE = ("easy", "medium", "medium", "medium", "hard", "hard")
 MULTIPLE_SHARE_BY_GRADE = (0.0, 0.1, 0.15, 0.2, 0.25, 0.3)
 REVIEW_SHARE = 0.5  # when reviews are due, half the questions are reviews
 AVOID_TOPICS = 60
+PUT_AWAY = "courses put away"  # setting: the keys of the courses no longer offered
 
 
 @dataclass(frozen=True)
@@ -92,9 +93,15 @@ class Game:
             self.store.set_setting(f"course:{bp.key}", json.dumps(bp.to_dict(), ensure_ascii=False))
         self._courses[bp.key] = bp
         self.store.set_setting("course", bp.key)
+        self.bring_back(bp.key)
 
     def courses(self) -> list[Blueprint]:
-        """The courses one can go back to: the one learned now first, then the others."""
+        """The courses one can go back to: the one learned now first, then the others, but
+        those put away."""
+        put_away = self._put_away()
+        return [bp for bp in self._known_courses() if bp.key == self.exam or bp.key not in put_away]
+
+    def _known_courses(self) -> list[Blueprint]:
         keys = [self.exam, self._default.key, *self.store.course_keys(), *blueprints.known()]
         found = []
         for key in dict.fromkeys(keys):
@@ -104,10 +111,30 @@ class Game:
                 continue
         return found
 
+    def put_away(self, key: str) -> None:
+        """No longer offer this course; its questions and progress are kept, and learning it
+        again brings it back. Not the course learned now: ValueError."""
+        if key == self.exam:
+            raise ValueError("the course learned now")
+        self.course(key)  # KeyError for an unknown one
+        put_away = self._put_away() | {key}
+        self.store.set_setting(PUT_AWAY, json.dumps(sorted(put_away)))
+
+    def bring_back(self, key: str) -> None:
+        put_away = self._put_away()
+        if key in put_away:
+            self.store.set_setting(PUT_AWAY, json.dumps(sorted(put_away - {key})))
+
+    def _put_away(self) -> set[str]:
+        try:
+            return set(json.loads(self.store.setting(PUT_AWAY) or "[]"))
+        except ValueError:
+            return set()
+
     def find_course(self, words: str) -> Blueprint | None:
-        """A known course, named by its key, its code or its name."""
+        """A known course, named by its key, its code or its name: one put away too."""
         said = " ".join(words.split()).strip(" .!?").casefold()
-        for bp in self.courses():
+        for bp in self._known_courses():
             if said in (bp.key.casefold(), bp.code.casefold(), bp.name.casefold()):
                 return bp
         return None

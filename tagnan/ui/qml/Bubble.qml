@@ -491,13 +491,81 @@ Item {
                 spacing: 6
                 Repeater {
                     model: bubble.mode === "subject" ? bubble.content.courses : []
-                    Action {
+                    // A course, and a cross to put it away: not on the one learned now.
+                    Rectangle {
+                        id: course
                         required property var modelData
+                        readonly property bool on: modelData.key === bubble.content.course
+                        readonly property bool removable: modelData.removable === true
+                        implicitWidth: courseText.implicitWidth + 24 + (removable ? 22 : 0)
                         width: Math.min(implicitWidth, column.width)
-                        label: modelData.label
-                        primary: modelData.key === bubble.content.course
-                        onActivated: bubble.controller.setCourse(modelData.key)
+                        height: 30
+                        radius: 6
+                        color: on ? bubble.theme.ink
+                             : (courseHover.containsMouse || crossHover.containsMouse ? bubble.theme.choiceHover : bubble.theme.choice)
+                        Text {
+                            id: courseText
+                            anchors.left: parent.left
+                            anchors.leftMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.min(implicitWidth, course.width - 24 - (course.removable ? 22 : 0))
+                            elide: Text.ElideRight
+                            text: course.modelData.label
+                            color: course.on ? bubble.theme.panel : bubble.theme.text
+                            font.family: bubble.theme.body
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                        }
+                        MouseArea {
+                            id: courseHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: bubble.controller.setCourse(course.modelData.key)
+                        }
+                        Rectangle {
+                            visible: course.removable
+                            anchors.right: parent.right
+                            anchors.rightMargin: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 20; height: 20
+                            radius: 4
+                            color: crossHover.containsMouse ? bubble.theme.badSoft : "transparent"
+                            Repeater {
+                                model: [45, -45]
+                                Rectangle {
+                                    required property int modelData
+                                    anchors.centerIn: parent
+                                    width: 11; height: 1.6
+                                    radius: 0.8
+                                    rotation: modelData
+                                    color: crossHover.containsMouse ? bubble.theme.bad : bubble.theme.muted
+                                }
+                            }
+                            MouseArea {
+                                id: crossHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                Accessible.role: Accessible.Button
+                                Accessible.name: "Put " + course.modelData.label + " away"
+                                onClicked: bubble.controller.putAwayCourse(course.modelData.key)
+                            }
+                        }
                     }
+                }
+            }
+            // The course just put away, and the way back in the same line.
+            Para {
+                visible: bubble.mode === "subject" && (bubble.content.putAway || {}).key !== undefined
+                text: visible ? bubble.content.putAway.text + ' <a href="undo">Undo</a>' : ""
+                textFormat: Text.StyledText
+                color: bubble.theme.muted
+                linkColor: bubble.theme.text
+                font.pixelSize: 12
+                onLinkActivated: bubble.controller.bringBackCourse(bubble.content.putAway.key)
+                HoverHandler {
+                    cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor
                 }
             }
             Item {

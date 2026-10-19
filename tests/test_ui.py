@@ -486,7 +486,11 @@ def test_anything_can_be_learned_each_with_its_own_grade(game: Game) -> None:
     assert controller.property("stage") == 2
     controller.showSubject()
     bubble = controller.property("bubble")
-    assert bubble["courses"][0] == {"label": "AWS Certified AI Practitioner", "key": "aif-c01"}
+    assert bubble["courses"][0] == {
+        "label": "AWS Certified AI Practitioner",
+        "key": "aif-c01",
+        "removable": False,
+    }
     assert bubble["course"] == "aif-c01"
     back = controller.previewCourse("AIF-C01")
     assert back == {"ok": True, "text": "Back to AWS Certified AI Practitioner."}
@@ -538,6 +542,27 @@ def test_anything_can_be_learned_each_with_its_own_grade(game: Game) -> None:
     assert game.fresh_count() == 6 + 1  # fill()'s questions and the late one
     controller.setCourse("pottery")
     assert controller.property("stage") == 0
+
+    # A course one no longer follows: put away, and back with Undo.
+    controller.showSubject()
+    courses = controller.property("bubble")["courses"]
+    assert [c["removable"] for c in courses] == [False, True]
+    assert controller.property("bubble")["putAway"] == {}
+    controller.putAwayCourse("pottery")  # the course learned now: nothing happens
+    assert game.exam == "pottery"
+    controller.putAwayCourse("aif-c01")
+    bubble = controller.property("bubble")
+    assert bubble["mode"] == "subject"
+    assert [c["key"] for c in bubble["courses"]] == ["pottery"]
+    assert bubble["putAway"] == {
+        "key": "aif-c01",
+        "text": "AWS Certified AI Practitioner put away. Learn it again and it comes back,"
+        " progress and all.",
+    }
+    controller.bringBackCourse("aif-c01")
+    bubble = controller.property("bubble")
+    assert [c["key"] for c in bubble["courses"]] == ["pottery", "aif-c01"]
+    assert bubble["putAway"] == {}
 
 
 def test_words_that_cannot_be_taught_are_said_so(game: Game) -> None:

@@ -118,6 +118,16 @@ def test_the_icon_is_the_inkwell_drawn_for_small_sizes() -> None:
     assert art.quill() == art.quill(*art.QUILL)  # the window's quill is unchanged
 
 
+@pytest.mark.parametrize("stage", range(1, 6))
+def test_each_grade_has_its_icon_drawn_as_the_inkwell(stage: int) -> None:
+    svg = art.icon_svg(stage)
+    _, _, w, h = (float(v) for v in ET.fromstring(svg).get("viewBox", "").split())
+    assert w == h  # square, as the inkwell's
+    assert art.ICON_RIM in svg
+    assert art.STEEL not in svg  # no rapier at icon size
+    assert (art.FELT in svg) == (stage >= 2)
+
+
 def test_the_gascon_is_lit_and_shaded_along_his_ripple() -> None:
     cx, cy = art.SPLASH.cx, art.SPLASH.cy
 

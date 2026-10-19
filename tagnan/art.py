@@ -5,8 +5,8 @@ The window draws the rippling ink, its shade and the droplets itself (QtQuick Sh
 numbers of `figure()`, the outlines of `blob_path()`/`ink_path()` and, in the inkwell, the shading
 of `inkwell_shading()`). Every other piece is an SVG layer (`layer()`, rendered by QtSvg) that it
 moves, turns or swaps: eyes, mouth, moustache, royale, cross, hat, plumes, rapier, inkwell,
-decorations. `still_svg()` puts them all together for the tray icon, the reference sheet and the
-tests.
+decorations. `still_svg()` puts them all together for the reference sheet and the tests;
+`icon_svg()` redraws each grade to read at 16 to 48 px (shortcut, tray icon, his menu's header).
 
 Coordinates are those of the 120 x 140 reference drawing; each grade is drawn at its own scale
 around the feet (60, 132).
@@ -14,6 +14,7 @@ around the feet (60, 132).
 
 import math
 import random
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -955,7 +956,7 @@ def glass() -> str:
     )
 
 
-# The icon (shortcut, app, tray at grade 0): the inkwell redrawn to read at 16 to 48 px. The ink
+# The icon (shortcut, app, tray and menu at grade 0): the inkwell redrawn to read at 16 to 48 px. The ink
 # fills it to the shoulder, the face is bigger, the quill short and dipped above the eyes, and a
 # dark rim keeps the glass apart from light taskbars.
 ICON_BOX = (14.0, 42.0, 92.0, 92.0)
@@ -964,7 +965,78 @@ ICON_QUILL = ((62.0, 84.0), (80.0, 46.0))
 ICON_RIM = "#1B2B52"
 
 
-def icon_svg() -> str:
+# From the Gascon on, his tray icon and his menu's header show him redrawn the same way: the dark rim around his
+# whole silhouette (ink, drip, hat, plumes), flat ink with one light on his upper left, a bigger
+# face with the inkwell's toothless grin, a single drip; no drops, ground or rapier. Each grade's
+# box is square and tight around him.
+ICON_BOXES = {
+    1: (24.8, 53.6, 72.0, 72.0),
+    2: (11.5, 37.8, 98.0, 98.0),
+    3: (0.7, 22.8, 113.0, 113.0),
+    4: (-1.7, 18.5, 117.0, 117.0),
+    5: (-10.7, 3.7, 132.0, 132.0),
+}
+ICON_FACE = {1: (86.0, 101.0), 2: (77.0, 93.0)}  # eyes' and mouth's y, the Gascon's and the hatted
+ICON_RIM_WIDTH = 7.0
+
+
+def _rimmed(svg: str) -> str:
+    """The same shapes in the icon's rim colour, outlined by it: drawn under them, the rim."""
+    svg = re.sub(r'\sstroke(-[a-z]+)?="[^"]*"|\sopacity="[^"]*"', "", svg)
+    svg = re.sub(r'fill="(?!none)[^"]*"', f'fill="{ICON_RIM}"', svg)
+    return re.sub(
+        r"<(path|circle|ellipse|rect)\b",
+        rf'<\1 stroke="{ICON_RIM}" stroke-width="{n(ICON_RIM_WIDTH)}" stroke-linejoin="round" '
+        'stroke-linecap="round"',
+        svg,
+    )
+
+
+def _icon_light(stage: int) -> str:
+    """The light along his upper left, a little inside his edge."""
+    blob = SPLASH if stage == 1 else STANDING
+    arc = []
+    for x, y in curve_samples(blob_points(blob, 0), 12):
+        angle = math.degrees(math.atan2(y - blob.cy, x - blob.cx))
+        if -165 <= angle <= -112:
+            k = 1 - 5.5 / math.hypot(x - blob.cx, y - blob.cy)
+            arc.append((angle, blob.cx + (x - blob.cx) * k, blob.cy + (y - blob.cy) * k))
+    d = "M" + " L".join(pt(x, y) for _, x, y in sorted(arc))
+    return (
+        f'<path d="{d}" fill="none" stroke="{INK_LIGHT}" stroke-width="3" stroke-linecap="round"/>'
+    )
+
+
+def icon_svg(stage: int = 0) -> str:
+    """The icon at his grade: the inkwell at grade 0 (also the shortcut's and the app's), then
+    his figure redrawn the same way. His tray icon and his menu's header."""
+    if stage == 0:
+        return _inkwell_icon()
+    spec = figure(stage)
+    eyes_y, mouth_y = ICON_FACE[min(stage, 2)]
+    x, y, r = spec["staticDrips"][0] if stage == 1 else spec["drip"]
+    drip = teardrop(x, y, r * 1.1) if stage == 1 else teardrop(x, y - 1, r * 1.3)
+    silhouette = f'<path d="{drip}" fill="{INK}"/><path d="{blob_path(stage, 0)}" fill="{INK}"/>'
+    top = plumes(stage) + (hat(stage) if stage >= 2 else "")
+    face = (
+        eye(60, eyes_y, 1.32, "idle", -1, 1.12)
+        + eye(60, eyes_y, 1.32, "idle", 1, 1.12)
+        + mouth(60, mouth_y, 1.25, "idle", 0.85, False)
+    )
+    if stage >= 4:
+        face += moustache(60, mouth_y - 5)
+    if stage >= 5:
+        face += royale("idle")
+    scaled = f"translate(60 132) scale({n(spec['scale'])}) translate(-60 -132)"
+    return _svg(
+        f'<g transform="{scaled}"><g transform="translate(0 {n(-spec["lift"])})">'
+        f"{_rimmed(silhouette + top)}{silhouette}{_icon_light(stage)}{face}"
+        f"{cross(stage) if stage >= 3 else ''}{top}</g></g>",
+        ICON_BOXES[stage],
+    )
+
+
+def _inkwell_icon() -> str:
     level = n(ICON_LEVEL)
     rim = f'fill="none" stroke="{ICON_RIM}" stroke-linejoin="round"'
     glass_ = (
@@ -1223,7 +1295,7 @@ def layer(stage: int, name: str, expression: str = "idle") -> str | None:
 
 
 def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: bool = True) -> str:
-    """The whole figure at rest, in one SVG: tray icon, reference sheet, tests, and, without
+    """The whole figure at rest, in one SVG: reference sheet, tests, and, without
     his shadow, the silhouette he evolves in.
 
     The pose follows the expression as the window's does at rest: rapier en garde when asking

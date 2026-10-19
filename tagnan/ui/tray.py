@@ -5,8 +5,8 @@ progress (on macOS, where the menu bar knows only one click, his menu)."""
 import sys
 from functools import lru_cache
 
-from PySide6.QtCore import QObject, Qt
-from PySide6.QtGui import QCursor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QObject
+from PySide6.QtGui import QCursor, QIcon, QPixmap
 from PySide6.QtWidgets import QSystemTrayIcon
 
 from tagnan import art
@@ -17,19 +17,10 @@ from tagnan.ui.menu import Menu
 
 @lru_cache(maxsize=6)
 def figure_icon(stage: int) -> QIcon:
+    """His grade's icon, drawn to read that small (art.icon_svg), as in his menu's header."""
     icon = QIcon()
     for size in (16, 20, 24, 32, 40, 48, 64):
-        if stage == 0:  # the inkwell has an icon of its own, drawn to read that small
-            icon.addPixmap(QPixmap.fromImage(render_svg(art.icon_svg(), size, size)))
-            continue
-        # The figure is taller than wide: keep its proportions, centred in a square.
-        image = render_svg(art.still_svg(stage, glow=False), round(size * 120 / 140), size)
-        square = QPixmap(size, size)
-        square.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(square)
-        painter.drawImage((size - image.width()) // 2, 0, image)
-        painter.end()
-        icon.addPixmap(square)
+        icon.addPixmap(QPixmap.fromImage(render_svg(art.icon_svg(stage), size, size)))
     return icon
 
 

@@ -31,8 +31,8 @@ class LayerImages(QQuickImageProvider):
             stage = int(stage_text)
         except ValueError:
             return QImage()
-        if name == "still":  # the whole figure at rest, his menu's header: the icon at grade 0
-            svg: str | None = art.icon_svg() if stage == 0 else art.still_svg(stage, glow=False)
+        if name == "still":  # his menu's header: the icon of his grade
+            svg: str | None = art.icon_svg(stage)
         elif name == "silhouette":  # the whole figure in white, as he evolves (Tagnan.qml)
             svg = art.still_svg(stage, glow=False, shadow=False)
         else:

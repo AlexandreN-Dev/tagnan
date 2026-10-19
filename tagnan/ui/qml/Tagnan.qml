@@ -10,6 +10,8 @@ Item {
 
     required property QtObject animator
     required property var spec  // tagnan.art.figure(grade)
+    // A promotion under way (controller.promotion): {"from": grade, "to": grade}, else empty.
+    property var promotion: ({})
 
     readonly property int stage: spec.stage
     readonly property string expression: animator.expression
@@ -29,6 +31,53 @@ Item {
         return v < 0.55 ? 0.15 + 0.85 * v / 0.55 : v < 0.6 ? 1 - 0.85 * (v - 0.55) / 0.05 : 0.15
     }
     readonly property real fallT: animator.drip < 0.57 || animator.drip > 0.76 ? -1 : (animator.drip - 0.57) / 0.19
+
+    // His evolution, as in the games: he turns white, his old and new looks swap faster and
+    // faster, a flash, and he stands in his new one. The controller changes his grade while he
+    // is white and shows it at the flash (PROMOTION_SWAP_MS, PROMOTION_REVEAL_MS).
+    property int evolveFrom: 0
+    property int evolveTo: 0
+    property real cover: 0  // the white silhouette over him
+    property real swing: 0  // 0 to 1, faster and faster: which look the silhouette has
+    property real rays: 0
+    property real flash: 0
+    readonly property bool covered: cover >= 1
+    readonly property bool showsNew: Math.floor(swing * 15) % 2 === 1
+    readonly property point heart: Qt.point(60, 80)  // where the rays meet, the flash bursts
+
+    onPromotionChanged: {
+        if (promotion.to === undefined)
+            return
+        evolveFrom = promotion.from
+        evolveTo = promotion.to
+        evolution.restart()
+    }
+
+    SequentialAnimation {
+        id: evolution
+        ScriptAction {
+            script: {
+                root.cover = 0
+                root.swing = 0
+                root.rays = 0
+                root.flash = 0
+            }
+        }
+        PauseAnimation { duration: 700 }  // he cheers the right answer first
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "cover"; to: 1; duration: 400; easing.type: Easing.InOutQuad }
+            NumberAnimation { target: root; property: "rays"; to: 1; duration: 400 }
+        }
+        NumberAnimation { target: root; property: "swing"; to: 1; duration: 2600; easing.type: Easing.InQuad }
+        NumberAnimation { target: root; property: "flash"; to: 1; duration: 150 }
+        ScriptAction {
+            script: {
+                root.cover = 0
+                root.rays = 0
+            }
+        }
+        NumberAnimation { target: root; property: "flash"; to: 0; duration: 650; easing.type: Easing.OutQuad }
+    }
 
     implicitWidth: 150
     implicitHeight: 175
@@ -118,6 +167,7 @@ Item {
             id: staged
             width: 120
             height: 140
+            opacity: root.covered ? 0 : 1
             transform: Scale { origin.x: 60; origin.y: 132; xScale: root.spec.scale; yScale: root.spec.scale }
 
             // What lies on the desk never moves: the cap, a blot, the knocked-over inkwell.
@@ -385,11 +435,73 @@ Item {
             }
         }
 
+        // His evolution: rays drawn in to him, his white silhouette, the flash.
+        Repeater {
+            model: 12
+            Rectangle {
+                required property int index
+                readonly property real outer: 58 - 30 * root.swing
+                readonly property real inner: 30 - 22 * root.swing
+                visible: root.rays > 0
+                opacity: 0.8 * root.rays
+                x: root.heart.x - 0.7
+                y: root.heart.y - outer
+                width: 1.4
+                height: outer - inner
+                radius: 0.7
+                gradient: Gradient {
+                    GradientStop { position: 0; color: "#00C8DCFF" }
+                    GradientStop { position: 1; color: "#C8DCFF" }
+                }
+                transform: Rotation { origin.x: 0.7; origin.y: outer; angle: index * 30 }
+            }
+        }
+        Item {
+            width: 120
+            height: 140
+            visible: root.cover > 0
+            opacity: root.cover
+            Image {
+                width: 120
+                height: 140
+                source: "image://tagnan/" + (root.showsNew ? root.evolveTo : root.evolveFrom) + "/silhouette/-"
+                sourceSize: Qt.size(Math.ceil(120 * root.unit * Screen.devicePixelRatio),
+                                    Math.ceil(140 * root.unit * Screen.devicePixelRatio))
+                smooth: true
+            }
+        }
+        Shape {
+            anchors.fill: parent
+            visible: root.flash > 0
+            opacity: root.flash
+            preferredRendererType: Shape.CurveRenderer
+            transform: Scale {
+                origin.x: root.heart.x
+                origin.y: root.heart.y
+                xScale: 0.6 + 0.6 * root.flash
+                yScale: 0.6 + 0.6 * root.flash
+            }
+            ShapePath {
+                strokeColor: "transparent"
+                fillGradient: RadialGradient {
+                    centerX: root.heart.x
+                    centerY: root.heart.y
+                    centerRadius: 60
+                    focalX: root.heart.x
+                    focalY: root.heart.y
+                    GradientStop { position: 0; color: "#FFFFFFFF" }
+                    GradientStop { position: 0.45; color: "#E6FFFFFF" }
+                    GradientStop { position: 1; color: "#00FFFFFF" }
+                }
+                PathSvg { path: root.ellipse(root.heart.x, root.heart.y, 60, 60) }
+            }
+        }
+
         // The mood's sign above him: a question mark, sparkles, a vein of anger. It pops in.
         Layer {
             name: "decor"
             byExpression: true
-            visible: root.expression === "ask" || root.expression === "happy" || root.expression === "angry"
+            visible: !root.covered && (root.expression === "ask" || root.expression === "happy" || root.expression === "angry")
             transform: Scale {
                 origin.x: root.spec.decor[0]
                 origin.y: root.spec.decor[1]

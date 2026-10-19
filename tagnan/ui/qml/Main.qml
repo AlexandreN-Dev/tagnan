@@ -46,6 +46,7 @@ Window {
         id: figure
         animator: win.animator
         spec: win.controller.spec
+        promotion: win.controller.promotion
         x: win.figureLeft
         y: win.figureTop
         width: 150

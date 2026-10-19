@@ -33,6 +33,8 @@ class LayerImages(QQuickImageProvider):
             return QImage()
         if name == "still":  # the whole figure at rest, his menu's header: the icon at grade 0
             svg: str | None = art.icon_svg() if stage == 0 else art.still_svg(stage, glow=False)
+        elif name == "silhouette":  # the whole figure in white, as he evolves (Tagnan.qml)
+            svg = art.still_svg(stage, glow=False, shadow=False)
         else:
             svg = art.layer(stage, name, "idle" if expression == "-" else expression)
         box_w, box_h = (
@@ -47,6 +49,15 @@ class LayerImages(QQuickImageProvider):
         )
         if svg is None:
             image.fill(QColor(0, 0, 0, 0))
+        elif name == "silhouette":
+            # Solid, though the inkwell's glass lets light through: laid over itself a few times.
+            once = image.copy()
+            painter = QPainter(image)
+            for _ in range(12):
+                painter.drawImage(0, 0, once)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            painter.fillRect(image.rect(), QColor("white"))
+            painter.end()
         if size is not None:
             size.setWidth(image.width())
             size.setHeight(image.height())

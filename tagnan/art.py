@@ -1222,8 +1222,9 @@ def layer(stage: int, name: str, expression: str = "idle") -> str | None:
     return _svg(body, RAPIER_BOX if name == "rapier" else (0, 0, WIDTH, HEIGHT))
 
 
-def still_svg(stage: int, expression: str = "idle", glow: bool = True) -> str:
-    """The whole figure at rest, in one SVG: tray icon, reference sheet, tests.
+def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: bool = True) -> str:
+    """The whole figure at rest, in one SVG: tray icon, reference sheet, tests, and, without
+    his shadow, the silhouette he evolves in.
 
     The pose follows the expression as the window's does at rest: rapier en garde when asking
     or cheering, point down otherwise.
@@ -1275,9 +1276,13 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True) -> str:
             f'translate({pt(-gx, -gy)})">{rapier(stage)}</g>'
         )
     scaled = f"translate(60 132) scale({n(k)}) translate(-60 -132)"
-    shadow = f'<ellipse cx="60" cy="133.5" rx="{n(spec["shadowRx"])}" ry="3.6" fill="#000" opacity=".16"/>'
+    under = (
+        f'<ellipse cx="60" cy="133.5" rx="{n(spec["shadowRx"])}" ry="3.6" fill="#000" opacity=".16"/>'
+        if shadow
+        else ""
+    )
     return _svg(
-        f'{shadow}<g transform="{scaled}">{layer_body(stage, "ground")}'
+        f'{under}<g transform="{scaled}">{layer_body(stage, "ground")}'
         f'<g transform="translate(0 {n(-lift)})">{"".join(parts)}</g></g>'
         f"{layer_body(stage, 'decor', expression)}"
     )

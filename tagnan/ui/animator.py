@@ -99,6 +99,9 @@ class Animator(QObject):
     def mood_name(self) -> str:
         return self._rig.mood
 
+    def reduced_motion(self) -> bool:
+        return self._rig.reduced_motion
+
     def _get_stage(self) -> int:
         return self._rig.stage
 

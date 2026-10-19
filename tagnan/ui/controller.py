@@ -45,6 +45,10 @@ NO_QUESTION_RETRY_MINUTES = 2
 REFILL_BACKOFF = 600.0  # after a failed batch, wait before asking the brain again
 FIRST_QUESTION_DELAY = 20.0  # the very first question comes soon after the first batch
 MOOD_SECONDS = {"happy": 4.0, "angry": 6.0}
+# A promotion's evolution in Tagnan.qml: he takes his new look while both are white silhouettes,
+# and shows it at the flash.
+PROMOTION_SWAP_MS = 1300
+PROMOTION_REVEAL_MS = 3850
 RESULT_SECONDS = 15  # a right answer's bubble closes by itself, unless hovered
 QUIP_SECONDS = 1.8
 MAX_COURSE_WORDS = 120
@@ -55,6 +59,7 @@ UPDATED_SECONDS = 30
 
 class Controller(QObject):
     stageChanged = Signal()
+    promotionChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
     prefsChanged = Signal()  # his pace, his call, its volume or his subject
@@ -91,6 +96,7 @@ class Controller(QObject):
         self._volume = calls.DEFAULT_VOLUME if volume is None else volume
         self._stage = game.progress.grade
         self._spec = art.figure(self._stage)
+        self._promotion: dict[str, int] = {}
         self._bubble: dict[str, Any] = {"mode": "hidden"}
         self._current: Question | None = None
         self._outcome: Outcome | None = None
@@ -110,6 +116,8 @@ class Controller(QObject):
         self._mood_timer = self._timer(lambda: self._set_mood("idle"))
         self._hide_timer = self._timer(self._auto_hide)
         self._unanswered_timer = self._timer(self._unanswered)
+        self._swap_timer = self._timer(self._swap)
+        self._reveal_timer = self._timer(self._reveal)
 
     def _timer(self, slot: Callable[[], None], single: bool = True) -> QTimer:
         timer = QTimer(self)
@@ -160,6 +168,12 @@ class Controller(QObject):
     @Property(dict, notify=stageChanged)
     def spec(self) -> dict[str, Any]:
         return self._spec
+
+    @Property(dict, notify=promotionChanged)
+    def promotion(self) -> dict[str, int]:
+        """His evolution under way: the grades it goes "from" and "to"; empty once he shows
+        his new look."""
+        return self._promotion
 
     @Property(dict, notify=bubbleChanged)
     def bubble(self) -> dict[str, Any]:
@@ -260,7 +274,9 @@ class Controller(QObject):
             MOOD_SECONDS["happy" if outcome.correct else "angry"],
         )
         self._show(self._result(outcome))
-        if outcome.after.grade != self._stage:
+        if outcome.promoted and not self.animator.reduced_motion():
+            self._promote(self._stage, outcome.after.grade)
+        elif outcome.after.grade != self._stage:
             self._set_stage(outcome.after.grade)
         if outcome.correct and not outcome.promoted:
             self._hide_timer.start(RESULT_SECONDS * 1000)
@@ -301,6 +317,7 @@ class Controller(QObject):
             "points": points,
             "news": news,
             "promoted": outcome.promoted,
+            "rank": rules.GRADES[after.grade].name if outcome.promoted else "",
         }
 
     @Slot()
@@ -560,6 +577,7 @@ class Controller(QObject):
             self.game.set_course(bp)
             logger.info("course: %r", bp.key)
             self._current = None
+            self._end_promotion()
             self._set_stage(self.game.progress.grade)  # each course has its own grade
             self.prefsChanged.emit()
             self.statusChanged.emit()
@@ -808,6 +826,29 @@ class Controller(QObject):
         self._spec = art.figure(stage)
         self.animator.set_stage(stage)
         self.stageChanged.emit()
+
+    def _promote(self, before: int, after: int) -> None:
+        """His evolution, as in the games: Tagnan.qml plays it, he changes under cover."""
+        self._promotion = {"from": before, "to": after}
+        self.promotionChanged.emit()
+        self._swap_timer.start(PROMOTION_SWAP_MS)
+        self._reveal_timer.start(PROMOTION_REVEAL_MS)
+
+    def _swap(self) -> None:
+        if self._promotion and self._stage != self._promotion["to"]:
+            self._set_stage(self._promotion["to"])
+
+    def _reveal(self) -> None:
+        self._end_promotion()
+        self._set_mood("happy", MOOD_SECONDS["happy"])
+
+    def _end_promotion(self) -> None:
+        self._swap_timer.stop()
+        self._reveal_timer.stop()
+        if self._promotion:
+            self._swap()
+            self._promotion = {}
+            self.promotionChanged.emit()
 
     # --- Bubble -----------------------------------------------------------------------------
 

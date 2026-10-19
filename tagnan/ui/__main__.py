@@ -36,6 +36,7 @@ from PySide6.QtWidgets import QApplication
 
 from tagnan import blueprint as blueprints
 from tagnan import config as configs
+from tagnan import progress as rules
 from tagnan.brain_client import BrainClient
 from tagnan.game import Game
 from tagnan.paths import config_file, state_dir
@@ -143,6 +144,26 @@ def demo(controller: Controller, what: str) -> None:
         controller.showSubject()
     elif what == "menu":
         controller.showMenu()
+    elif what == "promotion":  # his evolution only: nothing saved
+        before = min(controller.property("stage"), len(rules.GRADES) - 2)
+        controller._set_stage(before)
+        grade = rules.GRADES[before + 1]
+        controller._show(
+            {
+                "mode": "result",
+                "correct": True,
+                "title": "Touché!",
+                "chosen": [],
+                "right": "",
+                "explanation": "A right answer that takes him over the line.",
+                "reference": "",
+                "points": f"+14 points · {grade.threshold + 3} in all · streak of 4",
+                "news": f"Promotion! Tagnan is now a {grade.name}: {grade.look}.",
+                "promoted": True,
+                "rank": grade.name,
+            }
+        )
+        controller._promote(before, before + 1)
 
 
 def main() -> int:
@@ -167,6 +188,7 @@ def main() -> int:
             "pause",
             "subject",
             "menu",
+            "promotion",
         ],
         help="development: show a bubble right away",
     )

@@ -270,10 +270,47 @@ def test_promotion_changes_his_look(game: Game) -> None:
     question = controller._current
     assert question is not None
     controller.answer(list(question.answers))
+    # He evolves first: the window plays it, his grade changes under cover, then shows.
+    assert controller.property("promotion") == {"from": 0, "to": 1}
+    assert stages == []
+    controller._swap()
+    assert stages == [1]
+    assert controller.property("promotion") == {"from": 0, "to": 1}
+    controller._reveal()
+    assert controller.property("promotion") == {}
+    assert animator.mood_name() == "happy"
     assert stages == [1]
     assert animator.property("stage") == 1
     assert controller.property("spec")["stage"] == 1
-    assert controller.property("bubble")["news"].startswith("Promotion! Tagnan is now a Gascon")
+    bubble = controller.property("bubble")
+    assert bubble["news"].startswith("Promotion! Tagnan is now a Gascon")
+    assert bubble["rank"] == "Gascon"
+
+
+def test_with_reduced_motion_a_promotion_is_at_once(game: Game) -> None:
+    fill(game)
+    game.store.save_progress(game.exam, Progress(points=245, streak=2, grade=0))
+    controller, _, _ = make(game)
+    controller.animator._rig.reduced_motion = True
+    controller.askNow()
+    question = controller._current
+    assert question is not None
+    controller.answer(list(question.answers))
+    assert controller.property("promotion") == {}
+    assert controller.property("stage") == 1
+
+
+def test_a_new_course_ends_an_evolution_in_its_own_grade(game: Game) -> None:
+    fill(game)
+    game.store.save_progress(game.exam, Progress(points=245, streak=2, grade=0))
+    controller, _, _ = make(game)
+    controller.askNow()
+    question = controller._current
+    assert question is not None
+    controller.answer(list(question.answers))
+    controller._end_promotion()
+    assert controller.property("promotion") == {}
+    assert controller.property("stage") == 1
 
 
 def test_first_start_writes_questions_then_asks_soon(game: Game) -> None:

@@ -13,6 +13,8 @@ Item {
     property bool tailOnRight: true
     readonly property string mode: content.mode
     readonly property bool quip: mode === "quip"
+    // A promotion under way: he is still evolving (Tagnan.qml), his new rank not shown yet.
+    readonly property bool evolving: controller.promotion.to !== undefined
     readonly property real maxHeight: 590
     property var picked: []
     property var preview: ({ ok: false, text: "" })
@@ -336,9 +338,50 @@ Item {
             }
             Para {
                 visible: (bubble.mode === "result" || bubble.mode === "thinking") && (bubble.content.news || "") !== ""
+                         && !bubble.content.promoted
                 text: bubble.content.news || ""
                 color: bubble.theme.gold
                 font.weight: Font.DemiBold
+            }
+            // A promotion: a word of surprise while he evolves, then his new rank, large.
+            Para {
+                visible: (bubble.mode === "result" || bubble.mode === "thinking") && !!bubble.content.promoted
+                         && bubble.evolving
+                text: "What? Tagnan is changing!"
+                color: bubble.theme.gold
+                font.weight: Font.DemiBold
+            }
+            Column {
+                visible: (bubble.mode === "result" || bubble.mode === "thinking") && !!bubble.content.promoted
+                         && !bubble.evolving
+                width: column.width
+                spacing: 2
+                onVisibleChanged: if (visible) arrival.restart()
+                Text {
+                    text: "NEW RANK"
+                    color: bubble.theme.muted
+                    font.family: bubble.theme.body
+                    font.pixelSize: 11
+                    font.letterSpacing: 3
+                }
+                Text {
+                    id: rankName
+                    text: (bubble.content.rank || "").toUpperCase()
+                    color: bubble.theme.gold
+                    font.family: bubble.theme.display
+                    font.bold: true
+                    font.pixelSize: 26
+                    font.letterSpacing: 3
+                    // The name closes up as it comes in.
+                    ParallelAnimation {
+                        id: arrival
+                        NumberAnimation { target: rankName; property: "font.letterSpacing"; from: 14; to: 3; duration: 450; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: rankName; property: "opacity"; from: 0; to: 1; duration: 300 }
+                    }
+                }
+                Para {
+                    text: bubble.content.news || ""
+                }
             }
             Para {
                 visible: bubble.mode === "result" || bubble.mode === "thinking"

@@ -1,4 +1,5 @@
 import math
+import re
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -162,6 +163,17 @@ def test_the_knocked_over_inkwell_lies_on_the_desk_in_the_frame() -> None:
     assert max(y for _, y in points) == pytest.approx(130)
     assert all(0 <= x <= art.WIDTH and 0 <= y <= 130.01 for x, y in points)
     assert "clip-path" not in art.ground(1)  # QtSvg would ignore it
+
+
+def test_the_quill_fell_with_the_inkwell_onto_the_spilt_ink() -> None:
+    assert art.quill() in art.ground(1)  # the inkwell's own quill, turned with it
+    paths = re.findall(r' d="([^"]+)"', art.quill())
+    numbers = [float(v) for d in paths for v in re.findall(r"-?\d+(?:\.\d+)?", d)]
+    points = [art.fallen_point(x, y) for x, y in zip(numbers[0::2], numbers[1::2], strict=True)]
+    assert max(y for _, y in points) < 130  # never through the desk
+    x, y = art.fallen_point(*art.QUILL[1])
+    assert abs(x - art.PUDDLE.cx) < art.PUDDLE.rx  # its tip rests on the spilt ink
+    assert y > art.PUDDLE.cy - art.PUDDLE.ry - 1
 
 
 def test_only_the_gascon_drops_are_finished() -> None:

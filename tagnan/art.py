@@ -877,7 +877,8 @@ INSIDE = (
     "L44 66 L44 81 L39 81.5 Q25 82.5 25 97 Z"
 )
 # Knocked over beside the Gascon (grade 1): turned on its side, mouth to our right and a little
-# down (degrees), at that scale, its leftmost point at that x, lying on the desk.
+# down (degrees), at that scale, its leftmost point at that x, lying on the desk. Its quill fell
+# with it, still dipped, and rests its tip on the spilt ink.
 FALLEN = (100.0, 0.42, 1.0)
 # The quill: where it is dipped (the window turns it around that point), and its tip. It leans
 # so as to go in through the mouth, clear of the glass whichever way the window sways it.
@@ -1053,8 +1054,9 @@ def _below(polygon: list[tuple[float, float]], level: float) -> list[tuple[float
 
 def fallen_inkwell() -> str:
     """Grade 0's inkwell on its side: the ink it kept lies flat along its lower wall, below the
-    lower corner of its mouth (the rest ran out), with its meniscus; then its glass, whose
-    highlights now run along the top."""
+    lower corner of its mouth (the rest ran out), with its meniscus; its quill, still in it as it
+    was dipped, out through the mouth onto the desk; then its glass, whose highlights now run
+    along the top."""
     inside = [fallen_point(x, y) for x, y in path_points(INSIDE)]
     level = max(fallen_point(MOUTH[0], MOUTH[2])[1], fallen_point(MOUTH[1], MOUTH[2])[1])
     pool = _below(inside, level)
@@ -1064,7 +1066,7 @@ def fallen_inkwell() -> str:
         f'<path d="M{" L".join(pt(*p) for p in pool)} Z" fill="{INK}"/>'
         f'<path d="M{pt(min(xs) + 0.6, level + 0.35)} L{pt(max(xs) - 0.6, level + 0.35)}" fill="none" '
         f'stroke="{INK_EDGE[0]}" stroke-width="1" stroke-linecap="round" opacity="{n(INK_EDGE[1])}"/>'
-        f'<g transform="matrix({matrix})">{glass()}</g>'
+        f'<g transform="matrix({matrix})">{quill()}{glass()}</g>'
     )
 
 
@@ -1086,7 +1088,7 @@ def cap() -> str:
 
 def ground(stage: int) -> str:
     """What lies on the desk and never moves: the cap and a blot (grade 0); the knocked-over
-    inkwell, a puddle of spilt ink and the cap (grade 1)."""
+    inkwell and its quill, a puddle of spilt ink and the cap (grade 1)."""
     if stage == 0:
         return (
             f'<ellipse cx="11" cy="129.6" rx="5.5" ry="2.1" fill="{INK}"/><circle cx="19.1" cy="127.6" r="1.3" fill="{INK}"/>'

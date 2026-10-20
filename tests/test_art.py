@@ -254,3 +254,11 @@ def test_the_cadet_inkwell_is_split_at_the_desk_its_quill_still_in_it() -> None:
 def _pairs(paths: list[str]) -> list[tuple[float, float]]:
     numbers = [float(v) for d in paths for v in re.findall(r"-?\d+(?:\.\d+)?", d)]
     return list(zip(numbers[0::2], numbers[1::2], strict=True))
+
+
+def test_the_cadet_icon_hat_is_redrawn_to_read_small() -> None:
+    svg = art.icon_svg(2)
+    assert art.FELT_EDGE in svg  # the lit edges that part it from the rim
+    assert art.FELT_SHADE not in svg  # none of the figure's fine shading
+    assert art.CREAM_SHADE not in svg
+    assert art.cadet_hat() not in svg

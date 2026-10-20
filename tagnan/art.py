@@ -1309,7 +1309,7 @@ def icon_svg(stage: int = 0) -> str:
     x, y, r = spec["staticDrips"][0] if stage == 1 else spec["drip"]
     drip = teardrop(x, y, r * 1.1) if stage == 1 else teardrop(x, y - 1, r * 1.3)
     silhouette = f'<path d="{drip}" fill="{INK}"/><path d="{blob_path(stage, 0)}" fill="{INK}"/>'
-    top = plumes(stage) + (hat(stage) if stage >= 2 else "")
+    top = plumes(stage) + (_icon_hat() if stage == 2 else hat(stage) if stage >= 2 else "")
     face = (
         eye(60, eyes_y, 1.32, "idle", -1, 1.12)
         + eye(60, eyes_y, 1.32, "idle", 1, 1.12)
@@ -1327,6 +1327,31 @@ def icon_svg(stage: int = 0) -> str:
         f"{cross(stage) if stage >= 3 else ''}{top}</g></g>",
         ICON_BOXES[stage],
     )
+
+
+def _icon_hat() -> str:
+    """The Cadet's hat redrawn to read at 16 to 48 px, as his ink is: its silhouette and its dent,
+    flat felt with a broad lit edge along the crown's and the brim's upper left, to part them from
+    the rim on dark taskbars, a plain cream band and a round bow."""
+    cx, yb, u, tilt = CADET_HAT
+    rx, ry = 30 * u, 6.5 * u
+    brim = [
+        (cx + rx * math.cos(2 * math.pi * i / 96), yb + ry * math.sin(2 * math.pi * i / 96))
+        for i in range(96)
+    ]
+    crown = _dented_crown(cx, yb, u)
+    band = _band(cx, yb - 0.6 * u, u * 1.18)
+    bx, by = cx + CADET_BOW[0] * u, yb + CADET_BOW[1] * u
+    body = (
+        f'<ellipse cx="{n(cx)}" cy="{n(yb)}" rx="{n(rx)}" ry="{n(ry)}" fill="{FELT}"/>'
+        f'<path d="{crescents(brim, (cx, yb), (2.2, 2.6))}" fill="{FELT_EDGE}"/>'
+        f'<path d="{polygon(crown)}" fill="{FELT}"/>'
+        f'<path d="{crescents(crown, (cx, yb - 10 * u), (2.4, 2.6))}" fill="{FELT_EDGE}"/>'
+        f'<path d="{polygon(band)}" fill="{CREAM}"/>'
+        f'<circle cx="{n(bx)}" cy="{n(by)}" r="{n(3.2 * u)}" fill="{CREAM}"/>'
+        f'<path d="M{pt(cx - rx, yb)} A{n(rx)} {n(ry)} 0 0 0 {pt(cx + rx, yb)} Z" fill="{FELT}"/>'
+    )
+    return f'<g transform="rotate({n(tilt)} {pt(cx, yb)})">{body}</g>'
 
 
 def _inkwell_icon() -> str:

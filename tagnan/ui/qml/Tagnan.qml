@@ -31,6 +31,11 @@ Item {
         return v < 0.55 ? 0.15 + 0.85 * v / 0.55 : v < 0.6 ? 1 - 0.85 * (v - 0.55) / 0.05 : 0.15
     }
     readonly property real fallT: animator.drip < 0.57 || animator.drip > 0.76 ? -1 : (animator.drip - 0.57) / 0.19
+    // The Cadet's drip lands on his puddle (spec.landing, the desk's y) and rings it.
+    readonly property bool lands: spec.landing >= 0
+    readonly property real splashT: animator.drip < 0.76 || animator.drip > 0.96 ? -1 : (animator.drip - 0.76) / 0.2
+    // The Cadet's hat rides his rippling head (tagnan.art.hat_ride) on top of its own sway.
+    readonly property real hatAngle: animator.hat + animator.hatRideTip
 
     // His evolution, as in the games: he turns white, his old and new looks swap faster and
     // faster, a flash, and he stands in his new one. The controller changes his grade while he
@@ -170,8 +175,25 @@ Item {
             opacity: root.covered ? 0 : 1
             transform: Scale { origin.x: 60; origin.y: 132; xScale: root.spec.scale; yScale: root.spec.scale }
 
-            // What lies on the desk never moves: the cap, a blot, the knocked-over inkwell.
-            Layer { name: "ground"; visible: root.stage <= 1 }
+            // What lies on the desk never moves: the cap, a blot, the knocked-over inkwell, the
+            // split one.
+            Layer { name: "ground"; visible: root.stage <= 2 }
+            // Where the Cadet's drip lands, a ring widens on his puddle.
+            Shape {
+                anchors.fill: parent
+                visible: root.lands && root.splashT >= 0
+                opacity: 0.9 * (1 - Math.max(0, root.splashT))
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    fillColor: "transparent"
+                    strokeColor: root.spec.inkEdge
+                    strokeWidth: 0.8
+                    PathSvg {
+                        readonly property real r: 1.2 + 6 * Math.max(0, root.splashT)
+                        path: root.lands ? root.ellipse(root.spec.drip[0], root.spec.landing - 0.2, r, r * 0.28) : ""
+                    }
+                }
+            }
 
             // Everything else rides on his body: lift, sulky turn, squash and stretch, hops.
             Item {
@@ -222,75 +244,135 @@ Item {
                     }
                 }
 
-                // The ink, its shade and the drip.
+                // The Cadet's ribbon tails, behind his head: they ride with his hat and swing.
+                Layer {
+                    name: "tails"
+                    visible: root.spec.tails.length > 0
+                    transform: [
+                        Rotation {
+                            origin.x: root.spec.tails.length ? root.spec.tails[0] : 0
+                            origin.y: root.spec.tails.length ? root.spec.tails[1] : 0
+                            angle: 0.7 * root.animator.plume
+                        },
+                        Rotation {
+                            origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
+                            origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
+                            angle: root.hatAngle
+                        },
+                        Translate { y: root.animator.hatRideY }
+                    ]
+                }
+
+                // The Cadet's ink stays under his brim, wherever his hat sits, so that it never
+                // shows through the felt: clipped in the hat's frame (spec.underHat), then brought
+                // back to the body's.
                 Item {
-                    id: ink
+                    id: underBrim
+                    readonly property bool under: root.spec.underHat >= 0
                     width: 120
                     height: 140
+                    transform: [
+                        Rotation {
+                            origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
+                            origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
+                            angle: underBrim.under ? root.hatAngle : 0
+                        },
+                        Translate { y: underBrim.under ? root.animator.hatRideY : 0 }
+                    ]
+                    Item {
+                        x: -200
+                        y: underBrim.under ? root.spec.underHat : -200
+                        width: 520
+                        height: 540
+                        clip: underBrim.under
+                        Item {
+                            id: ink
+                            x: 200
+                            y: -parent.y
+                            width: 120
+                            height: 140
+                            transform: [
+                                Translate { y: underBrim.under ? -root.animator.hatRideY : 0 },
+                                Rotation {
+                                    origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
+                                    origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
+                                    angle: underBrim.under ? -root.hatAngle : 0
+                                }
+                            ]
 
-                    Ink {
-                        visible: root.spec.shadeOffset[0] !== 0 || root.spec.shadeOffset[1] !== 0
-                        d: root.animator.inkPath
-                        fill: root.spec.shade
-                        transform: Translate { x: root.spec.shadeOffset[0]; y: root.spec.shadeOffset[1] }
-                    }
-                    Ink { d: root.animator.inkPath }
-                    // Grade 0: the inkwell's ink, shaded on the right, lit under its surface, with
-                    // its meniscus; all three follow the slosh (tagnan.art.inkwell_shading).
-                    // Grade 1: the Gascon's, shaded on the lower right, lit on the upper left, with
-                    // a rim of light; all three follow the ripple (tagnan.art.splash_shading).
-                    Shape {
-                        visible: root.stage <= 1
-                        anchors.fill: parent
-                        preferredRendererType: Shape.CurveRenderer
-                        ShapePath {
-                            fillColor: root.spec.shade
-                            strokeColor: "transparent"
-                            PathSvg { path: root.animator.inkShade }
+                            Ink {
+                                visible: root.spec.shadeOffset[0] !== 0 || root.spec.shadeOffset[1] !== 0
+                                d: root.animator.inkPath
+                                fill: root.spec.shade
+                                transform: Translate { x: root.spec.shadeOffset[0]; y: root.spec.shadeOffset[1] }
+                            }
+                            Ink { d: root.animator.inkPath }
+                            // Grade 0: the inkwell's ink, shaded on the right, lit under its surface, with
+                            // its meniscus; all three follow the slosh (tagnan.art.inkwell_shading).
+                            // Grade 1: the Gascon's, shaded on the lower right, lit on the upper left, with
+                            // a rim of light; all three follow the ripple (tagnan.art.splash_shading).
+                            Shape {
+                                visible: root.stage <= 2
+                                anchors.fill: parent
+                                preferredRendererType: Shape.CurveRenderer
+                                ShapePath {
+                                    fillColor: root.spec.shade
+                                    strokeColor: "transparent"
+                                    PathSvg { path: root.animator.inkShade }
+                                }
+                                ShapePath {
+                                    fillColor: root.spec.inkLight
+                                    strokeColor: "transparent"
+                                    PathSvg { path: root.animator.inkLight }
+                                }
+                                ShapePath {
+                                    fillColor: root.stage >= 1 ? root.spec.inkEdge : "transparent"
+                                    strokeColor: root.stage === 0 ? root.spec.inkEdge : "transparent"
+                                    strokeWidth: root.spec.meniscusWidth
+                                    capStyle: ShapePath.RoundCap
+                                    PathSvg { path: root.animator.inkEdge }
+                                }
+                            }
+                            // The drips; the Gascon's and the Cadet's hang under their ink, from its
+                            // rippling edge.
+                            Repeater {
+                                model: root.spec.staticDrips
+                                Ink {
+                                    required property var modelData
+                                    required property int index
+                                    z: root.spec.dripsUnder ? -1 : 0
+                                    d: root.teardrop(modelData[0], root.dripTop(index, modelData[1]), modelData[2])
+                                }
+                            }
+                            Ink {
+                                id: drip
+                                readonly property real hangs: root.spec.drip.length
+                                    ? root.dripTop(root.spec.staticDrips.length, root.spec.drip[1]) : 0
+                                visible: root.spec.drip.length > 0
+                                z: root.spec.dripsUnder ? -1 : 0
+                                d: visible ? root.teardrop(root.spec.drip[0], hangs, root.spec.drip[2]) : ""
+                                transform: Scale {
+                                    origin.x: root.spec.drip.length ? root.spec.drip[0] : 0
+                                    origin.y: drip.hangs
+                                    yScale: root.dripScale
+                                }
+                            }
+                            // The drop that lets go: it fades as it falls, or the Cadet's lands on his
+                            // puddle, below him for all his lift.
+                            Ink {
+                                id: fall
+                                readonly property real from: drip.hangs + (root.spec.fall.length ? root.spec.fall[1] - root.spec.drip[1] : 0)
+                                visible: root.spec.fall.length > 0 && root.fallT >= 0
+                                opacity: root.lands ? 1 : 1 - Math.max(0, root.fallT)
+                                d: root.spec.fall.length
+                                    ? root.ellipse(root.spec.fall[0], from, root.spec.fall[2], root.spec.fall[2])
+                                    : ""
+                                transform: Translate {
+                                    y: (root.lands ? root.spec.landing - 1.6 + root.spec.lift - fall.from : 16)
+                                        * Math.pow(Math.max(0, root.fallT), 2)
+                                }
+                            }
                         }
-                        ShapePath {
-                            fillColor: root.spec.inkLight
-                            strokeColor: "transparent"
-                            PathSvg { path: root.animator.inkLight }
-                        }
-                        ShapePath {
-                            fillColor: root.stage === 1 ? root.spec.inkEdge : "transparent"
-                            strokeColor: root.stage === 0 ? root.spec.inkEdge : "transparent"
-                            strokeWidth: root.spec.meniscusWidth
-                            capStyle: ShapePath.RoundCap
-                            PathSvg { path: root.animator.inkEdge }
-                        }
-                    }
-                    // The drips; the Gascon's hang under his ink, from his rippling edge.
-                    Repeater {
-                        model: root.spec.staticDrips
-                        Ink {
-                            required property var modelData
-                            required property int index
-                            z: root.spec.dripsUnder ? -1 : 0
-                            d: root.teardrop(modelData[0], root.dripTop(index, modelData[1]), modelData[2])
-                        }
-                    }
-                    Ink {
-                        id: drip
-                        readonly property real hangs: root.spec.drip.length
-                            ? root.dripTop(root.spec.staticDrips.length, root.spec.drip[1]) : 0
-                        visible: root.spec.drip.length > 0
-                        z: root.spec.dripsUnder ? -1 : 0
-                        d: visible ? root.teardrop(root.spec.drip[0], hangs, root.spec.drip[2]) : ""
-                        transform: Scale {
-                            origin.x: root.spec.drip.length ? root.spec.drip[0] : 0
-                            origin.y: drip.hangs
-                            yScale: root.dripScale
-                        }
-                    }
-                    Ink {
-                        visible: root.spec.fall.length > 0 && root.fallT >= 0
-                        opacity: 1 - Math.max(0, root.fallT)
-                        d: root.spec.fall.length
-                            ? root.ellipse(root.spec.fall[0], drip.hangs + root.spec.fall[1] - root.spec.drip[1], root.spec.fall[2], root.spec.fall[2])
-                            : ""
-                        transform: Translate { y: 16 * Math.pow(Math.max(0, root.fallT), 2) }
                     }
                 }
 
@@ -394,11 +476,14 @@ Item {
                     visible: root.spec.hasHat
                     width: 120
                     height: 140
-                    transform: Rotation {
-                        origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
-                        origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
-                        angle: root.animator.hat
-                    }
+                    transform: [
+                        Rotation {
+                            origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
+                            origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
+                            angle: root.hatAngle
+                        },
+                        Translate { y: root.animator.hatRideY }
+                    ]
                     Layer {
                         name: "plume"
                         visible: root.spec.hasPlume
@@ -432,6 +517,9 @@ Item {
                     }
                 }
 
+
+            // What lies on the desk in front of him: the Cadet's quill, out of its inkwell.
+            Layer { name: "front"; visible: root.stage === 2 }
             }
         }
 

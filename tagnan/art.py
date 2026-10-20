@@ -29,6 +29,8 @@ GLASS, GLASS_LN, CAP, CAP_LIGHT = "#DCE4F0", "#B8C2D2", "#2A2733", "#5A5370"
 # quill stands out on light ones.
 GLASS_OUTLINE, INK_LIGHT, CREAM_SHADE, QUILL_LINE = "#A9B7CB", "#3F63B5", "#DDD3C2", "#5E5649"
 BAND_BLUE, RIB = "#4F7FCB", "#BDB5A4"
+# The Cadet's felt (grade 2): its shaded side and the light along its edges.
+FELT_SHADE, FELT_EDGE = "#2C2839", "#6A6290"
 ANGER = "#D8333A"
 
 WIDTH, HEIGHT = 120, 140
@@ -315,9 +317,32 @@ def splash_shading(phase: float) -> dict[str, str]:
     }
 
 
-def splash_shading_svg(phase: float = 0.0) -> str:
-    """The Gascon's shading as SVG, for the still figure."""
-    shading = splash_shading(phase)
+# The Cadet's ink (grade 2), finished as the Gascon's: the same three tones, each copy moved a
+# little further on his taller outline.
+CADET_SHADE = (-3.4, -3.8)
+CADET_LIGHT = (2.8, 3.2)
+CADET_RIM = (1.0, 1.2)
+
+
+def cadet_shading(phase: float) -> dict[str, str]:
+    """What gives the Cadet's ink its volume, following its rippling edge, as the Gascon's."""
+    samples = curve_samples(blob_points(STANDING, phase))
+    centre = (STANDING.cx, STANDING.cy)
+    return {
+        "shade": crescents(samples, centre, CADET_SHADE),
+        "light": crescents(samples, centre, CADET_LIGHT),
+        "rim": crescents(samples, centre, CADET_RIM),
+    }
+
+
+def ink_shading(stage: int, phase: float) -> dict[str, str] | None:
+    """The shaded ink of the grades that have it: the Gascon's and the Cadet's."""
+    return splash_shading(phase) if stage == 1 else cadet_shading(phase) if stage == 2 else None
+
+
+def splash_shading_svg(phase: float = 0.0, stage: int = 1) -> str:
+    """The Gascon's shading (or the Cadet's) as SVG, for the still figure."""
+    shading = ink_shading(stage, phase) or {}
     return (
         f'<path d="{shading["shade"]}" fill="{INK_SHADE}"/>'
         f'<path d="{shading["light"]}" fill="{INK_LIT[0]}" opacity="{n(INK_LIT[1])}"/>'
@@ -328,6 +353,7 @@ def splash_shading_svg(phase: float = 0.0) -> str:
 # The Gascon's drips (grade 1): where each hangs (x) and its size, the falling one last. They are
 # drawn under his ink, their top this far inside his rippling edge, so that they always hang from it.
 GASCON_DRIPS = ((46.0, 2.6), (72.0, 2.4))
+CADET_DRIPS = ((48.0, 2.3), (76.0, 2.5))
 DRIP_DEPTH = 2.4
 
 
@@ -344,13 +370,55 @@ def _edge_below(samples: list[tuple[float, float]], x: float, cy: float) -> floa
 
 
 def drip_tops(stage: int, phase: float) -> list[float]:
-    """Where each drip hangs from (the y of its top), the falling one last. The Gascon's follow his
-    rippling edge; the others stay put."""
-    if stage != 1:
+    """Where each drip hangs from (the y of its top), the falling one last. The Gascon's and the
+    Cadet's follow his rippling edge; the others stay put."""
+    if stage not in (1, 2):
         spec = figure(stage)
         return [y for _, y, _ in spec["staticDrips"]] + ([spec["drip"][1]] if spec["drip"] else [])
-    samples = curve_samples(blob_points(SPLASH, phase))
-    return [_edge_below(samples, x, SPLASH.cy) - DRIP_DEPTH for x, _ in GASCON_DRIPS]
+    blob, drips = (SPLASH, GASCON_DRIPS) if stage == 1 else (STANDING, CADET_DRIPS)
+    samples = curve_samples(blob_points(blob, phase))
+    return [_edge_below(samples, x, blob.cy) - DRIP_DEPTH for x, _ in drips]
+
+
+def _edge_above(samples: list[tuple[float, float]], x: float, cy: float) -> float:
+    """Where the upper half of a closed curve crosses the vertical through x."""
+    best = None
+    for (x0, y0), (x1, y1) in zip(samples, samples[1:] + samples[:1], strict=True):
+        if (y0 < cy or y1 < cy) and min(x0, x1) <= x <= max(x0, x1) and x0 != x1:
+            y = y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+            best = y if best is None else min(best, y)
+    if best is None:
+        raise ValueError(x)
+    return best
+
+
+# The Cadet's hat rides the rippling top of his head (grade 2): it rests on it at these two x and
+# rises, sinks and tips with it, the tip damped (the brim is stiffer than the ink under it). Both
+# are taken around their mean over the ripple's phases, the rig's steps (rig.WOBBLE_RATE a turn).
+HAT_RESTS = (44.0, 76.0)
+HAT_RIDE_TIP = 0.35
+RIDE_PHASES = 22
+
+
+def _resting(phase: float) -> tuple[float, float]:
+    samples = curve_samples(blob_points(STANDING, phase))
+    left, right = (_edge_above(samples, x, STANDING.cy) for x in HAT_RESTS)
+    return (left + right) / 2, math.degrees(math.atan2(right - left, HAT_RESTS[1] - HAT_RESTS[0]))
+
+
+@lru_cache(maxsize=1)
+def _resting_mean() -> tuple[float, float]:
+    rows = [_resting(2 * math.pi * k / RIDE_PHASES) for k in range(RIDE_PHASES)]
+    return sum(y for y, _ in rows) / len(rows), sum(a for _, a in rows) / len(rows)
+
+
+def hat_ride(stage: int, phase: float) -> tuple[float, float]:
+    """How far the hat rises or sinks (y) and tips (degrees) on his rippling head; 0, 0 but on
+    the Cadet."""
+    if stage != 2:
+        return 0.0, 0.0
+    (y, angle), (my, ma) = _resting(phase), _resting_mean()
+    return round(y - my, 3), round(HAT_RIDE_TIP * (angle - ma), 3)
 
 
 def argb(colour: str, opacity: float) -> str:
@@ -457,13 +525,14 @@ def figure(stage: int) -> dict[str, Any]:
     spec: dict[str, Any] = {
         "stage": stage,
         "scale": SCALES[stage],
-        "lift": 10.0 if stage == 1 else 0.0,
+        # The Gascon floats; the Cadet floats over his puddle without touching it.
+        "lift": 10.0 if stage == 1 else CADET_LIFT if stage == 2 else 0.0,
         "ink": INK,
         "shade": INK_SHADE,
         "glow": GOLD_GLOW if stage >= 5 else GLOW,
-        # The inkwell's ink and the Gascon's are shaded inside (inkwell_shading, splash_shading),
-        # not by an offset copy.
-        "shadeOffset": [0.0, 0.0] if stage <= 1 else [2.6, 3.0],
+        # The inkwell's ink, the Gascon's and the Cadet's are shaded inside (inkwell_shading,
+        # ink_shading), not by an offset copy.
+        "shadeOffset": [0.0, 0.0] if stage <= 2 else [2.6, 3.0],
         # Their shading as QML colours; the window gets the paths from the animator.
         "inkLight": argb(*INK_LIT),
         "inkEdge": argb(*INK_EDGE),
@@ -479,6 +548,12 @@ def figure(stage: int) -> dict[str, Any]:
         "hasPlume": stage >= 3,
         "hasRapier": stage >= 4,
         "hasMoustache": stage >= 4,
+        # The Cadet's: where his falling drip lands (on his puddle, the desk's y), the ribbon's
+        # tails' pivot, and the line under his brim, in the hat's frame, below which his ink
+        # stays (so that it never shows through the felt).
+        "landing": CADET_PUDDLE.cy if stage == 2 else -1.0,
+        "tails": list(tails_pivot()) if stage == 2 else [],
+        "underHat": CADET_HAT[1] - 2.0 if stage == 2 else -1.0,
     }
     if stage == 0:
         spec.update(
@@ -502,6 +577,21 @@ def figure(stage: int) -> dict[str, Any]:
             eyes=[[50.0, 86.0], [70.0, 86.0]],
             eyeRadius=6.45,
             mouth=[60.0, 100.0],
+        )
+    elif stage == 2:
+        (sx, sr), (dx, dr) = CADET_DRIPS
+        top, drip_top = drip_tops(2, 0.0)
+        cx, yb = CADET_HAT[:2]
+        spec.update(
+            drops=[[112, 62, 3.6], [33, 50, 3], [110, 100, 3.2], [24, 80, 2.6]],
+            drip=[dx, drip_top, dr],
+            fall=[dx, drip_top + 6, 2.2],
+            staticDrips=[[sx, top, sr]],
+            eyes=[[50.0, 76.0], [70.0, 76.0]],
+            eyeRadius=6.45,
+            mouth=[60.0, 91.0],
+            hat=[cx, yb],
+            plume=[cx, yb],
         )
     else:
         spec.update(
@@ -534,8 +624,9 @@ def figure(stage: int) -> dict[str, Any]:
     spec["burst"] = [
         [d.x, d.y, d.mx, d.my, d.dx, d.dy, d.r, d.delay, d.duration] for d in burst(stage)
     ]
-    # The Gascon's drips hang under his ink; his drops have their shade and their point of light.
-    finished = stage == 1
+    # The Gascon's and the Cadet's drips hang under their ink; their drops have their shade and
+    # their point of light.
+    finished = stage in (1, 2)
     spec["dripsUnder"] = finished
     spec["dropShades"] = [drop_shade(*d) for d in spec["drops"]] if finished else []
     spec["dropLights"] = [drop_light(*d) for d in spec["drops"]] if finished else []
@@ -741,8 +832,184 @@ def plumes(stage: int, cx: float = 60, yb: float = 54, tilt: float = -8) -> str:
     return f'<g transform="rotate({n(tilt)} {pt(cx, yb)})">{inner}</g>'
 
 
+# The Cadet's hat (grade 2): a recruit's, a size too big. Where its brim sits (centre x, y), its
+# size against the plain felt's, its tilt (degrees); it sits lower and tips more.
+CADET_HAT = (60.0, 56.5, 1.12, -12.0)
+# The ribbon's bow, on the band's left end, in the hat's frame before its tilt.
+CADET_BOW = (-15.6, -3.4)
+
+
+def _cubic(
+    p0: tuple[float, float],
+    c1: tuple[float, float],
+    c2: tuple[float, float],
+    p1: tuple[float, float],
+    per: int = 12,
+) -> list[tuple[float, float]]:
+    """A cubic Bézier sampled: `per` points, its end left out (the next piece starts there)."""
+    out = []
+    for j in range(per):
+        t = j / per
+        a, b, c, d = (1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t * t, t**3
+        out.append(
+            (
+                a * p0[0] + b * c1[0] + c * c2[0] + d * p1[0],
+                a * p0[1] + b * c1[1] + c * c2[1] + d * p1[1],
+            )
+        )
+    return out
+
+
+def _quad(
+    p0: tuple[float, float], c: tuple[float, float], p1: tuple[float, float], per: int = 12
+) -> list[tuple[float, float]]:
+    return [_blossom(p0, c, p1, j / per, j / per) for j in range(per)]
+
+
+def _segment(
+    p0: tuple[float, float], p1: tuple[float, float], per: int = 6
+) -> list[tuple[float, float]]:
+    return [
+        (p0[0] + (p1[0] - p0[0]) * j / per, p0[1] + (p1[1] - p0[1]) * j / per) for j in range(per)
+    ]
+
+
+def polygon(points: list[tuple[float, float]]) -> str:
+    return "M" + " L".join(pt(*p) for p in points) + " Z"
+
+
+def _dented_crown(cx: float, yb: float, u: float) -> list[tuple[float, float]]:
+    """The Cadet's crown, pinched in the middle: from its left foot over to its right foot, then
+    back along its base."""
+
+    def p(x: float, y: float) -> tuple[float, float]:
+        return cx + x * u, yb + y * u
+
+    return (
+        _cubic(p(-16, 0), p(-17.6, -15), p(-11, -25.5), p(-4.5, -25.5))
+        + _cubic(p(-4.5, -25.5), p(-1.8, -25.5), p(-1.2, -22), p(0, -22))
+        + _cubic(p(0, -22), p(1.2, -22), p(1.8, -25.5), p(4.5, -25.5))
+        + _cubic(p(4.5, -25.5), p(11, -25.5), p(17.6, -15), p(16, 0))
+        + _segment(p(16, 0), p(-16, 0), 12)
+    )
+
+
+def _band(cx: float, yb: float, u: float) -> list[tuple[float, float]]:
+    def p(x: float, y: float) -> tuple[float, float]:
+        return cx + x * u, yb + y * u
+
+    return (
+        _quad(p(-16.4, -1.2), p(0, 1.6), p(16.4, -1.2))
+        + _segment(p(16.4, -1.2), p(16.9, -6.2), 4)
+        + _quad(p(16.9, -6.2), p(0, -3.4), p(-16.9, -6.2))
+        + _segment(p(-16.9, -6.2), p(-16.4, -1.2), 4)
+    )
+
+
+def cadet_hat() -> str:
+    """The Cadet's felt, finished as the inkwell: lit on its upper left, shaded on its right, the
+    brim's thickness underneath, a dent down its crown, a cream band with its own shade and a bow
+    on its left, and the shadow the brim casts on his ink."""
+    cx, yb, u, tilt = CADET_HAT
+    rx, ry = 30 * u, 6.5 * u
+    brim = [
+        (cx + rx * math.cos(2 * math.pi * i / 96), yb + ry * math.sin(2 * math.pi * i / 96))
+        for i in range(96)
+    ]
+    crown, band = _dented_crown(cx, yb, u), _band(cx, yb, u)
+    crown_c, band_c = (cx, yb - 10 * u), (cx, yb - 3.2 * u)
+
+    def fill(d: str, colour: str, opacity: float = 1.0) -> str:
+        return (
+            f'<path d="{d}" fill="{colour}"'
+            + (f' opacity="{n(opacity)}"' if opacity < 1 else "")
+            + "/>"
+        )
+
+    def line(d: str, colour: str, width: float, opacity: float = 1.0) -> str:
+        return (
+            f'<path d="{d}" fill="none" stroke="{colour}" stroke-width="{n(width)}" '
+            f'stroke-linecap="round" opacity="{n(opacity)}"/>'
+        )
+
+    bx, by = cx + CADET_BOW[0] * u, yb + CADET_BOW[1] * u
+    parts = [
+        f'<ellipse cx="{n(cx + 1.5 * u)}" cy="{n(yb + 3.4 * u)}" rx="{n(17 * u)}" ry="{n(3.4 * u)}" '
+        f'fill="{INK_SHADE}" opacity=".9"/>',
+        # The brim behind the crown, lit along its upper left edge.
+        f'<ellipse cx="{n(cx)}" cy="{n(yb)}" rx="{n(rx)}" ry="{n(ry)}" fill="{FELT}"/>',
+        fill(crescents(brim, (cx, yb), (1.4, 1.6)), FELT_LIGHT),
+        fill(crescents(brim, (cx, yb), (0.5, 0.6)), FELT_EDGE, 0.9),
+        # The crown and its dent.
+        fill(polygon(crown), FELT),
+        fill(crescents(crown, crown_c, (2.6 * u, 2.8 * u)), FELT_LIGHT, 0.55),
+        fill(crescents(crown, crown_c, (0.8, 0.9)), FELT_EDGE, 0.9),
+        fill(crescents(crown, crown_c, (-3.0 * u, -2.6 * u)), FELT_SHADE),
+        line(
+            f"M{pt(cx - 1.2 * u, yb - 21.5 * u)} Q{pt(cx - 0.4 * u, yb - 14 * u)} {pt(cx + 0.6 * u, yb - 8 * u)}",
+            FELT_SHADE,
+            1.1 * u,
+            0.75,
+        ),
+        line(
+            f"M{pt(cx - 2.6 * u, yb - 21 * u)} Q{pt(cx - 2 * u, yb - 15 * u)} {pt(cx - 1.2 * u, yb - 10 * u)}",
+            FELT_EDGE,
+            0.8 * u,
+            0.7,
+        ),
+        # The band and its bow.
+        fill(polygon(band), CREAM),
+        fill(crescents(band, band_c, (-1.6 * u, -1.3 * u)), CREAM_SHADE),
+        fill(
+            f"M{pt(bx, by)} C{pt(bx - 6 * u, by - 6 * u)} {pt(bx - 9 * u, by - 1 * u)} {pt(bx - 1 * u, by + 0.6 * u)} Z",
+            CREAM,
+        ),
+        fill(
+            f"M{pt(bx, by)} C{pt(bx + 3 * u, by - 7 * u)} {pt(bx + 7 * u, by - 3 * u)} {pt(bx + 1 * u, by + 0.8 * u)} Z",
+            CREAM_SHADE,
+        ),
+        f'<circle cx="{n(bx)}" cy="{n(by)}" r="{n(1.7 * u)}" fill="{CREAM}"/>',
+        f'<circle cx="{n(bx + 0.5 * u)}" cy="{n(by + 0.5 * u)}" r="{n(1 * u)}" fill="{CREAM_SHADE}"/>',
+        # The front of the brim, over the crown's foot: its thickness, a light along its front.
+        f'<path d="M{pt(cx - rx, yb)} A{n(rx)} {n(ry)} 0 0 0 {pt(cx + rx, yb)} Z" fill="{FELT}"/>',
+        fill(crescents(brim, (cx, yb), (0.0, -1.5 * u)), FELT_SHADE),
+        line(
+            f"M{pt(cx - rx * 0.86, yb + ry * 0.36)} Q{pt(cx - rx * 0.45, yb + ry * 0.92)} {pt(cx - rx * 0.05, yb + ry * 0.86)}",
+            FELT_EDGE,
+            1.1 * u,
+            0.8,
+        ),
+    ]
+    return f'<g transform="rotate({n(tilt)} {pt(cx, yb)})">{"".join(parts)}</g>'
+
+
+def tails_pivot() -> tuple[float, float]:
+    """The bow the ribbon's tails hang from, the hat's tilt applied: they swing around it."""
+    cx, yb, u, tilt = CADET_HAT
+    return _rotate(cx + CADET_BOW[0] * u, yb + CADET_BOW[1] * u, cx, yb, tilt)
+
+
+def tails() -> str:
+    """The two cream tails of the Cadet's ribbon, hanging from its bow behind his head."""
+    u = CADET_HAT[2]
+    kx, ky = tails_pivot()
+
+    def tail(dx: float, dy: float, w: float, colour: str) -> str:
+        return (
+            f'<path d="M{pt(kx, ky)} C{pt(kx + dx * 0.3 - w, ky + dy * 0.35)} {pt(kx + dx * 0.7 - w, ky + dy * 0.7)} '
+            f"{pt(kx + dx - w * 0.6, ky + dy)} L{pt(kx + dx + w * 0.4, ky + dy - w * 0.9)} "
+            f'C{pt(kx + dx * 0.7 + w, ky + dy * 0.66)} {pt(kx + dx * 0.3 + w, ky + dy * 0.3)} {pt(kx, ky)} Z" '
+            f'fill="{colour}"/>'
+        )
+
+    return tail(-11 * u, 14 * u, 1.6 * u, CREAM_SHADE) + tail(-6.5 * u, 16.5 * u, 1.7 * u, CREAM)
+
+
 def hat(stage: int, cx: float = 60, yb: float = 54, tilt: float = -8) -> str:
-    """The felt, without its plumes: plain from the Cadet on, the captain's from grade 5."""
+    """The felt, without its plumes: the Cadet's a size too big, plain from the Musketeer on, the
+    captain's from grade 5."""
+    if stage == 2:
+        return cadet_hat()
     if stage >= 5:
         u = 66 / 60
         body = (
@@ -900,11 +1167,14 @@ def open_spline(points: list[tuple[float, float]]) -> str:
     return " ".join(d)
 
 
-def quill(dip: tuple[float, float] = QUILL[0], tip: tuple[float, float] = QUILL[1]) -> str:
+def quill(
+    dip: tuple[float, float] = QUILL[0], tip: tuple[float, float] = QUILL[1], outside: bool = False
+) -> str:
     """The goose quill dipped in the inkwell: a vane in two tones (cream towards the light, shaded
     on the other side of the shaft), the shaft, a gold nib in the ink, and a thin dark outline all
     round, so that the cream stands out on light desktops. The vane starts just above the lip, so
-    that only the bare shaft goes down the neck."""
+    that only the bare shaft goes down the neck. `outside`: only what is out of the inkwell, the
+    vane and its shaft."""
     (x0, y0), (x1, y1) = dip, tip
     width, shaft, line = 11.0, 2.2, 1.0
     start = (y0 - MOUTH[2] + 2) / (y0 - y1)
@@ -926,6 +1196,15 @@ def quill(dip: tuple[float, float] = QUILL[0], tip: tuple[float, float] = QUILL[
     nib_shade = f"M{pt(x0 - ux * 3.5, y0 - uy * 3.5)} L{pt(x0 - ux * 0.5, y0 - uy * 0.5)}"
     outline = f"M{pt(*lit[0])} {open_spline(lit)} {open_spline(shaded[::-1])} Z"
     round_cap = 'fill="none" stroke-linecap="round"'
+    if outside:
+        shaft_d = f"M{pt(*lit[0])} L{pt(x1 - ux * 3.5, y1 - uy * 3.5)}"
+        return (
+            f'<path d="{shaft_d}" {round_cap} stroke="{QUILL_LINE}" stroke-width="{n(shaft + 2 * line)}"/>'
+            f'<path d="M{pt(*lit[0])} {open_spline(lit)} Z" fill="{CREAM}"/>'
+            f'<path d="M{pt(*shaded[0])} {open_spline(shaded)} Z" fill="{CREAM_SHADE}"/>'
+            f'<path d="{outline}" fill="none" stroke="{QUILL_LINE}" stroke-width="{n(line)}" stroke-linejoin="round"/>'
+            f'<path d="{shaft_d}" {round_cap} stroke="{RIB}" stroke-width="{n(shaft)}"/>'
+        )
     return (
         # The outline under the shaft and the nib shows only along their edges.
         f'<path d="{shaft_d}" {round_cap} stroke="{QUILL_LINE}" stroke-width="{n(shaft + 2 * line)}"/>'
@@ -939,6 +1218,19 @@ def quill(dip: tuple[float, float] = QUILL[0], tip: tuple[float, float] = QUILL[
     )
 
 
+GLASS_BASE = "M22 122.6 Q22.31 130 30 130 L90 130 Q97.69 130 98 122.6 Z"
+# The lip of its mouth, and the light on its shoulder and lip (from, to, width, opacity).
+LIP_PATH = (
+    "M43.5 66 L76.5 66 Q80 66 80 69.5 L80 72 Q80 75.5 76.5 75.5 L43.5 75.5 Q40 75.5 40 72 "
+    "L40 69.5 Q40 66 43.5 66 Z"
+)
+GLASS_LIGHTS = (
+    ((29.0, 88.0), (29.0, 118.0), 3.6, 0.5),
+    ((36.0, 85.5), (36.0, 93.0), 3.0, 0.5),
+    ((44.5, 68.4), (60.0, 68.4), 1.6, 0.6),
+)
+
+
 def glass() -> str:
     """The inkwell's glass, drawn over the ink: a faint tint, its thick base (its top just under
     the lowest grin, so that no mood's mouth fades into it), its outline, the lip of its mouth and
@@ -946,7 +1238,7 @@ def glass() -> str:
     light = 'fill="none" stroke="#fff" stroke-linecap="round"'
     return (
         f'<path d="{INKWELL}" fill="{GLASS}" opacity=".18"/>'
-        f'<path d="M22 122.6 Q22.31 130 30 130 L90 130 Q97.69 130 98 122.6 Z" fill="{GLASS}" opacity=".5"/>'
+        f'<path d="{GLASS_BASE}" fill="{GLASS}" opacity=".5"/>'
         f'<path d="{INKWELL}" fill="none" stroke="{GLASS_OUTLINE}" stroke-width="2" stroke-linejoin="round"/>'
         f'<rect x="40" y="66" width="40" height="9.5" rx="3.5" fill="{GLASS}" opacity=".85"/>'
         f'<rect x="40" y="66" width="40" height="9.5" rx="3.5" fill="none" stroke="{GLASS_OUTLINE}" stroke-width="1.8"/>'
@@ -971,7 +1263,7 @@ ICON_RIM = "#1B2B52"
 # box is square and tight around him.
 ICON_BOXES = {
     1: (24.8, 53.6, 72.0, 72.0),
-    2: (11.5, 37.8, 98.0, 98.0),
+    2: (10.8, 35.8, 98.4, 98.4),
     3: (0.7, 22.8, 113.0, 113.0),
     4: (-1.7, 18.5, 117.0, 117.0),
     5: (-10.7, 3.7, 132.0, 132.0),
@@ -1028,8 +1320,9 @@ def icon_svg(stage: int = 0) -> str:
     if stage >= 5:
         face += royale("idle")
     scaled = f"translate(60 132) scale({n(spec['scale'])}) translate(-60 -132)"
+    lift = spec["lift"] if stage == 1 else 0.0  # the Cadet's is over his puddle, not drawn here
     return _svg(
-        f'<g transform="{scaled}"><g transform="translate(0 {n(-spec["lift"])})">'
+        f'<g transform="{scaled}"><g transform="translate(0 {n(-lift)})">'
         f"{_rimmed(silhouette + top)}{silhouette}{_icon_light(stage)}{face}"
         f"{cross(stage) if stage >= 3 else ''}{top}</g></g>",
         ICON_BOXES[stage],
@@ -1146,6 +1439,145 @@ def fallen_inkwell() -> str:
 PUDDLE = Blob(50, 130.2, 30, 2.6, 0.05, 0.025, 0.5, 1.3, push=0.0, period=1.0, points=14)
 
 
+# Grade 2: he floats this high over his own puddle, a little to his right; the Gascon's inkwell
+# lies where it fell, split clean in two along the desk's line, its lower half sunk this deep in
+# the desk. Its quill is still dipped in it and lies level with the desk, out through what is
+# left of its mouth: dipped there, its tip there.
+CADET_LIFT = 7.0
+CADET_PUDDLE = Blob(64, 129.4, 23, 2.3, 0.05, 0.025, 0.9, 1.3, push=0.0, period=1.0, points=14)
+DESK = 130.4
+SUNK = 15.0
+SUNK_QUILL = ((14.0, 125.5), (47.0, 125.5))
+
+
+def _puddle(blob: Blob) -> str:
+    """Spilt ink lying on the desk, a little lobed, lit along its far edge."""
+    rim = (
+        f"M{pt(blob.cx - blob.rx * 0.62, blob.cy - blob.ry * 0.55)} Q{pt(blob.cx, blob.cy - blob.ry * 1.05)} "
+        f"{pt(blob.cx + blob.rx * 0.62, blob.cy - blob.ry * 0.55)}"
+    )
+    return (
+        f'<path d="{spline(blob_points(blob, 0.0))}" fill="{INK}"/>'
+        f'<path d="{rim}" fill="none" stroke="{INK_LIGHT}" stroke-width="0.9" stroke-linecap="round" opacity=".8"/>'
+    )
+
+
+@lru_cache(maxsize=1)
+def sunk() -> tuple[float, float, float, float, float, float]:
+    """The split inkwell's SVG matrix: the fallen one's, sunk into the desk."""
+    a, b, c, d, e, f = fallen()
+    return a, b, c, d, e, f + SUNK
+
+
+def sunk_point(x: float, y: float) -> tuple[float, float]:
+    a, b, c, d, e, f = sunk()
+    return a * x + c * y + e, b * x + d * y + f
+
+
+def _unsunk(x: float, y: float) -> tuple[float, float]:
+    a, b, c, d, e, f = sunk()
+    det, x, y = a * d - b * c, x - e, y - f
+    return (d * x - c * y) / det, (-b * x + a * y) / det
+
+
+def _above(points: list[tuple[float, float]], level: float) -> list[tuple[float, float]]:
+    """What of a polygon lies above the line y = level (Sutherland-Hodgman, one edge)."""
+    flipped = _below([(x, -y) for x, y in points], -level)
+    return [(x, -y) for x, y in flipped]
+
+
+def _runs_above(
+    points: list[tuple[float, float]], level: float, closed: bool
+) -> list[list[tuple[float, float]]]:
+    """The pieces of a line through the points that lie above y = level."""
+    pairs = list(zip(points, points[1:] + points[:1] if closed else points[1:], strict=False))
+    runs: list[list[tuple[float, float]]] = []
+    run: list[tuple[float, float]] = []
+    for (x0, y0), (x1, y1) in pairs:
+        if y0 <= level:
+            run = run or [(x0, y0)]
+        if (y0 <= level) != (y1 <= level):
+            t = (level - y0) / (y1 - y0)
+            cut = (x0 + (x1 - x0) * t, level)
+            if y0 <= level:
+                runs.append([*run, cut])
+                run = []
+            else:
+                run = [cut]
+        if y1 <= level:
+            run.append((x1, y1))
+    if run:
+        runs.append(run)
+    if closed and len(runs) > 1 and runs[0][0] == runs[-1][-1]:
+        runs[0] = runs.pop()[:-1] + runs[0]
+    return [r for r in runs if len(r) > 1]
+
+
+def sunk_glass() -> str:
+    """The glass of the split inkwell: the fallen one's (glass()), cut at the desk. Cut here rather
+    than clipped, which QtSvg would ignore."""
+    scale = math.hypot(*sunk()[:2])
+
+    def world(d: str) -> list[tuple[float, float]]:
+        return [sunk_point(x, y) for x, y in path_points(d)]
+
+    def stroke(
+        points: list[tuple[float, float]], closed: bool, colour: str, width: float, extra: str
+    ) -> str:
+        d = " ".join(
+            "M" + " L".join(pt(*p) for p in run) for run in _runs_above(points, DESK, closed)
+        )
+        return f'<path d="{d}" fill="none" stroke="{colour}" stroke-width="{n(width * scale)}"{extra}/>'
+
+    body, lip = world(INKWELL), world(LIP_PATH)
+    parts = [
+        f'<path d="{polygon(_above(body, DESK))}" fill="{GLASS}" opacity=".18"/>',
+        f'<path d="{polygon(_above(world(GLASS_BASE), DESK))}" fill="{GLASS}" opacity=".5"/>',
+        stroke(body, True, GLASS_OUTLINE, 2.0, ' stroke-linejoin="round"'),
+        f'<path d="{polygon(_above(lip, DESK))}" fill="{GLASS}" opacity=".85"/>',
+        stroke(lip, True, GLASS_OUTLINE, 1.8, ""),
+    ]
+    for start, end, width, opacity in GLASS_LIGHTS:
+        line = _runs_above([sunk_point(*start), sunk_point(*end)], DESK, False)
+        if line:
+            parts.append(
+                stroke(
+                    line[0], False, "#fff", width, f' stroke-linecap="round" opacity="{n(opacity)}"'
+                )
+            )
+    return "".join(parts)
+
+
+def sunk_inkwell() -> str:
+    """Grade 1's knocked-over inkwell where it fell, split clean in two: its glass down to the
+    desk, a straight break along it, the dark of the hole it sank into, and its quill still
+    dipped in it (under the glass: its part out of the mouth is drawn again over him, front())."""
+    crossings = [
+        x
+        for run in _runs_above([sunk_point(x, y) for x, y in path_points(INKWELL)], DESK, True)
+        for x, _ in (run[0], run[-1])
+    ]
+    left, right = min(crossings), max(crossings)
+    matrix = " ".join(n(v) for v in sunk())
+    dip, tip = (_unsunk(*p) for p in SUNK_QUILL)
+    return (
+        f'<g transform="matrix({matrix})">{quill(dip, tip)}</g>'
+        + sunk_glass()
+        + f'<ellipse cx="{n((left + right) / 2)}" cy="{n(DESK + 0.4)}" rx="{n((right - left) / 2 + 1.5)}" '
+        'ry="1.3" fill="#000" opacity=".22"/>'
+        f'<path d="M{pt(left, DESK)} L{pt(right, DESK)}" stroke="{GLASS_OUTLINE}" stroke-width="1.2" '
+        'stroke-linecap="round"/>'
+    )
+
+
+def front(stage: int) -> str:
+    """What lies on the desk in front of him: the Cadet's quill, out of its sunk inkwell."""
+    if stage != 2:
+        return ""
+    dip, tip = (_unsunk(*p) for p in SUNK_QUILL)
+    return f'<g transform="matrix({" ".join(n(v) for v in sunk())})">{quill(dip, tip, outside=True)}</g>'
+
+
 def cap() -> str:
     """The inkwell's cap lying on the desk, ringed with the glass's outline so that it stands out
     on dark desktops."""
@@ -1160,24 +1592,17 @@ def cap() -> str:
 
 def ground(stage: int) -> str:
     """What lies on the desk and never moves: the cap and a blot (grade 0); the knocked-over
-    inkwell and its quill, a puddle of spilt ink and the cap (grade 1)."""
+    inkwell and its quill, a puddle of spilt ink and the cap (grade 1); his puddle, the inkwell
+    split and sunk with its quill, and the cap (grade 2)."""
     if stage == 0:
         return (
             f'<ellipse cx="11" cy="129.6" rx="5.5" ry="2.1" fill="{INK}"/><circle cx="19.1" cy="127.6" r="1.3" fill="{INK}"/>'
             + cap()
         )
     if stage == 1:
-        b = PUDDLE
-        rim = (
-            f"M{pt(b.cx - b.rx * 0.62, b.cy - b.ry * 0.55)} Q{pt(b.cx, b.cy - b.ry * 1.05)} "
-            f"{pt(b.cx + b.rx * 0.62, b.cy - b.ry * 0.55)}"
-        )
-        return (
-            f'<path d="{spline(blob_points(PUDDLE, 0.0))}" fill="{INK}"/>'
-            f'<path d="{rim}" fill="none" stroke="{INK_LIGHT}" stroke-width="0.9" stroke-linecap="round" opacity=".8"/>'
-            + fallen_inkwell()
-            + cap()
-        )
+        return _puddle(PUDDLE) + fallen_inkwell() + cap()
+    if stage == 2:
+        return _puddle(CADET_PUDDLE) + sunk_inkwell() + cap()
     return ""
 
 
@@ -1186,6 +1611,7 @@ def ground(stage: int) -> str:
 LAYERS = (
     "glow",
     "ground",
+    "tails",
     "glass",
     "quill",
     "eye-left",
@@ -1197,6 +1623,7 @@ LAYERS = (
     "plume",
     "hat",
     "rapier",
+    "front",
     "decor",
 )
 BY_EXPRESSION = frozenset({"eye-left", "eye-right", "mouth", "royale", "decor"})
@@ -1205,7 +1632,8 @@ BY_EXPRESSION = frozenset({"eye-left", "eye-right", "mouth", "royale", "decor"})
 def layer_names(stage: int) -> tuple[str, ...]:
     present = {
         "glow": True,
-        "ground": stage <= 1,
+        "ground": stage <= 2,
+        "tails": stage == 2,
         "glass": stage == 0,
         "quill": stage == 0,
         "eye-left": True,
@@ -1217,6 +1645,7 @@ def layer_names(stage: int) -> tuple[str, ...]:
         "plume": stage >= 3,
         "hat": stage >= 2,
         "rapier": stage >= 4,
+        "front": stage == 2,
         "decor": True,
     }
     return tuple(name for name in LAYERS if present[name])
@@ -1255,6 +1684,10 @@ def layer_body(stage: int, name: str, expression: str = "idle") -> str:
             return glow(stage)
         case "ground":
             return ground(stage)
+        case "tails":
+            return tails()
+        case "front":
+            return front(stage)
         case "glass":
             return glass()
         case "quill":
@@ -1310,6 +1743,11 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: b
         f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>'
         for x, y, r in spec["staticDrips"] + ([spec["drip"]] if spec["drip"] else [])
     ]
+    # The Cadet's hat as it sits at rest on his rippling head; its ribbon's tails behind him.
+    ride_y, ride_tip = hat_ride(stage, 0.0)
+    riding = f"translate(0 {n(ride_y)}) rotate({n(ride_tip)} {pt(*CADET_HAT[:2])})"
+    if stage == 2:
+        parts.append(f'<g transform="{riding}">{tails()}</g>')
     if spec["dripsUnder"]:
         parts += drips
     if dx or dy:
@@ -1319,8 +1757,8 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: b
     parts.append(f'<path d="{outline}" fill="{INK}"/>')
     if stage == 0:
         parts.append(inkwell_shading_svg())
-    if stage == 1:
-        parts.append(splash_shading_svg())
+    if stage in (1, 2):
+        parts.append(splash_shading_svg(stage=stage))
     if not spec["dripsUnder"]:
         parts += drips
     for i, (x, y, r) in enumerate(spec["drops"]):
@@ -1337,8 +1775,12 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: b
         # The face is in the ink, behind the quill and the glass.
         names: tuple[str, ...] = ("eye-left", "eye-right", "mouth", "quill", "glass")
     else:
-        names = ("cross", "eye-left", "eye-right", "mouth", "moustache", "royale", "plume", "hat")
+        names = ("cross", "eye-left", "eye-right", "mouth", "moustache", "royale")
     parts += [layer_body(stage, name, expression) for name in names]
+    if stage == 2:
+        parts.append(f'<g transform="{riding}">{hat(stage)}</g>')
+    elif spec["hasHat"]:
+        parts.append(plumes(stage) + hat(stage))
     if spec["hasRapier"]:
         guard = expression in ("ask", "happy")
         x, y, theta = spec["rapierUp"] if guard else spec["rapierDown"]
@@ -1355,6 +1797,6 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: b
     )
     return _svg(
         f'{under}<g transform="{scaled}">{layer_body(stage, "ground")}'
-        f'<g transform="translate(0 {n(-lift)})">{"".join(parts)}</g></g>'
+        f'<g transform="translate(0 {n(-lift)})">{"".join(parts)}</g>{front(stage)}</g>'
         f"{layer_body(stage, 'decor', expression)}"
     )

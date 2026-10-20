@@ -29,15 +29,20 @@ def outline(stage: int, phase: float) -> str:
 @lru_cache(maxsize=512)
 def shading(stage: int, phase: float) -> tuple[str, str, str]:
     """The ink's shaded side, lit band and lit edge: the inkwell's (its meniscus, a line to
-    stroke) at grade 0, the Gascon's (his rim of light, a crescent to fill) at grade 1; none at
-    the others."""
+    stroke) at grade 0, the Gascon's and the Cadet's (a rim of light, a crescent to fill) at
+    grades 1 and 2; none at the others."""
     if stage == 0:
         paths = art.inkwell_shading(phase)
         return paths["shade"], paths["light"], paths["meniscus"]
-    if stage == 1:
-        paths = art.splash_shading(phase)
-        return paths["shade"], paths["light"], paths["rim"]
+    shaded = art.ink_shading(stage, phase)
+    if shaded:
+        return shaded["shade"], shaded["light"], shaded["rim"]
     return "", "", ""
+
+
+@lru_cache(maxsize=512)
+def hat_ride(stage: int, phase: float) -> tuple[float, float]:
+    return art.hat_ride(stage, phase)
 
 
 @lru_cache(maxsize=512)
@@ -67,6 +72,7 @@ class Animator(QObject):
         self._outline = outline(stage, 0.0)
         self._shading = shading(stage, 0.0)
         self._drip_tops = drip_tops(stage, 0.0)
+        self._hat_ride = hat_ride(stage, 0.0)
         self._eyes: QPointF | None = None
         self._cursor: QPointF | None = None
         self._last = time.monotonic()
@@ -111,6 +117,7 @@ class Animator(QObject):
             self._outline = outline(stage, ripple(self._pose.wobble))
             self._shading = shading(stage, ripple(self._pose.wobble))
             self._drip_tops = drip_tops(stage, ripple(self._pose.wobble))
+            self._hat_ride = hat_ride(stage, ripple(self._pose.wobble))
             self.stageChanged.emit()
             self.outlineChanged.emit()
 
@@ -163,6 +170,7 @@ class Animator(QObject):
             self._outline = outline(self._rig.stage, phase)
             self._shading = shading(self._rig.stage, phase)
             self._drip_tops = drip_tops(self._rig.stage, phase)
+            self._hat_ride = hat_ride(self._rig.stage, phase)
             self.outlineChanged.emit()
 
     @Property(str, notify=outlineChanged)
@@ -185,6 +193,16 @@ class Animator(QObject):
     def dripTops(self) -> list[float]:
         """Where each drip hangs from, the falling one last (tagnan.art.drip_tops)."""
         return self._drip_tops
+
+    @Property(float, notify=outlineChanged)
+    def hatRideY(self) -> float:
+        """How far the Cadet's hat rises or sinks on his rippling head (tagnan.art.hat_ride)."""
+        return self._hat_ride[0]
+
+    @Property(float, notify=outlineChanged)
+    def hatRideTip(self) -> float:
+        """How far it tips with it, in degrees."""
+        return self._hat_ride[1]
 
     expression = _pose_property("expression", str, poseChanged)
     bodySx = _pose_property("body_sx", float, poseChanged)

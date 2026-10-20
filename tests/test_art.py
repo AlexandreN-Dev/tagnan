@@ -186,9 +186,71 @@ def test_the_quill_fell_with_the_inkwell_onto_the_spilt_ink() -> None:
     assert y > art.PUDDLE.cy - art.PUDDLE.ry - 1
 
 
-def test_only_the_gascon_drops_are_finished() -> None:
-    spec = art.figure(1)
+@pytest.mark.parametrize("stage", [1, 2])
+def test_the_gascon_and_cadet_drops_are_finished(stage: int) -> None:
+    spec = art.figure(stage)
     assert len(spec["dropShades"]) == len(spec["dropLights"]) == len(spec["drops"])
     assert all(d.startswith("M") and d.endswith("Z") for d in spec["dropShades"])
-    assert not art.figure(2)["dropShades"]
+    assert not art.figure(3)["dropShades"]
     assert not art.figure(0)["dropLights"]
+
+
+def test_the_cadet_is_lit_and_shaded_along_his_ripple() -> None:
+    seen = set()
+    for k in range(0, 22, 4):
+        shading = art.ink_shading(2, 2 * math.pi * k / 22)
+        assert shading is not None
+        assert all(d.startswith("M") and d.endswith("Z") for d in shading.values())
+        seen.add(shading["shade"])
+    assert len(seen) > 1
+    assert art.figure(2)["shadeOffset"] == [0.0, 0.0]  # no offset copy any more
+
+
+def test_the_cadet_drips_hang_from_his_rippling_edge() -> None:
+    spec = art.figure(2)
+    assert spec["dripsUnder"]
+    assert [spec["staticDrips"][0][1], spec["drip"][1]] == art.drip_tops(2, 0.0)
+    assert art.drip_tops(2, 1.0) != art.drip_tops(2, 0.0)
+
+
+def test_the_cadet_floats_over_his_puddle_and_his_drip_lands_on_it() -> None:
+    spec = art.figure(2)
+    samples = art.curve_samples(art.blob_points(art.STANDING, 0.0))
+    lowest = max(y for _, y in samples) - spec["lift"]
+    puddle = art.CADET_PUDDLE
+    assert lowest < puddle.cy - puddle.ry - 1  # he never touches it
+    assert spec["landing"] == puddle.cy
+    assert art.figure(1)["landing"] < 0  # the Gascon's drop still fades as it falls
+
+
+def test_the_cadet_hat_rides_his_ripple_around_its_rest() -> None:
+    rides = [art.hat_ride(2, 2 * math.pi * k / art.RIDE_PHASES) for k in range(art.RIDE_PHASES)]
+    assert abs(sum(y for y, _ in rides)) < 1e-2  # around its mean
+    assert abs(sum(a for _, a in rides)) < 1e-2
+    assert 0.5 < max(abs(y) for y, _ in rides) < 3
+    assert 1 < max(abs(a) for _, a in rides) < 6  # damped: it rides, it does not wobble
+    assert art.hat_ride(3, 1.0) == (0.0, 0.0)
+    assert art.figure(2)["underHat"] < art.CADET_HAT[1]
+    assert art.figure(3)["underHat"] < 0
+
+
+def test_the_cadet_inkwell_is_split_at_the_desk_its_quill_still_in_it() -> None:
+    ground = art.ground(2)
+    assert "clip-path" not in ground  # QtSvg would ignore it: cut instead
+    numbers = [
+        float(v)
+        for d in re.findall(r' d="([^"]+)"', art.sunk_glass())
+        for v in re.findall(r"-?\d+(?:\.\d+)?", d)
+    ]
+    assert max(numbers[1::2]) <= art.DESK + 1e-6  # nothing of the glass below the desk
+    paths = re.findall(r' d="([^"]+)"', art.front(2))
+    dip, tip = art.SUNK_QUILL
+    assert all(abs(y - dip[1]) < 6 for x, y in (art.sunk_point(*p) for p in _pairs(paths)))
+    assert tip[0] > dip[0]  # out through the mouth, level with the desk
+    assert {"tails", "front"} <= set(art.layer_names(2))
+    assert not {"tails", "front"} & set(art.layer_names(3))
+
+
+def _pairs(paths: list[str]) -> list[tuple[float, float]]:
+    numbers = [float(v) for d in paths for v in re.findall(r"-?\d+(?:\.\d+)?", d)]
+    return list(zip(numbers[0::2], numbers[1::2], strict=True))

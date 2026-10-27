@@ -1,7 +1,7 @@
 // Tagnan's menu, in his bubbles' style (tagnan/ui/menu.py says what it shows and does): his
 // grade and points at the top, a field to type a command ("break 45", "often", "learn pottery"),
-// then his commands. How often and Sound open their lists beside it, Sound with his volume
-// under its list. Arrows, Enter and Esc work throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
+// then his commands. How often, Hours, Sound and Questions by open their lists beside it, Hours
+// with a range across the day above its days, Sound with his volume under its list. Arrows, Enter and Esc work throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
 // while it is open and never moves: only the panels move within it, so nothing jumps. It grows
 // out of the pointer as it opens, its shadow with it, and fades as it closes.
 import QtQuick
@@ -16,11 +16,13 @@ Window {
 
     readonly property var c: menu.content
     readonly property int gap: 6
-    property string sub: ""  // "pace" or "call": the list open beside the menu
+    property string sub: ""  // "pace", "hours", "call" or "model": the list open beside the menu
     property real subTop: 0
     property int subRow: -1  // the row whose list is open
     property int current: 0  // the row the keyboard is on
-    property int subCurrent: 0  // in his call's list, one past the last call is the volume
+    // In his call's list, one past the last call is the volume; in his hours', From and Until
+    // come before the days.
+    property int subCurrent: 0
     property var suggestions: []
     property bool keyboard: false  // the arrows were used: the row they are on is ringed
     property point pointer: Qt.point(-1, -1)  // where the mouse last was, in the window
@@ -55,6 +57,7 @@ Window {
         stats: "M4 20V10M10 20V4M16 20v-7M22 20H2",
         subject: "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5",
         pace: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+        hours: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4",
         call: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6",
         soft: "M4 9v6h4l5 4V5L8 9z",
         loud: "M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6M20 6a8 8 0 0 1 0 12",
@@ -79,6 +82,7 @@ Window {
             { action: "subject", label: "Subject", value: c.subject, icon: "subject" },
             { separator: true },
             { action: "sub:pace", label: "How often", value: c.pace, icon: "pace", more: true },
+            { action: "sub:hours", label: "Hours", value: c.hours, icon: "hours", more: true },
             { action: "sub:call", label: "Sound", value: c.sound, icon: "call", more: true },
             { action: "sub:model", label: "Questions by", value: c.model, icon: "model", more: true },
             { separator: true }
@@ -100,10 +104,13 @@ Window {
     }
     function suggestionRows() {
         return suggestions.map(function(s) {
-            const verb = s.action.split(":")[0]
+            const verb = s.action === "sub:hours" ? "hours" : s.action.split(":")[0]
             const icon = verb === "theme" ? (s.action === "theme:dark" ? "moon" : "sun")
-                : { pace: "pace", call: "call", pause: "pause", learn: "learn", focus: "focus" }[verb] || verb
-            return { action: s.action, label: s.label, value: s.sub, icon: win.icons[icon] ? icon : "search" }
+                : { pace: "pace", hours: "hours", days: "hours", call: "call", pause: "pause", learn: "learn",
+                    focus: "focus" }[verb] || verb
+            // "Hours…" opens its list beside it, as its row does.
+            return { action: s.action, label: s.label, value: s.sub, icon: win.icons[icon] ? icon : "search",
+                     more: s.action.startsWith("sub:") }
         })
     }
     // The rows one can land on with the arrows, by their index in `rows`.
@@ -126,7 +133,7 @@ Window {
     function move(step) {
         keyboard = true
         if (sub !== "") {
-            const count = subList.count + (sub === "call" ? 1 : 0)
+            const count = subList.count + (sub === "call" ? 1 : 0) + firstStop(sub)
             subCurrent = (subCurrent + step + count) % count
             return
         }
@@ -148,10 +155,16 @@ Window {
     }
     // The lists beside: their choices, and the one kept.
     function choicesOf(which) {
-        return which === "pace" ? c.paces : which === "call" ? c.calls : which === "model" ? c.models : []
+        return which === "pace" ? c.paces : which === "call" ? c.calls : which === "model" ? c.models
+            : which === "hours" ? c.days : []
     }
     function chosenOf(which) {
-        return which === "pace" ? c.paceKey : which === "call" ? c.callKey : c.modelKey
+        return which === "pace" ? c.paceKey : which === "call" ? c.callKey : which === "hours" ? c.daysKey
+            : c.modelKey
+    }
+    // The stops before a list's choices: From and Until, in his hours'.
+    function firstStop(which) {
+        return which === "hours" ? 2 : 0
     }
     function openSub(which, index) {
         hover.stop()
@@ -162,7 +175,8 @@ Window {
         const item = rowRepeater.itemAt(index)
         subTop = item ? item.mapToItem(panel, 0, 0).y - 8 : 0
         const chosen = chosenOf(which)
-        subCurrent = Math.max(0, choicesOf(which).findIndex(function(x) { return x.key === chosen }))
+        subCurrent = which === "hours" ? 0
+            : Math.max(0, choicesOf(which).findIndex(function(x) { return x.key === chosen }))
         sub = which
         subPhase = 0
         subSpeed = 1 / 0.16
@@ -175,16 +189,34 @@ Window {
         if (next !== c.volume)
             menu.run("volume:" + next)
     }
+    // On From or Until, the arrows beside move it an hour, kept at once; never past the other.
+    readonly property bool onHours: sub === "hours" && subCurrent < firstStop("hours")
+    function nudge(step) {
+        keyboard = true  // its handle ringed
+        if (subCurrent === 0) {
+            const start = Math.max(0, Math.min(c.end - 1, c.start + step))
+            if (start !== c.start)
+                menu.run("hours:" + start + "-" + c.end)
+        } else {
+            const end = Math.max(c.start + 1, Math.min(24, c.end + step))
+            if (end !== c.end)
+                menu.run("hours:" + c.start + "-" + end)
+        }
+    }
+    // A stop of the list beside: its choice kept (a call heard, a day), or nothing on a slider.
     function choose(index) {
         if (onVolume) {
             menu.run("volume:" + c.volume)  // Enter: heard again
             return
         }
+        if (onHours)
+            return  // the arrows beside move it
         const list = choicesOf(sub)
-        if (index < 0 || index >= list.length)
+        const at = index - firstStop(sub)
+        if (at < 0 || at >= list.length)
             return
         subCurrent = index
-        menu.run(sub + ":" + list[index].key)
+        menu.run((sub === "hours" ? "days" : sub) + ":" + list[at].key)
     }
 
     // --- Opening and closing -------------------------------------------------------------------
@@ -324,6 +356,48 @@ Window {
         onYChanged: if (visible) Qt.callLater(function() { placed = true })
         Behavior on y { enabled: placed; NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
         Behavior on height { enabled: placed; NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+    }
+
+    // A handle of his hours' range, ringed in gold when the arrows move it.
+    component Knob: Rectangle {
+        property bool ringed: false
+        width: 16
+        height: 16
+        radius: 8
+        color: win.theme.ink
+        border.color: win.theme.panel
+        border.width: 2
+        Rectangle {
+            anchors.centerIn: parent
+            width: 20
+            height: 20
+            radius: 10
+            color: "transparent"
+            border.color: win.theme.gold
+            border.width: 2
+            visible: parent.ringed
+        }
+    }
+    // From or Until, and its hour.
+    component End: Row {
+        property string word
+        property int hour
+        property bool on: false
+        spacing: 4
+        Text {
+            text: parent.word
+            color: win.theme.muted
+            font.family: win.theme.body
+            font.pixelSize: 13
+        }
+        Text {
+            text: parent.hour + ":00"
+            color: parent.on ? win.theme.ink : win.theme.text
+            font.family: win.theme.body
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+            font.features: { "tnum": 1 }
+        }
     }
 
     // A soft shadow under a panel, as under the bubble (no effect: it shows everywhere). Inside
@@ -482,6 +556,8 @@ Window {
                     const row = win.rows[win.current]
                     if (win.onVolume)
                         win.louder(1)
+                    else if (win.onHours)
+                        win.nudge(1)
                     else if (win.sub === "" && row && row.more && field.cursorPosition === field.text.length)
                         win.activate(win.current)
                     else
@@ -490,6 +566,8 @@ Window {
                 Keys.onLeftPressed: (event) => {
                     if (win.onVolume)
                         win.louder(-1)
+                    else if (win.onHours)
+                        win.nudge(-1)
                     else if (win.sub !== "")
                         win.sub = ""
                     else
@@ -685,7 +763,7 @@ Window {
         }
     }
 
-    // --- How often, or Sound, beside the menu ---------------------------------------------------
+    // --- How often, Hours, Sound or Questions by, beside the menu -------------------------------
     Rectangle {
         id: subPanel
         objectName: "list"
@@ -710,7 +788,11 @@ Window {
         }
 
         Hilite {
-            target: { win.subCurrent; subList.count; return win.onVolume ? volumeBox : subList.itemAt(win.subCurrent) }
+            target: {
+                win.subCurrent; subList.count
+                return win.onVolume ? volumeBox : win.onHours ? hoursBox
+                    : subList.itemAt(win.subCurrent - win.firstStop(win.sub))
+            }
             shown: target !== null
             originY: subColumn.y
         }
@@ -725,21 +807,175 @@ Window {
                 leftPadding: 10
                 topPadding: 4
                 bottomPadding: 6
-                text: ({ pace: "How often?", call: "His call", model: "Who writes his questions?" })[win.sub] || ""
+                text: ({ pace: "How often?", hours: "When may he ask?", call: "His call",
+                         model: "Who writes his questions?" })[win.sub] || ""
                 color: win.theme.text
                 font.family: win.theme.display
                 font.pixelSize: 14
                 font.bold: true
             }
             Text {
-                visible: win.sub === "call" || win.sub === "model"
+                visible: win.sub === "call" || win.sub === "model" || win.sub === "hours"
                 leftPadding: 10
                 bottomPadding: 4
-                text: win.sub === "call" ? "A click plays it and keeps it." : "From his next batch on."
+                text: ({ call: "A click plays it and keeps it.", model: "From his next batch on.",
+                         hours: "Not a word outside these hours." })[win.sub] || ""
                 color: win.theme.muted
                 font.family: win.theme.body
                 font.pixelSize: 12
             }
+
+            // His hours, above his days: From and Until on a range across the day, kept as a
+            // handle is let go, or at once with the arrows beside.
+            Item {
+                id: hoursBox
+                objectName: "hours"
+                visible: win.sub === "hours"
+                width: subColumn.width
+                height: hoursColumn.implicitHeight + 12
+                Accessible.role: Accessible.Slider
+                Accessible.name: "From " + win.c.start + ":00 until " + win.c.end + ":00"
+                Column {
+                    id: hoursColumn
+                    x: 10
+                    y: 6
+                    width: parent.width - 20
+                    spacing: 6
+                    Item {
+                        width: parent.width
+                        height: fromLabel.implicitHeight
+                        End {
+                            id: fromLabel
+                            word: "From"
+                            hour: Math.round(range.first.value)
+                            on: win.onHours && win.subCurrent === 0
+                        }
+                        End {
+                            anchors.right: parent.right
+                            word: "Until"
+                            hour: Math.round(range.second.value)
+                            on: win.onHours && win.subCurrent === 1
+                        }
+                    }
+                    RangeSlider {
+                        id: range
+                        objectName: "range"
+                        width: parent.width
+                        height: 24
+                        leftPadding: 0
+                        rightPadding: 0
+                        from: 0
+                        to: 24
+                        stepSize: 1
+                        snapMode: RangeSlider.SnapAlways
+                        focusPolicy: Qt.NoFocus  // the keyboard stays in the field
+                        // Both ends at once: one at a time, the first could not pass the second.
+                        function sync() {
+                            if (!first.pressed && !second.pressed)
+                                setValues(win.c.start, win.c.end)
+                        }
+                        Component.onCompleted: sync()
+                        Connections {
+                            target: win
+                            function onCChanged() { range.sync() }
+                        }
+                        // Let go: kept, an hour apart at least.
+                        function keep(moved) {
+                            let start = Math.round(first.value), end = Math.round(second.value)
+                            if (start >= end) {
+                                if (moved === 0)
+                                    start = Math.max(0, end - 1)
+                                else
+                                    end = Math.min(24, start + 1)
+                                if (start >= end)
+                                    start = end - 1
+                            }
+                            win.menu.run("hours:" + start + "-" + end)
+                            sync()  // the hours kept, whether they changed or not
+                        }
+                        first.onPressedChanged: {
+                            if (first.pressed)
+                                win.subCurrent = 0
+                            else
+                                keep(0)
+                        }
+                        second.onPressedChanged: {
+                            if (second.pressed)
+                                win.subCurrent = 1
+                            else
+                                keep(1)
+                        }
+                        // The whole day faint, his hours in ink: it reads on the highlight too.
+                        background: Item {
+                            x: range.leftPadding
+                            y: range.topPadding + (range.availableHeight - height) / 2
+                            width: range.availableWidth
+                            height: 4
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 2
+                                color: win.theme.muted
+                                opacity: 0.35
+                            }
+                            Rectangle {
+                                x: range.first.handle.x + 8 - range.leftPadding
+                                width: range.second.handle.x - range.first.handle.x
+                                height: parent.height
+                                radius: 2
+                                color: win.theme.ink
+                            }
+                        }
+                        first.handle: Knob {
+                            objectName: "from"
+                            x: range.leftPadding + range.first.visualPosition * (range.availableWidth - width)
+                            y: range.topPadding + (range.availableHeight - height) / 2
+                            ringed: win.keyboard && win.onHours && win.subCurrent === 0
+                        }
+                        second.handle: Knob {
+                            objectName: "until"
+                            x: range.leftPadding + range.second.visualPosition * (range.availableWidth - width)
+                            y: range.topPadding + (range.availableHeight - height) / 2
+                            ringed: win.keyboard && win.onHours && win.subCurrent === 1
+                        }
+                    }
+                    // The hours of the day, under the range.
+                    Item {
+                        width: parent.width
+                        height: 14
+                        Repeater {
+                            model: [0, 6, 12, 18, 24]
+                            Text {
+                                required property int modelData
+                                x: 8 + modelData / 24 * (range.availableWidth - 16) - implicitWidth / 2
+                                text: modelData
+                                color: win.theme.muted
+                                font.family: win.theme.body
+                                font.pixelSize: 11
+                                font.features: { "tnum": 1 }
+                            }
+                        }
+                    }
+                }
+                HoverHandler {
+                    onPointChanged: {
+                        if (hovered && !win.onHours) {
+                            hover.stop()
+                            win.current = win.subRow
+                            win.subCurrent = 0
+                        }
+                    }
+                }
+            }
+            Item { visible: win.sub === "hours"; width: 1; height: 4 }
+            Rectangle {
+                visible: win.sub === "hours"
+                x: 10
+                width: subColumn.width - 20
+                height: 1
+                color: win.theme.line
+            }
+            Item { visible: win.sub === "hours"; width: 1; height: 4 }
+
             Repeater {
                 id: subList
                 model: win.choicesOf(win.sub)
@@ -788,7 +1024,7 @@ Window {
                         anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
                         name: "call"
-                        tint: win.subCurrent === choice.index ? win.theme.ink : win.theme.muted
+                        tint: win.subCurrent === choice.index + win.firstStop(win.sub) ? win.theme.ink : win.theme.muted
                     }
                     MouseArea {
                         id: choiceMouse
@@ -800,10 +1036,11 @@ Window {
                                 return
                             hover.stop()  // reached the list: it stays, its row lit again
                             win.current = win.subRow
-                            if (win.subCurrent !== choice.index)
-                                win.subCurrent = choice.index
+                            const stop = choice.index + win.firstStop(win.sub)
+                            if (win.subCurrent !== stop)
+                                win.subCurrent = stop
                         }
-                        onClicked: win.choose(choice.index)
+                        onClicked: win.choose(choice.index + win.firstStop(win.sub))
                     }
                 }
             }

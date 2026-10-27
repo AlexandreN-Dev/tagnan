@@ -6,7 +6,8 @@ exam = "aif-c01"
 
 [rhythm]
 # A question every 8 to 25 minutes, at random, from 9:00 to 19:00, weekdays only. Once a pace
-# is chosen in his menu ("How often"), it takes the place of these two gaps.
+# is chosen in his menu ("How often"), it takes the place of these two gaps; once hours are
+# chosen there ("Hours"), they take the place of start_hour, end_hour and weekends.
 min_minutes = 8
 max_minutes = 25
 snooze_minutes = 10  # "Later"

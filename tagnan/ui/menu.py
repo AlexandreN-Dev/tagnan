@@ -1,11 +1,11 @@
 """Tagnan's menu: a panel of his own, in his bubbles' style, opened by a right click on him or
-on his tray icon. What it shows (his grade, the next question, the pace, the call, the model),
-what a few words typed at its top would do ("break 45", "often", "sonnet", "learn pottery"),
-where it opens, and
-running its commands. TagnanMenu.qml draws it.
+on his tray icon. What it shows (his grade, the next question, the pace, the hours, the call,
+the model), what a few words typed at its top would do ("break 45", "often", "8-18", "sonnet",
+"learn pottery"), where it opens, and running its commands. TagnanMenu.qml draws it.
 """
 
 import logging
+import re
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, QPoint, Signal, Slot
@@ -45,6 +45,14 @@ THEME_WORDS = {
     "dark": ("dark", "dark mode", "night", "theme", "colours", "colors"),
     "light": ("light", "light mode", "day", "theme", "colours", "colors"),
 }
+# His days, under his hours: (key, name, hint).
+DAYS = (("weekdays", "Weekdays", "Monday to Friday"), ("every-day", "Every day", "weekends too"))
+HOURS_WORDS = ("hours", "when", "schedule", "working hours", "office hours")
+RANGE_WORDS = ("hours", "from", "hours from")
+# "8-18", "8 to 18", "8h to 18h", "8:00–18:00"
+HOURS_RANGE = re.compile(r"(\d{1,2})(?::00|h)? ?(?:-|–|to) ?(\d{1,2})(?::00|h)?")
+WEEKEND_WORDS = ("weekend", "weekends", "every day", "saturday", "sunday", "all week")
+WEEKDAY_WORDS = ("weekdays", "week days", "not on weekends")
 
 
 def menu_position(anchor: tuple[int, int], size: tuple[int, int], area: Box) -> tuple[int, int]:
@@ -152,7 +160,8 @@ class Menu(QObject):
         if s["streak"] > 1:
             points += f" · streak {s['streak']}"
         bp, subject = c.game.blueprint, c.game.subject
-        pace = c.scheduler.rhythm.pace
+        rhythm = c.scheduler.rhythm
+        pace = rhythm.pace
         call = dict(calls.CALLS).get(str(c.call), "Silent")
         model = configs.find_model(str(c.model))
         return {
@@ -168,6 +177,12 @@ class Menu(QObject):
             "subjectFull": c.game.topic(),
             "pace": pace.name if pace else "Your own",
             "paceKey": pace.key if pace else "",
+            # His hours: the row says them short, its list as a range and the days under it.
+            "hours": rhythm.hours_hint,
+            "start": rhythm.start_hour,
+            "end": rhythm.end_hour,
+            "daysKey": "every-day" if rhythm.weekends else "weekdays",
+            "days": [{"key": k, "name": name, "hint": hint} for k, name, hint in DAYS],
             "call": call,
             "sound": call if str(c.call) == calls.SILENT else f"{call} · {c.volume} %",
             "volume": c.volume,
@@ -269,6 +284,21 @@ class Menu(QObject):
         for p in paces:
             if everything or p.name.casefold().startswith(folded) or folded in p.key:
                 add(f"How often: {p.name}", f"pace:{p.key}", p.hint)
+        rhythm = c.scheduler.rhythm
+        span = f"{rhythm.start_hour}:00 to {rhythm.end_hour}:00"
+        if folded in HOURS_WORDS:
+            add("Hours…", "sub:hours", rhythm.hours_hint)  # its list opens beside it
+        rest = _after(text, RANGE_WORDS)
+        if match := HOURS_RANGE.fullmatch(_words(text if rest is None else rest)):
+            start, end = int(match[1]), int(match[2])
+            if start < end <= 24:
+                days = "Every day" if rhythm.weekends else "Monday to Friday"
+                add(f"Hours: {start}:00 to {end}:00", f"hours:{start}-{end}", days)
+        if len(folded) > 2 and any(w.startswith(folded) for w in WEEKEND_WORDS):
+            add("Every day, weekends too", "days:every-day", span)
+            add("Weekdays only", "days:weekdays", span)
+        if len(folded) > 2 and any(w.startswith(folded) for w in WEEKDAY_WORDS):
+            add("Weekdays only", "days:weekdays", span)
         everything = folded in ("sound", "sounds", "call", "music")
         for key, name in [*calls.CALLS, (calls.SILENT, "Silent")]:
             if everything or name.casefold().startswith(folded) or folded in ("mute", "quiet"):
@@ -300,6 +330,15 @@ class Menu(QObject):
         if verb == "theme":
             c.setTheme(arg)
             return True  # one sees it at once, the menu open
+        if verb == "hours":
+            start, _, end = arg.partition("-")
+            if start.isdigit() and end.isdigit():
+                c.setHours(int(start), int(end))
+            return True  # a handle at a time, the list open
+        if verb == "days":
+            if arg in (key for key, _, _ in DAYS):
+                c.setWeekends(arg == "every-day")
+            return True
         if verb == "update":
             if self._updater is not None:
                 self._updater.activate()

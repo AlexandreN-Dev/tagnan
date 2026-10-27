@@ -2,6 +2,7 @@ import array
 import json
 import os
 import random
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from tagnan.brain_client import BrainClient
 from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
 from tagnan.progress import Progress
-from tagnan.scheduler import Rhythm, Scheduler
+from tagnan.scheduler import Rhythm, Scheduler, find_pace
 from tagnan.ui.animation.rig import BURST_LENGTH, Rig
 from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
@@ -844,6 +845,80 @@ def test_a_few_words_find_a_model(game: Game) -> None:
     ]
 
 
+def test_his_hours_are_chosen_in_his_menu_and_kept(game: Game, tmp_path: Path) -> None:
+    fill(game)
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"hours": {"start": 20, "end": 9, "weekends": False}}))
+    clock = Clock()
+    controller, _, _ = make(game, clock, settings=Settings(path))
+    assert controller.scheduler.rhythm.hours == {"start": 0, "end": 24, "weekends": True}
+    menu = Menu(controller)
+    menu.openAt(10, 10)
+    c = menu.property("content")
+    assert (c["hours"], c["start"], c["end"], c["daysKey"]) == (
+        "Every day, 0–24",
+        0,
+        24,
+        "every-day",
+    )
+    assert [d["key"] for d in c["days"]] == ["weekdays", "every-day"]
+    hour = datetime.fromtimestamp(NOW).hour
+    assert menu.run(f"hours:{hour - 1}-{hour + 8}") is True  # a handle at a time, the list open
+    assert menu.property("shown") is True
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "As you wish!"
+    assert bubble["text"].startswith(
+        f"Every day, from {hour - 1}:00 to {hour + 8}:00. The next one around "
+    )
+    assert menu.property("content")["hours"] == f"Every day, {hour - 1}–{hour + 8}"
+    assert menu.run("days:weekdays") is True
+    assert controller.property("bubble")["text"].startswith("Weekdays, from ")
+    assert menu.property("content")["daysKey"] == "weekdays"
+    # A pace of so many questions a day spreads them over the new hours.
+    controller.setPace("rarely")
+    controller.setHours(hour, hour + 4)
+    rhythm = controller.scheduler.rhythm
+    assert (rhythm.pace, rhythm.min_minutes, rhythm.max_minutes) == (find_pace("rarely"), 80, 120)
+    # Hours already over today: tomorrow, or after the weekend.
+    controller.setHours(0, hour)
+    assert "Not a word more today: the next one " in controller.property("bubble")["text"]
+    asked = datetime.fromtimestamp(controller.scheduler.next_at)
+    assert asked.date() > datetime.fromtimestamp(NOW).date()
+    assert asked.weekday() < 5
+    for nonsense in ("hours:18-8", "hours:soon", "hours:9-30", "days:sundays"):
+        menu.run(nonsense)
+    assert controller.scheduler.rhythm.hours == {"start": 0, "end": hour, "weekends": False}
+    # Not a word over a question, nor during a break but to say when.
+    controller.askNow()
+    controller.setHours(1, hour)
+    assert controller.property("bubble")["mode"] == "question"
+    controller.dismiss()
+    controller.pauseWith("1h")
+    controller.setHours(2, hour)
+    assert controller.property("bubble")["text"].endswith(", once your break is over.")
+    assert controller.scheduler.next_at >= clock.now + 3600
+    again, _, _ = make(game, settings=Settings(path))
+    assert again.scheduler.rhythm.hours == {"start": 2, "end": hour, "weekends": False}
+    assert again.property("pace") == "rarely"
+
+
+def test_a_few_words_find_his_hours(game: Game) -> None:
+    controller, _, _ = make(game)
+    menu = Menu(controller)
+
+    def actions(text: str) -> list[str]:
+        return [s["action"] for s in menu.suggest(text)]
+
+    for typed in ("8-18", "8 to 18", "hours 8-18", "from 8h to 18h", "8:00–18:00"):
+        assert actions(typed)[0] == "hours:8-18", typed
+    found = menu.suggest("8-18")[0]
+    assert (found["label"], found["sub"]) == ("Hours: 8:00 to 18:00", "Every day")
+    assert not [a for a in actions("18-8") if a.startswith("hours")]
+    assert actions("hours") == ["sub:hours"]  # its list opens beside it
+    assert actions("weekend") == ["days:every-day", "days:weekdays"]
+    assert actions("weekdays") == ["days:weekdays"]
+
+
 def test_a_question_left_alone_goes_and_the_next_one_waits_for_the_pace(game: Game) -> None:
     fill(game)
     clock = Clock()
@@ -968,6 +1043,38 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         QTest.keyClick(popup, Qt.Key.Key_Down)
         QTest.keyClick(popup, Qt.Key.Key_Return)
         assert controller.property("model") == "claude-sonnet-5-5"
+        # His hours: From and Until come before the days; the arrows beside move the one they
+        # are on, an hour at a time, the list open.
+        menu.openAt(400, 300)  # a model chosen closed it
+        QApplication.processEvents()
+        hours = next(i for i, r in enumerate(rows) if r.get("action") == "sub:hours")
+        popup.openSub("hours", hours)
+        QApplication.processEvents()
+        box = next(i for i in items(popup.contentItem()) if i.objectName() == "hours")
+        assert box.isVisible()
+        assert (popup.property("subCurrent"), popup.property("onHours")) == (0, True)
+        QTest.keyClick(popup, Qt.Key.Key_Left)  # From is at 0 already
+        QTest.keyClick(popup, Qt.Key.Key_Right)
+        QTest.keyClick(popup, Qt.Key.Key_Down)
+        QTest.keyClick(popup, Qt.Key.Key_Left)
+        assert controller.scheduler.rhythm.hours == {"start": 1, "end": 23, "weekends": True}
+        said = [i.property("text") for i in items(box) if i.property("text")]
+        assert said[:4] == ["From", "1:00", "Until", "23:00"]  # the handles moved with them
+        # Dragged, a handle is kept as it is let go, by the hour.
+        until = next(i for i in items(box) if i.objectName() == "until")
+        at = until.mapToScene(until.boundingRect().center())
+        grab = QPoint(round(at.x()), round(at.y()))
+        step = (box.width() - 20 - 16) / 24  # the range's width an hour
+        QTest.mousePress(popup, Qt.MouseButton.LeftButton, pos=grab)
+        for dx in (-10, -20, -round(3 * step)):
+            QTest.mouseMove(popup, grab + QPoint(dx, 0))
+        assert controller.scheduler.rhythm.end_hour == 23  # not yet
+        QTest.mouseRelease(popup, Qt.MouseButton.LeftButton, pos=grab + QPoint(-round(3 * step), 0))
+        assert controller.scheduler.rhythm.end_hour == 20
+        QTest.keyClick(popup, Qt.Key.Key_Down)  # Weekdays
+        QTest.keyClick(popup, Qt.Key.Key_Return)
+        assert controller.scheduler.rhythm.weekends is False
+        assert popup.property("sub") == "hours"
         # Opened low on the screen, the list beside stays above its bottom edge, with room.
         menu.close()
         bottom = QApplication.primaryScreen().availableGeometry().bottom()

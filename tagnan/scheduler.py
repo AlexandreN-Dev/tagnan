@@ -83,6 +83,41 @@ class Rhythm:
         gaps = (self.min_minutes, self.max_minutes)
         return next((p for p in PACES if p.gaps(self.day_minutes) == gaps), None)
 
+    def at_hours(self, start_hour: int, end_hour: int, weekends: bool) -> "Rhythm":
+        """Other hours, at the same pace: a pace of so many questions a day spreads them over
+        the new day."""
+        chosen = self.pace
+        moved = replace(self, start_hour=start_hour, end_hour=end_hour, weekends=weekends)
+        return moved.paced(chosen) if chosen else moved
+
+    @property
+    def hours(self) -> dict[str, int | bool]:
+        """His hours as the window keeps them in its settings, once chosen in his menu."""
+        return {"start": self.start_hour, "end": self.end_hour, "weekends": self.weekends}
+
+    def kept(self, saved: object) -> "Rhythm":
+        """The hours the window kept (`hours`), if they make sense; else these."""
+        if not isinstance(saved, dict):
+            return self
+        start, end, weekends = saved.get("start"), saved.get("end"), saved.get("weekends")
+        if type(start) is not int or type(end) is not int or not isinstance(weekends, bool):
+            return self
+        try:
+            return self.at_hours(start, end, weekends)
+        except ValueError:
+            return self
+
+    @property
+    def hours_hint(self) -> str:
+        """Like "Mon–Fri, 9–19": beside Hours, in his menu."""
+        days = "Every day" if self.weekends else "Mon–Fri"
+        return f"{days}, {self.start_hour}–{self.end_hour}"
+
+    @property
+    def hours_sentence(self) -> str:
+        days = "Every day" if self.weekends else "Weekdays"
+        return f"{days}, from {self.start_hour}:00 to {self.end_hour}:00"
+
 
 class Scheduler:
     def __init__(self, rhythm: Rhythm, rng: random.Random, now: float) -> None:

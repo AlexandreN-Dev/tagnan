@@ -244,3 +244,32 @@ def test_a_missed_question_does_not_call_back_soon_at_a_slow_pace() -> None:
     s.set_rhythm(s.rhythm.paced(a_pace("intensive")), at(12, 10))
     s.missed(at(12, 10))
     assert s.next_at == at(12, 10, 10)  # the snooze: longer than this pace's gaps
+
+
+def test_other_hours_keep_the_pace() -> None:
+    shorter = Rhythm().paced(a_pace("rarely")).at_hours(9, 13, False)
+    assert shorter.pace is a_pace("rarely")
+    assert (shorter.min_minutes, shorter.max_minutes) == (80, 120)  # 2 or 3 in four hours
+    own = Rhythm(min_minutes=2, max_minutes=3).at_hours(8, 20, True)
+    assert (own.min_minutes, own.max_minutes, own.weekends) == (2, 3, True)  # gaps of one's own
+    with pytest.raises(ValueError, match="start_hour"):
+        Rhythm().at_hours(18, 8, False)
+    assert shorter.hours_hint == "Mon–Fri, 9–13"
+    assert shorter.hours_sentence == "Weekdays, from 9:00 to 13:00"
+    assert own.hours_hint == "Every day, 8–20"
+
+
+def test_hours_kept_by_the_window_are_read_back_if_they_make_sense() -> None:
+    kept = Rhythm().kept({"start": 7, "end": 15, "weekends": True})
+    assert kept.hours == {"start": 7, "end": 15, "weekends": True}
+    for saved in (
+        None,
+        [7, 15],
+        {"start": 7, "end": 15},
+        {"start": "7", "end": 15, "weekends": False},
+        {"start": True, "end": 15, "weekends": False},
+        {"start": 7.0, "end": 15, "weekends": False},
+        {"start": 15, "end": 7, "weekends": False},
+        {"start": 7, "end": 25, "weekends": False},
+    ):
+        assert Rhythm().kept(saved) == Rhythm(), saved

@@ -4,6 +4,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
@@ -64,7 +65,7 @@ class Controller(QObject):
     promotionChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
-    prefsChanged = Signal()  # his pace, call, volume, subject, model or theme
+    prefsChanged = Signal()  # his pace, hours, call, volume, subject, model or theme
     menuRequested = Signal(int, int)  # where the pointer is: his menu opens there
     quitRequested = Signal()
 
@@ -89,7 +90,10 @@ class Controller(QObject):
         self._clock = clock
         self.settings = settings or desktop.Settings(None)
         self.sounds = sounds or Sounds()
-        # The pace chosen in his menu wins over the config file's gaps.
+        # The hours and the pace chosen in his menu win over the config file's.
+        hours = scheduler.rhythm.kept(self.settings.get("hours"))
+        if hours != scheduler.rhythm:
+            scheduler.set_rhythm(hours, clock())
         saved = find_pace(str(self.settings.get("pace", "")))
         if saved is not None:
             scheduler.set_rhythm(scheduler.rhythm.paced(saved), clock())
@@ -675,6 +679,45 @@ class Controller(QObject):
             text = (
                 f"{chosen.sentence}. The next one around "
                 f"{pauses.clock(self.scheduler.next_at, now)}."
+            )
+        self._show({"mode": "message", "title": "As you wish!", "text": text})
+        self._hide_timer.start(6000)
+
+    @Slot(int, int)
+    def setHours(self, start: int, end: int) -> None:
+        """From when until when he may ask, on the same days."""
+        self._change_hours(start, end, self.scheduler.rhythm.weekends)
+
+    @Slot(bool)
+    def setWeekends(self, weekends: bool) -> None:
+        rhythm = self.scheduler.rhythm
+        self._change_hours(rhythm.start_hour, rhythm.end_hour, weekends)
+
+    def _change_hours(self, start: int, end: int, weekends: bool) -> None:
+        rhythm = self.scheduler.rhythm
+        if (start, end, weekends) == (rhythm.start_hour, rhythm.end_hour, rhythm.weekends):
+            return
+        try:
+            changed = rhythm.at_hours(start, end, weekends)
+        except ValueError:
+            return
+        now = self._clock()
+        self.scheduler.set_rhythm(changed, now)
+        self.settings.set("hours", changed.hours)
+        logger.info("hours: %s", changed.hours_hint)
+        self.prefsChanged.emit()
+        self.statusChanged.emit()
+        if self._bubble["mode"] in ("question", "thinking"):
+            return  # not a word over a question: his menu shows the hours
+        next_at = self.scheduler.next_at
+        if self.scheduler.paused_until > now:
+            text = f"{changed.hours_sentence}, once your break is over."
+        elif datetime.fromtimestamp(next_at).date() == datetime.fromtimestamp(now).date():
+            text = f"{changed.hours_sentence}. The next one around {pauses.clock(next_at, now)}."
+        else:
+            text = (
+                f"{changed.hours_sentence}. Not a word more today: the next one"
+                f" {pauses.clock(next_at, now)}."
             )
         self._show({"mode": "message", "title": "As you wish!", "text": text})
         self._hide_timer.start(6000)

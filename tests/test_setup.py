@@ -1,4 +1,5 @@
 import io
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -162,3 +163,20 @@ def test_plain_glyphs_where_the_terminal_cannot_show_them() -> None:
     out = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
     term = setup_ui.Terminal(out=out, interactive=False)
     assert term.g is setup_ui.ASCII
+
+
+def test_hours_offered_are_those_of_his_menu_and_answers_go_where_he_reads_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window = tmp_path / "settings.json"
+    window.write_text('{"pace": "often", "hours": {"start": 7, "end": 15, "weekends": true}}')
+    monkeypatch.setattr(setup, "config_file", lambda: tmp_path / "config.toml")
+    monkeypatch.setattr(setup.Setup, "window_settings", lambda self: window)
+    monkeypatch.setattr(setup, "exams", lambda: ["aif-c01"])
+    # The model, From (Enter: his menu's 7), Until, weekends, the pace.
+    term, _ = terminal("", "", "18", "n", "")
+    setup.Setup(term, check=False, mac=True).settings()
+    rhythm = config.load(tmp_path / "config.toml").rhythm
+    assert (rhythm.start_hour, rhythm.end_hour, rhythm.weekends) == (7, 18, False)
+    saved = json.loads(window.read_text())
+    assert saved == {"pace": "often", "hours": {"start": 7, "end": 18, "weekends": False}}

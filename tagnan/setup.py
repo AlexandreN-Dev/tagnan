@@ -289,7 +289,8 @@ class Setup:
                 ),
             )
         ]
-        rhythm = current.rhythm
+        # The hours his menu kept, if any: they are the ones he asks in.
+        rhythm = current.rhythm.kept(self.window_saved().get("hours"))
         start = self.term.hour("Questions from what hour?", rhythm.start_hour)
         end = self.term.hour("Until what hour?", rhythm.end_hour)
         weekends = self.term.confirm("On weekends too?", rhythm.weekends)
@@ -300,17 +301,23 @@ class Setup:
             configs.load(path)
         except ValueError as error:
             raise SetupError(f"{error}\nRun scripts/setup again with other answers.") from None
-        self.pace()
+        self.pace(hours={"start": start, "end": end, "weekends": weekends})
         self.term.done("Settings saved", shown)
 
-    def pace(self) -> None:
-        """His starting pace, kept by the window in its settings.json; the menu changes it later."""
-        path = self.window_settings()
+    def window_saved(self) -> dict[str, Any]:
+        """What the window keeps in its settings.json: his place, pace, hours, call…"""
         try:
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = json.loads(self.window_settings().read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            saved = {}
-        saved = saved if isinstance(saved, dict) else {}
+            return {}
+        return saved if isinstance(saved, dict) else {}
+
+    def pace(self, hours: dict[str, int | bool] | None = None) -> None:
+        """His starting pace, kept by the window in its settings.json with the hours just
+        answered, which would otherwise give way to those of his menu; the menu changes both
+        later."""
+        path = self.window_settings()
+        saved = self.window_saved()
         keys = [p.key for p in PACES]
         current = str(saved.get("pace")) if saved.get("pace") in keys else "regularly"
         if self.check:
@@ -324,6 +331,8 @@ class Setup:
             )
         ]
         saved["pace"] = chosen.key
+        if hours is not None:
+            saved["hours"] = hours
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(saved, indent=2), encoding="utf-8")
 

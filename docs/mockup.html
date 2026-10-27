@@ -447,6 +447,20 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 .s-track > b { position: absolute; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 50%; background: var(--tg-ink); border: 2px solid var(--tg-panel); }
 .s-track input { position: absolute; inset: -10px 0; width: 100%; opacity: 0; cursor: pointer; margin: 0; }
 .s-note { font: 12px/1.35 var(--tg-body); color: var(--tg-muted); }
+/* His hours: a range across the day, a handle for each end, the hours of the day under it. */
+.s-hours { border-radius: 9px; padding: 6px 10px 6px; display: flex; flex-direction: column; gap: 6px; flex: none; }
+.s-hours.is-hl { background: var(--tg-choiceHover); }
+.s-hrow { display: flex; justify-content: space-between; font: 13px/1.35 var(--tg-body); color: var(--tg-muted); }
+.s-hrow b { font-weight: 600; color: var(--tg-text); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.s-hrow .is-on b { color: var(--tg-ink); }
+.s-range { position: relative; height: 24px; display: flex; align-items: center; }
+.s-range > .s-track { background: color-mix(in srgb, var(--tg-muted) 35%, transparent); }
+.s-track > b.is-ring { box-shadow: 0 0 0 2px var(--tg-gold); }
+.s-range input { position: absolute; inset: -10px 0; width: 100%; margin: 0; opacity: 0; pointer-events: none; -webkit-appearance: none; appearance: none; background: transparent; }
+.s-range input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none; width: 16px; height: 28px; cursor: grab; }
+.s-range input::-moz-range-thumb { pointer-events: auto; width: 16px; height: 28px; border: 0; cursor: grab; }
+.s-ticks { position: relative; height: 14px; font: 11px/14px var(--tg-body); color: var(--tg-muted); font-variant-numeric: tabular-nums; }
+.s-ticks > span { position: absolute; top: 0; transform: translateX(-50%); }
 .cursor { position: absolute; width: 18px; height: 24px; pointer-events: none; z-index: 9; }
 
 /* --- Component sheets -------------------------------------------------------------------------- */
@@ -757,6 +771,7 @@ const ICONS = {
   stats: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   subject: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5',
   pace: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+  hours: 'M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4',
   call: 'M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6',
   soft: 'M4 9v6h4l5 4V5L8 9z',
   loud: 'M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6M20 6a8 8 0 0 1 0 12',
@@ -913,6 +928,7 @@ function commandRows(c) {
     { action: 'subject', label: 'Subject', value: c.subject, icon: 'subject' },
     { separator: true },
     { action: 'sub:pace', label: 'How often', value: c.pace, icon: 'pace', more: true },
+    { action: 'sub:hours', label: 'Hours', value: c.hours, icon: 'hours', more: true },
     { action: 'sub:call', label: 'Sound', value: c.sound, icon: 'call', more: true },
     { action: 'sub:model', label: 'Questions by', value: c.model, icon: 'model', more: true },
     { separator: true },
@@ -930,10 +946,10 @@ function commandRows(c) {
 }
 function suggestionRows(found) {
   return found.map(s => {
-    const verb = s.action.split(':')[0];
+    const verb = s.action === 'sub:hours' ? 'hours' : s.action.split(':')[0];
     const name = verb === 'theme' ? (s.action === 'theme:dark' ? 'moon' : 'sun')
-      : ({ pace: 'pace', call: 'call', pause: 'pause', learn: 'learn', focus: 'focus' })[verb] || verb;
-    return { action: s.action, label: s.label, value: s.sub, icon: ICONS[name] ? name : 'search' };
+      : ({ pace: 'pace', hours: 'hours', days: 'hours', call: 'call', pause: 'pause', learn: 'learn', focus: 'focus' })[verb] || verb;
+    return { action: s.action, label: s.label, value: s.sub, icon: ICONS[name] ? name : 'search', more: s.action.startsWith('sub:') };
   });
 }
 function menuRow(r, i, u, typed) {
@@ -950,29 +966,51 @@ function menuRow(r, i, u, typed) {
   return `<div class="${cls}" data-row="${i}"${act(u.live && 'row:' + i)}${r.primary ? ' data-m="primary"' : ''}>${glyph(r.icon, tint, 18, r.busy ? 'spin' : '')}${label}${value}`
     + `${r.busy ? '<span class="m-busy"><i></i></span>' : ''}</div>`;
 }
-const choicesOf = (c, which) => which === 'pace' ? c.paces : which === 'call' ? c.calls : which === 'model' ? c.models : [];
-const chosenOf = (c, which) => which === 'pace' ? c.paceKey : which === 'call' ? c.callKey : c.modelKey;
+const choicesOf = (c, which) => which === 'pace' ? c.paces : which === 'call' ? c.calls : which === 'model' ? c.models : which === 'hours' ? c.days : [];
+const chosenOf = (c, which) => which === 'pace' ? c.paceKey : which === 'call' ? c.callKey : which === 'hours' ? c.daysKey : c.modelKey;
+// In his hours' list, the arrows go From, Until, then the days: these come two stops later.
+const HOUR_STOPS = 2;
+const firstStop = which => which === 'hours' ? HOUR_STOPS : 0;
+const along = h => `calc(${h / 24} * (100% - 16px) + 8px)`;
+// From and Until on a range across the day, a handle for each; ← and → move the one ringed by
+// an hour, they never cross.
+function hoursBlock(c, u, current) {
+  const ring = n => current === n && u.keyboard ? ' is-ring' : '';
+  const on = n => current === n ? ' class="is-on"' : '';
+  const handle = (n, h) => `<b class="${ring(n).trim()}" style="left:calc(${h / 24} * (100% - 16px))"></b>`;
+  const inputs = u.live ? `<input type="range" min="0" max="24" step="1" value="${c.start}" data-input="hours-start" aria-label="From">`
+    + `<input type="range" min="0" max="24" step="1" value="${c.end}" data-input="hours-end" aria-label="Until">` : '';
+  return `<div class="s-hours${current === 0 || current === 1 ? ' is-hl' : ''}" data-hours>`
+    + `<div class="s-hrow"><span${on(0)}>From<b>${c.start}:00</b></span><span${on(1)}>Until<b>${c.end}:00</b></span></div>`
+    + `<div class="s-range"><span class="s-track"><i style="left:${along(c.start)};width:calc(${(c.end - c.start) / 24} * (100% - 16px))"></i>`
+    + `${handle(0, c.start)}${handle(1, c.end)}${inputs}</span></div>`
+    + `<div class="s-ticks">${[0, 6, 12, 18, 24].map(h => `<span style="left:${along(h)}">${h}</span>`).join('')}</div></div>`;
+}
 function sublist(c, u) {
   const which = u.sub;
   const list = choicesOf(c, which);
   const chosen = chosenOf(c, which);
-  const current = u.subCurrent ?? Math.max(0, list.findIndex(x => x.key === chosen));
-  const title = { pace: 'How often?', call: 'His call', model: 'Who writes his questions?' }[which];
-  const subtitle = which === 'call' ? 'A click plays it and keeps it.' : which === 'model' ? 'From his next batch on.' : '';
-  const rows = list.map((x, i) => {
-    const isChosen = x.key === chosen;
-    const cls = ['s-row', x.hint && 'has-hint', current === i && 'is-hl', isChosen && 'is-chosen'].filter(Boolean).join(' ');
-    return `<div class="${cls}"${act(u.live && 'choose:' + i)}>${isChosen ? glyph('check', 'var(--tg-ink)', 18, 'check') : ''}`
+  const first = firstStop(which);
+  const current = u.subCurrent ?? (which === 'hours' ? 0 : Math.max(0, list.findIndex(x => x.key === chosen)));
+  const title = { pace: 'How often?', call: 'His call', model: 'Who writes his questions?', hours: 'When may he ask?' }[which];
+  const subtitle = which === 'call' ? 'A click plays it and keeps it.' : which === 'model' ? 'From his next batch on.'
+    : which === 'hours' ? 'Not a word outside these hours.' : '';
+  const choiceRows = (items, keyOf, offset, chosenKey, act0) => items.map((x, i) => {
+    const isChosen = x.key === chosenKey;
+    const cls = ['s-row', x.hint && 'has-hint', current === i + offset && 'is-hl', isChosen && 'is-chosen'].filter(Boolean).join(' ');
+    return `<div class="${cls}"${act(u.live && act0 + i)}>${isChosen ? glyph('check', 'var(--tg-ink)', 18, 'check') : ''}`
       + `<span class="s-text"><span class="s-name">${esc(x.name)}</span>${x.hint ? `<span class="s-hint">${esc(x.hint)}</span>` : ''}</span>`
-      + `${which === 'call' && x.key !== 'silent' ? glyph('call', current === i ? 'var(--tg-ink)' : 'var(--tg-muted)', 18, 'spk') : ''}</div>`;
+      + `${keyOf === 'call' && x.key !== 'silent' ? glyph('call', current === i + offset ? 'var(--tg-ink)' : 'var(--tg-muted)', 18, 'spk') : ''}</div>`;
   }).join('');
+  const rows = choiceRows(list, which, first, chosen, 'choose:');
   const volume = which !== 'call' ? '' : '<div class="s-sep"></div><div class="s-gap"></div>'
     + `<div class="s-vol${current === list.length ? ' is-hl' : ''}"><div class="s-vrow"><span>Volume</span><span>${c.volume} %</span></div>`
     + `<div class="s-slider">${glyph('soft')}<span class="s-track"><i style="width:${c.volume}%"></i><b style="left:calc(${c.volume / 100} * (100% - 16px))"></b>`
     + `${u.live ? `<input type="range" min="0" max="100" step="5" value="${c.volume}" data-input="volume" aria-label="Volume">` : ''}</span>${glyph('loud')}</div>`
     + '<div class="s-note">Let go to hear it.</div></div>';
+  const hours = which === 'hours' ? `${hoursBlock(c, u, current)}<div class="s-gap"></div><div class="s-sep"></div><div class="s-gap"></div>` : '';
   return `<div class="m-subpanel${u.subLeft ? ' is-left' : ''}" data-subrow="${u.subRow}" data-m="list"><div class="s-title">${title}</div>`
-    + `${subtitle ? `<div class="s-subtitle">${subtitle}</div>` : ''}${rows}${volume}</div>`;
+    + `${subtitle ? `<div class="s-subtitle">${subtitle}</div>` : ''}${hours}${rows}${volume}</div>`;
 }
 // c: menu.content (tagnan/ui/menu.py); u: the row the mouse or the arrows are on, the words
 // typed and their suggestions, the list open beside.
@@ -1043,6 +1081,16 @@ const MODELS = [
   { key: 'claude-sonnet-5-5', name: 'Sonnet 5.5, effort high', hint: 'quick, lighter on your limits' },
   { key: 'claude-haiku-5-5', name: 'Haiku 5.5, effort high', hint: 'the quickest, plainer questions' },
 ];
+const DAYS = [
+  { key: 'weekdays', name: 'Weekdays', hint: 'Monday to Friday' },
+  { key: 'every-day', name: 'Every day', hint: 'weekends too' },
+];
+// His hours, as his menu's row says them: the days, then from when until when, short enough for
+// the row's 130 px; his list says them in full.
+const hoursText = (start, end, weekends) => `${weekends ? 'Every day' : 'Mon–Fri'}, ${start}–${end}`;
+const withHours = (c, start, end, weekends) => ({
+  ...c, start, end, weekends, hours: hoursText(start, end, weekends), daysKey: weekends ? 'every-day' : 'weekdays', days: DAYS,
+});
 const UPDATE_NEW = { label: 'Update & Restart', value: 'New', pill: true, busy: false, strong: true };
 const MENU = {
   stage: 2, grade: 'Cadet', share: 0.349, points: '1284 of 2000 points to Musketeer · streak 4', paused: false,
@@ -1050,7 +1098,10 @@ const MENU = {
   pace: 'Regularly', paceKey: 'regularly', call: 'Bugle call', sound: 'Bugle call · 65 %', volume: 65, callKey: 'bugle',
   paces: PACES, calls: CALLS, model: 'Opus 5.5', modelKey: 'claude-opus-5-5', theme: '', models: MODELS, update: UPDATE_NEW,
 };
+Object.assign(MENU, withHours(MENU, 9, 19, false));
 const MENU_PAUSED = { ...MENU, paused: true, next: 'until 16:00' };
+const MENU_EARLY = withHours(MENU, 8, 19, false);  // the keyboard has moved From an hour earlier
+const MENU_EVERY_DAY = withHours(MENU, 9, 19, true);
 
 const Q_SINGLE = {
   mode: 'question', title: 'En garde!', meta: 'Domain 3 · Applications of Foundation Models', tag: 'Medium question',
@@ -1140,6 +1191,8 @@ const MSG = {
   ready: { mode: 'message', title: 'Ready!', text: 'My questions are written. En garde, the first one is coming.' },
   atEase: { mode: 'message', title: 'At ease!', text: 'A break of 45 min, back at 15:05. Not a word from me till then.' },
   pace: { mode: 'message', title: 'As you wish!', text: 'A question every 5 to 10 min. The next one around 14:27.' },
+  hours: { mode: 'message', title: 'As you wish!', text: 'Weekdays, from 8:00 to 19:00. The next one around 15:07.' },
+  hoursTomorrow: { mode: 'message', title: 'As you wish!', text: 'Weekdays, from 9:00 to 14:00. Not a word more today: the next one tomorrow at 9:06.' },
   model: { mode: 'message', title: 'Sonnet it is!', text: 'Sonnet 5.5 writes my next questions: quick, lighter on your limits. The ones I already hold stay as they are.' },
   updated: { mode: 'message', title: 'Freshly inked!', text: 'I’m up to date. What’s new:\n· Update & Restart, one row in his menu instead of two\n· His call’s volume, set by ear under his sounds\n· A cross puts away a course one no longer follows', button: 'Splendid!' },
   flagged: { mode: 'message', title: 'Question set aside', text: 'Thank you, I won’t ask it again. My brain will write others.' },
@@ -1154,6 +1207,11 @@ const SUGGEST = {
     { label: 'A question now', sub: '', action: 'ask' }, { label: 'Progress', sub: '', action: 'stats' },
     { label: 'Subject…', sub: '', action: 'subject' }, { label: 'A break…', sub: '', action: 'pause' },
     { label: 'Quit Tagnan', sub: '', action: 'quit' }, { label: 'How often: Intensive training', sub: 'every 3 to 5 min', action: 'pace:intensive' },
+  ],
+  hours: [{ label: 'Hours: 8:00 to 18:00', sub: 'Monday to Friday', action: 'hours:8-18' }],
+  weekend: [
+    { label: 'Every day, weekends too', sub: '9:00 to 19:00', action: 'days:every-day' },
+    { label: 'Weekdays only', sub: '9:00 to 19:00', action: 'days:weekdays' },
   ],
   learn: [{ label: 'Learn italian cooking', sub: 'I’ll draw up a course on it: a minute or two.', action: 'learn:italian cooking' }],
   none: [],
@@ -1325,7 +1383,7 @@ function typeDoc() {
 }
 function iconDoc() {
   return '<div class="eyebrow">Foundations · Icons</div><h2>Icons</h2>'
-    + '<p class="lead">Nineteen strokes on a 24-unit grid, 2.2 units wide with round caps and joins, drawn at 18 px in muted, ink, gold or the panel’s colour. Shown here at 24 px.</p>'
+    + '<p class="lead">Twenty strokes on a 24-unit grid, 2.2 units wide with round caps and joins, drawn at 18 px in muted, ink, gold or the panel’s colour. Shown here at 24 px.</p>'
     + `<div class="igrid">${Object.keys(ICONS).map(k => `<div class="itile">${glyph(k, 'var(--doc-accent)', 24)}<span>${k}</span></div>`).join('')}</div>`
     + '<div class="src"><span>TagnanMenu.qml: icons, Glyph</span></div>';
 }
@@ -1663,7 +1721,7 @@ function desktopFrame(id, name, mode, html, o = {}) {
 
 // --- Pages -----------------------------------------------------------------------------------------
 function coverHtml() {
-  return `<div class="cover"><div class="cv-top"><span class="cv-mark">${tagIcon(5, 32)}</span><span class="cv-eyebrow">Tagnan · Interface design</span><span class="cv-date">Updated 19 October 2026</span></div>`
+  return `<div class="cover"><div class="cv-top"><span class="cv-mark">${tagIcon(5, 32)}</span><span class="cv-eyebrow">Tagnan · Interface design</span><span class="cv-date">Updated 27 October 2026</span></div>`
     + '<h1 class="cv-title">Tagnan</h1><p class="cv-tag">An ink musketeer who quizzes you from the corner of your screen.</p>'
     + '<p class="cv-lead">Claude writes the questions, on an AWS exam or anything else you are learning. He asks them in a speech bubble, cheers or scolds, explains what you missed, and climbs six ranks as you get them right.</p>'
     + `<div class="cv-ladder">${GRADES.map((g, i) => `<div class="cv-rank">${figure(i, i === 5 ? 'happy' : 'idle', { w: 140 })}<span class="cv-rname">${g.name}</span><span class="cv-rpts">${g.threshold.toLocaleString('en-GB')} pts</span></div>`).join('')}</div>`
@@ -1697,7 +1755,7 @@ const PAGES = [
         docFrame('f-art', 'Ink and art', artDoc, { w: 1220, src: ['tagnan/art.py'] }),
         docFrame('f-contrast', 'Contrast', contrastDoc, { w: 1080, src: SRC.theme, notes: ['Ratios are computed live from the tokens, as WCAG 2 defines them.'] }),
       ] }],
-      [{ id: 's-type', name: 'Type and icons', desc: 'Two faces and nineteen strokes.', frames: [
+      [{ id: 's-type', name: 'Type and icons', desc: 'Two faces and twenty strokes.', frames: [
         docFrame('f-type', 'Typography', typeDoc, { w: 1240, src: SRC.theme }),
         docFrame('f-icons', 'Icons', iconDoc, { w: 1080, src: ['tagnan/ui/qml/TagnanMenu.qml'] }),
       ] }],
@@ -1794,12 +1852,28 @@ const PAGES = [
         menuShot('menu', 'Menu', MENU, { current: 0 }, { notes: ['Opens at the pointer, growing from 96 % in 0.2 s.', 'A click elsewhere closes it.'], cap: 'As it opens: the primary row first, the field ready for words.' }),
         menuShot('menu-hover', 'Menu · pointer on a row', MENU, { current: 1 }, { notes: ['One highlight slides from row to row (110 ms).'] }),
         menuShot('menu-keys', 'Menu · keyboard', MENU, { current: 0, keyboard: true }, { notes: ['Once the arrows are used, the row they are on is ringed; the primary row in gold.'] }),
-        menuShot('menu-paused', 'Menu · on a break', MENU_PAUSED, { current: 8 }, { notes: ['“Resume now” with the time the break ends, and “Change the break…”.'] }),
+        menuShot('menu-paused', 'Menu · on a break', MENU_PAUSED, { current: 9 }, { notes: ['“Resume now” with the time the break ends, and “Change the break…”.'] }),
       ] }],
-      [{ id: 's-lists', name: 'Lists beside', desc: 'How often, Sound and Questions by open their list beside the menu, after 220 ms on the row or at once with a click or →.', frames: [
+      [{ id: 's-lists', name: 'Lists beside', desc: 'How often, Hours, Sound and Questions by open their list beside the menu, after 220 ms on the row or at once with a click or →.', frames: [
         menuShot('list-pace', 'How often', MENU, { sub: 'pace', subRow: 4, current: 4 }, { notes: ['He says so in his bubble, with the time of the next question.'] }),
-        menuShot('list-call', 'Sound', MENU, { sub: 'call', subRow: 5, current: 5, subCurrent: 2 }, { notes: ['A click plays the call and keeps it; the list stays open to hear the others.', 'Volume: ← and → in 5 % steps.'] }),
-        menuShot('list-model', 'Questions by', MENU, { sub: 'model', subRow: 6, current: 6 }, { notes: ['His next batch is written by the one chosen.'] }),
+        menuShot('list-call', 'Sound', MENU, { sub: 'call', subRow: 6, current: 6, subCurrent: 2 }, { notes: ['A click plays the call and keeps it; the list stays open to hear the others.', 'Volume: ← and → in 5 % steps.'] }),
+        menuShot('list-model', 'Questions by', MENU, { sub: 'model', subRow: 7, current: 7 }, { notes: ['His next batch is written by the one chosen.'] }),
+      ] }],
+      [{ id: 's-hours', name: 'Hours', desc: 'When he may ask: the hours chosen at setup, changed at any time from his menu. A row under How often, its list beside: a range across the day, then the days.', frames: [
+        menuShot('hours-list', 'Hours', MENU, { sub: 'hours', subRow: 5, current: 5 }, {
+          cap: 'The row says the days and the hours at a glance; its list opens beside it, as the others do.',
+          notes: ['Drag a handle: kept as one lets go, an hour at a time; the two never cross, an hour apart at least.', 'A click on a day keeps it. The menu stays open, as for the sound.', 'He says so in his bubble, with the time of the next question.'] }),
+        menuShot('hours-keys', 'Hours · keyboard', MENU_EARLY, { sub: 'hours', subRow: 5, current: 5, subCurrent: 0, keyboard: true }, {
+          cap: '↑ and ↓ go From, Until, Weekdays, Every day; ← and → move the ringed handle by an hour, kept at once.',
+          notes: ['Here From went from 9:00 to 8:00.', 'Esc or ← on a day closes the list.'] }),
+        menuShot('hours-every-day', 'Hours · every day', MENU_EVERY_DAY, { sub: 'hours', subRow: 5, current: 5, subCurrent: 3 }, {
+          notes: ['Weekends on: the row says “Every day”.', 'A pace of a few questions a day (Rarely) spreads them over the new hours.'] }),
+        menuShot('type-hours', 'Typed · 8-18', MENU, { typed: '8-18', suggestions: SUGGEST.hours, current: 0 }, {
+          notes: ['“8-18”, “8 to 18”, “hours 8-18”, “from 8h to 18h” all say the same.', 'The days stay as they are.', '“hours” alone offers Hours…, whose list opens beside it with → or Enter.'] }),
+        menuShot('type-weekend', 'Typed · weekend', MENU, { typed: 'weekend', suggestions: SUGGEST.weekend, current: 0 }, {
+          notes: ['“weekend”, “every day”, “saturday”, “weekdays”.'] }),
+        shot('m-hours', 'Hours changed', MSG.hours, { notes: ['6 s; not over a question, where his menu shows them.'] }),
+        shot('m-hours-after', 'Hours changed · already past', MSG.hoursTomorrow, { notes: ['At 15:00, the new hours end at 14:00: the next question waits for tomorrow.'] }),
       ] }],
       [{ id: 's-typing', name: 'Typing', desc: 'A few words do what the rows do: “break 45”, “until 4pm”, “often”, “bell”, “sonnet”, “dark”, “learn pottery”, “focus RAG”. Six suggestions at most, the likeliest first.', frames: [
         menuShot('type-break', 'Typed · break 45', MENU, { typed: 'break 45', suggestions: SUGGEST.break45, current: 0 }, { notes: ['What he understood, and when he comes back.'] }),
@@ -1844,7 +1918,7 @@ const PAGES = [
       [{ id: 's-flow-break', name: 'Taking a break', desc: 'From his menu to silence; a tap meanwhile says until when.', grid: { cols: 4, gap: [120, 200] },
         links: [['fb-menu', 'fb-pause', 'A break…'], ['fb-pause', 'fb-ease', 'OK'], ['fb-ease', 'fb-tap', 'a tap later']],
         frames: [
-          menuShot('fb-menu', 'His menu', MENU, { current: 8 }, { cell: [1, 1] }),
+          menuShot('fb-menu', 'His menu', MENU, { current: 9 }, { cell: [1, 1] }),
           shot('fb-pause', 'A break?', PAUSE, { ui: { field: '45 min', preview: { ok: true, text: 'A break of 45 min, back at 15:05.' } }, cell: [2, 1] }),
           shot('fb-ease', 'At ease!', MSG.atEase, { cell: [3, 1] }),
           shot('fb-tap', 'Tap', { mode: 'quip', text: 'On a break until 15:05.' }, { expr: 'wink', cell: [4, 1] }),
@@ -2439,6 +2513,7 @@ const Proto = (() => {
     return {
       stage: 2, points: 1985, streak: 3, best: 11, right: 176, answered: 267, expr: 'idle', bubble: null, ui: {}, menu: null,
       qi: 0, cur: null, pausedUntil: 0, nextAt: now() + 12 * 60000, pace: 'regularly', call: 'bugle', volume: 65, model: 'claude-opus-5-5',
+      start: 9, end: 19, weekends: false,
       taps: [], gone: false, cover: false, rays: false, shown: null, update: 'new', subject: '', putAway: null,
       course: 'aif-c01',
       courses: [
@@ -2456,7 +2531,20 @@ const Proto = (() => {
   function clock(t) {
     const d = new Date(t), today = new Date();
     const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-    return d.toDateString() === today.toDateString() ? hm : `tomorrow at ${hm}`;
+    if (d.toDateString() === today.toDateString()) return hm;
+    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    return d.toDateString() === tomorrow.toDateString() ? `tomorrow at ${hm}` : `${d.toLocaleDateString('en-GB', { weekday: 'long' })} at ${hm}`;
+  }
+  // The same moment if within his hours, else a few minutes into the next of them.
+  function inHours(t) {
+    const d = new Date(t);
+    const ok = x => (S.weekends || (x.getDay() !== 0 && x.getDay() !== 6)) && x.getHours() >= S.start && x.getHours() < S.end;
+    if (ok(d)) return t;
+    const day = new Date(d);
+    day.setHours(S.start, 0, 0, 0);
+    if (d.getHours() >= S.start) day.setDate(day.getDate() + 1);
+    while (!S.weekends && (day.getDay() === 0 || day.getDay() === 6)) day.setDate(day.getDate() + 1);
+    return day.getTime() + (2 + Math.random() * 6) * 60000;
   }
   const length = min => {
     const h = Math.floor(min / 60), m = min % 60;
@@ -2527,6 +2615,14 @@ const Proto = (() => {
     let rest = after(text, ['break', 'pause', 'a break', 'rest']);
     const b = parseBreak(rest ? rest : text);
     if (b && (rest || rest === null)) { const [said, back] = b.said.split(', '); add(said, 'pause:' + (rest || text), back ? back[0].toUpperCase() + back.slice(1) : ''); }
+    const range = (after(text, ['hours', 'from', 'hours from']) ?? text).toLowerCase().match(/^(\d{1,2})(?::00|h)? ?(?:-|–|to) ?(\d{1,2})(?::00|h)?$/);
+    if (['hours', 'when', 'schedule', 'working hours', 'office hours'].includes(folded)) add('Hours…', 'sub:hours', hoursText(S.start, S.end, S.weekends));
+    if (range && +range[1] < +range[2] && +range[2] <= 24) add(`Hours: ${+range[1]}:00 to ${+range[2]}:00`, `hours:${+range[1]}-${+range[2]}`, S.weekends ? 'Every day' : 'Monday to Friday');
+    if (folded.length > 2 && ['weekend', 'weekends', 'every day', 'saturday', 'sunday', 'all week'].some(w => w.startsWith(folded))) {
+      add('Every day, weekends too', 'days:every-day', `${S.start}:00 to ${S.end}:00`);
+      add('Weekdays only', 'days:weekdays', `${S.start}:00 to ${S.end}:00`);
+    }
+    if (folded.length > 2 && ['weekdays', 'week days', 'not on weekends'].some(w => w.startsWith(folded))) add('Weekdays only', 'days:weekdays', `${S.start}:00 to ${S.end}:00`);
     rest = after(text, ['learn', 'study']);
     if (rest) add(`Learn ${rest}`, 'learn:' + rest, previewCourse(rest).text);
     rest = after(text, ['subject', 'focus', 'on']);
@@ -2555,13 +2651,13 @@ const Proto = (() => {
     const pace = PACES.find(p => p.key === S.pace), call = CALLS.find(c => c.key === S.call), model = MODELS.find(m => m.key === S.model);
     const update = S.update === 'busy' ? { label: 'Updating…', value: 'back in a moment', pill: false, busy: true, strong: false }
       : S.update === 'new' ? UPDATE_NEW : { label: 'Update & Restart', value: '', pill: false, busy: false, strong: false };
-    return {
+    return withHours({
       stage: g, grade: GRADES[g].name, share: next ? clamp((S.points - start) / (next.threshold - start), 0, 1) : 1, points,
       paused: paused(), next: paused() ? `until ${clock(S.pausedUntil)}` : `next ~${clock(S.nextAt)}`,
       subject: S.subject || current().code, pace: pace.name, paceKey: pace.key, call: call.name,
       sound: S.call === 'silent' ? 'Silent' : `${call.name} · ${S.volume} %`, volume: S.volume, callKey: S.call,
       paces: PACES, calls: CALLS, model: model.name.split(',')[0], modelKey: S.model, models: MODELS, update,
-    };
+    }, S.start, S.end, S.weekends);
   }
   function subjectContent() {
     const c = current();
@@ -2676,7 +2772,7 @@ const Proto = (() => {
   function renderHint() {
     let t = 'Click Tagnan to tease him; right-click him for his menu.';
     if (S.gone) t = 'He quit. Bring him back with the button.';
-    else if (S.menu) t = 'Rest on How often, Sound or Questions by to open its list, or type a command: “break 45”, “bell”, “dark”.';
+    else if (S.menu) t = 'Rest on How often, Hours, Sound or Questions by to open its list, or type a command: “break 45”, “8-18”, “bell”, “dark”.';
     else if (S.bubble && S.bubble.mode === 'question') t = S.bubble.need > 1 ? 'Pick two answers, then Confirm. “Later” puts it off.' : 'Pick an answer. “Later” puts it off ten minutes.';
     else if (S.cover) t = 'A promotion: watch him evolve.';
     else if (T.next && S.waiting) t = `Next question in a few seconds; ${PACES.find(p => p.key === S.pace).hint} for real. ${t}`;
@@ -2818,7 +2914,7 @@ const Proto = (() => {
     const u = S.menu.ui;
     const list = choicesOf(menuContent(), which);
     u.sub = which; u.subRow = row; u.current = row;
-    u.subCurrent = Math.max(0, list.findIndex(x => x.key === chosenOf(menuContent(), which)));
+    u.subCurrent = which === 'hours' ? 0 : Math.max(0, list.findIndex(x => x.key === chosenOf(menuContent(), which)));
     renderMenu();
   }
   function activate(i) {
@@ -2833,6 +2929,8 @@ const Proto = (() => {
     if (verb === 'call') { S.call = arg; play(arg); renderMenu(); return; }
     if (verb === 'volume') { S.volume = +arg; play(S.call); renderMenu(); return; }
     if (verb === 'theme') { setMode(arg); return; }
+    if (verb === 'hours') { const [a, b] = arg.split('-').map(Number); setHours(a, b, S.weekends); return; }  // the menu stays open
+    if (verb === 'days') { setHours(S.start, S.end, arg === 'every-day'); return; }
     if (verb === 'update') { startUpdate(); return; }
     closeMenu();
     if (verb === 'ask') { if (!S.bubble || !['question', 'thinking'].includes(S.bubble.mode)) ask(false); }
@@ -2863,6 +2961,18 @@ const Proto = (() => {
     const [a, b] = GAPS[key];
     S.nextAt = now() + (a + Math.random() * (b - a)) * 60000;
     say('As you wish!', paused() ? `${SENTENCES[key]}, once your break is over.` : `${SENTENCES[key]}. The next one around ${clock(S.nextAt)}.`, { hide: 6000 });
+  }
+  function setHours(start, end, weekends) {
+    if (!(start >= 0 && start < end && end <= 24)) return;
+    S.start = start; S.end = end; S.weekends = weekends;
+    renderMenu();
+    if (S.bubble && ['question', 'thinking'].includes(S.bubble.mode)) return;
+    const said = `${weekends ? 'Every day' : 'Weekdays'}, from ${start}:00 to ${end}:00`;
+    if (paused()) { say('As you wish!', `${said}, once your break is over.`, { hide: 6000 }); return; }
+    const [a, b] = GAPS[S.pace];
+    S.nextAt = inHours(now() + (a + Math.random() * (b - a)) * 60000);
+    const today = new Date(S.nextAt).toDateString() === new Date().toDateString();
+    say('As you wish!', today ? `${said}. The next one around ${clock(S.nextAt)}.` : `${said}. Not a word more today: the next one ${clock(S.nextAt)}.`, { hide: 6000 });
   }
   function setModel(key) {
     if (key === S.model) return;
@@ -2974,8 +3084,8 @@ const Proto = (() => {
       case 'row': activate(+arg); break;
       case 'choose': {
         const u = S.menu.ui, list = choicesOf(menuContent(), u.sub), x = list[+arg];
-        u.subCurrent = +arg;
-        if (u.sub === 'call') run('call:' + x.key); else run(u.sub + ':' + x.key);
+        u.subCurrent = +arg + firstStop(u.sub);
+        if (u.sub === 'call') run('call:' + x.key); else if (u.sub === 'hours') run('days:' + x.key); else run(u.sub + ':' + x.key);
         break;
       }
       case 'theme': setMode(mode === 'dark' ? 'light' : 'dark'); break;
@@ -3010,7 +3120,8 @@ const Proto = (() => {
     if (e.target.closest('.m-subpanel')) {
       stop('hover');
       const sr = e.target.closest('.s-row');
-      if (sr) { const i = +sr.dataset.act.split(':')[1]; if (u.subCurrent !== i || u.current !== u.subRow) { u.subCurrent = i; u.current = u.subRow; renderMenu(); } }
+      if (sr) { const i = +sr.dataset.act.split(':')[1] + firstStop(u.sub); if (u.subCurrent !== i || u.current !== u.subRow) { u.subCurrent = i; u.current = u.subRow; renderMenu(); } }
+      else if (e.target.closest('.s-hours')) { if (u.subCurrent > 1) { u.subCurrent = 0; u.keyboard = false; renderMenu(); } }
       else if (e.target.closest('.s-vol')) { const n = choicesOf(menuContent(), u.sub).length; if (u.subCurrent !== n) { u.subCurrent = n; renderMenu(); } }
       return;
     }
@@ -3034,8 +3145,24 @@ const Proto = (() => {
     else if (which === 'break-field') { S.ui.field = v; S.ui.preview = previewBreak(v); renderBubble(false); }
     else if (which === 'course-field') { S.ui.course = v; S.ui.coursePreview = previewCourse(v); renderBubble(false); }
     else if (which === 'subject-field') { S.ui.subject = v; S.ui.subjectPreview = previewSubject(v); renderBubble(false); }
+    else if (which === 'hours-start' || which === 'hours-end') dragHours(e.target);
   });
-  stageEl.addEventListener('change', e => { if (e.target.dataset.input === 'volume') run('volume:' + e.target.value); });
+  // A handle dragged: it follows the pointer by the hour, never past the other; kept as one lets go.
+  function dragHours(input) {
+    const box = input.closest('.s-hours'), [from, until] = $$('[data-input^="hours-"]', box);
+    let a = +from.value, b = +until.value;
+    if (input === from) { a = Math.min(a, b - 1); from.value = a; } else { b = Math.max(b, a + 1); until.value = b; }
+    const [h0, h1] = $$('.s-track > b', box), fill = $('.s-track > i', box), [t0, t1] = $$('.s-hrow b', box);
+    h0.style.left = `calc(${a / 24} * (100% - 16px))`; h1.style.left = `calc(${b / 24} * (100% - 16px))`;
+    fill.style.left = along(a); fill.style.width = `calc(${(b - a) / 24} * (100% - 16px))`;
+    t0.textContent = a + ':00'; t1.textContent = b + ':00';
+    return [a, b];
+  }
+  stageEl.addEventListener('change', e => {
+    const which = e.target.dataset.input;
+    if (which === 'volume') run('volume:' + e.target.value);
+    else if (which === 'hours-start' || which === 'hours-end') { const [a, b] = dragHours(e.target); run(`hours:${a}-${b}`); }
+  });
   stageEl.addEventListener('keydown', e => {
     const which = e.target.dataset && e.target.dataset.input;
     if (e.key === 'Enter' && which === 'break-field') { if (!pauseWith(e.target.value)) { S.ui.preview = previewBreak(e.target.value); renderBubble(false); } e.preventDefault(); return; }
@@ -3049,7 +3176,7 @@ const Proto = (() => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       const step = e.key === 'ArrowDown' ? 1 : -1;
       u.keyboard = true;
-      if (u.sub) { const n = choicesOf(menuContent(), u.sub).length + (u.sub === 'call' ? 1 : 0); u.subCurrent = ((u.subCurrent ?? 0) + step + n) % n; }
+      if (u.sub) { const n = choicesOf(menuContent(), u.sub).length + (u.sub === 'call' ? 1 : 0) + firstStop(u.sub); u.subCurrent = ((u.subCurrent ?? 0) + step + n) % n; }
       else { const here = Math.max(0, stops.indexOf(u.current)); u.current = stops[(here + step + stops.length) % stops.length]; }
       renderMenu();
       e.preventDefault();
@@ -3057,8 +3184,15 @@ const Proto = (() => {
       if (u.sub) {
         const list = choicesOf(menuContent(), u.sub);
         if (u.sub === 'call' && u.subCurrent === list.length) run('volume:' + S.volume);
-        else handle('choose:' + u.subCurrent);
+        else if (u.sub === 'hours' && u.subCurrent < HOUR_STOPS) { /* a handle: the arrows move it */ }
+        else handle('choose:' + (u.subCurrent - firstStop(u.sub)));
       } else activate(u.current);
+      e.preventDefault();
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && u.sub === 'hours' && u.subCurrent < HOUR_STOPS) {
+      const step = e.key === 'ArrowRight' ? 1 : -1;
+      u.keyboard = true;
+      if (u.subCurrent === 0) run(`hours:${clamp(S.start + step, 0, S.end - 1)}-${S.end}`);
+      else run(`hours:${S.start}-${clamp(S.end + step, S.start + 1, 24)}`);
       e.preventDefault();
     } else if (e.key === 'ArrowRight') {
       const onVolume = u.sub === 'call' && u.subCurrent === choicesOf(menuContent(), 'call').length;

@@ -516,11 +516,11 @@ Item {
                         smooth: true
                     }
                 }
-
-
-            // What lies on the desk in front of him: the Cadet's quill, out of its inkwell.
-            Layer { name: "front"; visible: root.stage === 2 }
             }
+
+            // What lies on the desk in front of him, and stays there whatever his body does: the
+            // Cadet's quill, out of its inkwell.
+            Layer { name: "front"; visible: root.stage === 2 }
         }
 
         // His evolution: rays drawn in to him, his white silhouette, the flash.

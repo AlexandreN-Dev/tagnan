@@ -4,6 +4,7 @@
     scripts/brain explain < request.json    # {"course", "question": {...}, "chosen": [...]}
     scripts/brain plan < request.json       # {"words": "pottery"}: a new course's blueprint
     scripts/brain check                     # one tiny call with the configured model
+    scripts/brain account                   # whose Claude login it writes with
 
 "course" is a blueprint (tagnan.blueprint's to_dict); a request may instead name a file of
 exam/ by its key, as "exam". "model", optional, is one of config.MODELS, chosen in his menu: it
@@ -48,6 +49,7 @@ ISOLATION_FLAGS = (
 )
 # Opus at max effort thinks long: a batch of ten can take minutes, an explanation a minute.
 GENERATE_TIMEOUT, EXPLAIN_TIMEOUT, CHECK_TIMEOUT, PLAN_TIMEOUT = 600.0, 240.0, 180.0, 600.0
+ACCOUNT_TIMEOUT = 30.0
 MAX_WORDS = 120
 DIFFICULTIES = ("easy", "medium", "hard")
 
@@ -426,12 +428,55 @@ def check(cfg: configs.Config) -> dict[str, Any]:
     return {"ok": True, "model": cfg.brain.model}
 
 
+def account() -> dict[str, Any]:
+    """Whose Claude login writes his questions, as `claude auth status` says it (no call to a
+    model, no quota): its address, its organisation and its plan, shown at the foot of his menu
+    so that one sees which licence is spent. Nobody signed in: signedIn false, the rest empty."""
+    command = [claude_binary(), "auth", "status", "--json"]
+    with tempfile.TemporaryDirectory(prefix="tagnan-brain-") as folder:
+        try:
+            done = subprocess.run(  # noqa: S603 - fixed argument list, no shell
+                command,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                cwd=folder,
+                env=child_env(),
+                timeout=ACCOUNT_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            raise BrainError("claude did not say who is signed in") from None
+    try:
+        status = json.loads(done.stdout)
+    except json.JSONDecodeError:
+        status = None
+    if not isinstance(status, dict):
+        raise BrainError("claude did not say who is signed in")
+    signed_in = status.get("loggedIn") is True
+
+    def said(name: str) -> str:
+        value = status.get(name)
+        return value.strip() if signed_in and isinstance(value, str) else ""
+
+    return {
+        "signedIn": signed_in,
+        "email": said("email"),
+        "org": said("orgName"),
+        "plan": said("subscriptionType").capitalize(),
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brain", description="Tagnan's brain")
-    parser.add_argument("action", choices=["generate", "explain", "plan", "check"])
+    parser.add_argument("action", choices=["generate", "explain", "plan", "check", "account"])
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
     try:
+        if args.action == "account":
+            sys.stdout.write(json.dumps(account(), ensure_ascii=False))
+            return 0
         cfg = configs.load(args.config)
         if args.action == "check":
             result = check(cfg)

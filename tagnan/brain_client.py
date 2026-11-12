@@ -73,3 +73,7 @@ class BrainClient:
 
     def plan(self, words: str, timeout: float = 630.0) -> dict[str, Any]:
         return self.call("plan", {"words": words}, timeout)
+
+    def account(self, timeout: float = 45.0) -> dict[str, Any]:
+        """Whose Claude login the brain writes with: {"signedIn", "email", "org", "plan"}."""
+        return self.call("account", {}, timeout)

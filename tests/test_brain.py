@@ -108,6 +108,51 @@ def test_explain_returns_text(fake_claude: Path) -> None:
     assert "Right answer: A (Amazon Bedrock Guardrails)" in prompt
 
 
+def test_the_account_is_what_claude_says_of_its_login(fake_claude: Path) -> None:
+    status = {
+        "loggedIn": True,
+        "authMethod": "claude.ai",
+        "email": "athos@example.com",
+        "orgName": "Example Org",
+        "subscriptionType": "max",
+    }
+    (fake_claude / "fake-answer.json").write_text(json.dumps(status))
+    assert brain.account() == {
+        "signedIn": True,
+        "email": "athos@example.com",
+        "org": "Example Org",
+        "plan": "Max",
+    }
+    log = call_log(fake_claude)
+    assert log["argv"] == ["auth", "status", "--json"]  # no model called, no quota spent
+    env = log["env"]
+    assert isinstance(env, dict)
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "CLAUDECODE" not in env
+    # Nobody signed in: said so, and nothing of an earlier login.
+    (fake_claude / "fake-answer.json").write_text(
+        json.dumps({"loggedIn": False, "email": "old@example.com"})
+    )
+    assert brain.account() == {"signedIn": False, "email": "", "org": "", "plan": ""}
+    # A login without an address or a plan.
+    (fake_claude / "fake-answer.json").write_text(json.dumps({"loggedIn": True, "email": None}))
+    assert brain.account() == {"signedIn": True, "email": "", "org": "", "plan": ""}
+    (fake_claude / "fake-answer.json").write_text("Unknown command")
+    with pytest.raises(brain.BrainError, match="did not say who"):
+        brain.account()
+
+
+def test_the_brain_script_says_the_account(
+    fake_claude: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (fake_claude / "fake-answer.json").write_text(
+        json.dumps({"loggedIn": True, "email": "athos@example.com", "subscriptionType": "team"})
+    )
+    assert brain.main(["account", "--config", str(fake_claude / "none.toml")]) == 0
+    said = json.loads(capsys.readouterr().out)
+    assert (said["email"], said["plan"]) == ("athos@example.com", "Team")
+
+
 def test_claude_errors_become_messages(fake_claude: Path) -> None:
     answer(fake_claude, None, is_error=True, subtype="error", result="usage limit reached")
     with pytest.raises(brain.BrainError, match="usage limit"):

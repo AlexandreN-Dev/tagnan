@@ -72,7 +72,8 @@ Window {
         search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",
         check: "M5 12.5l4.5 4.5L19 7",
         update: "M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9M18.6 3.2v4.1h-4.1M5.4 20.8v-4.1h4.1",
-        spinner: "M12 3.5a8.5 8.5 0 1 1-8.1 5.9"
+        spinner: "M12 3.5a8.5 8.5 0 1 1-8.1 5.9",
+        account: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4.5 4-6.5 8-6.5s7 2 8 6.5"
     })
 
     function commandRows() {
@@ -758,6 +759,57 @@ Window {
                         }
                         onClicked: win.activate(rowItem.index)
                     }
+                }
+            }
+
+            // Whose Claude login writes his questions, so that one sees which licence is spent:
+            // a quiet line, not a row (nothing to click), in gold when nobody is signed in.
+            Item {
+                visible: accountLine.visible
+                width: column.width
+                height: 9
+                Rectangle { x: 6; y: 4; width: parent.width - 12; height: 1; color: win.theme.line }
+            }
+            Item {
+                id: accountLine
+                objectName: "account"
+                readonly property var account: win.c.account || null
+                readonly property bool signedIn: account !== null && account.signedIn === true
+                readonly property color tint: signedIn ? win.theme.muted : win.theme.goldInk
+                visible: account !== null && !win.typing
+                width: column.width
+                height: 26
+                Accessible.role: Accessible.StaticText
+                Accessible.name: "Claude account: " + accountMail.text
+                Glyph {
+                    x: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "account"
+                    tint: accountLine.tint
+                    scale: 14 / 18
+                    transformOrigin: Item.Left
+                }
+                Text {
+                    id: accountMail
+                    x: 32
+                    width: accountPlan.x - 8 - x
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    text: !accountLine.signedIn ? "Not signed in to Claude"
+                        : (accountLine.account.email || "Signed in to Claude")
+                    color: accountLine.tint
+                    font.family: win.theme.body
+                    font.pixelSize: 12
+                    font.weight: accountLine.signedIn ? Font.Normal : Font.DemiBold
+                }
+                Text {
+                    id: accountPlan
+                    x: parent.width - 10 - width
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: accountLine.signedIn ? (accountLine.account.plan || "") : ""
+                    color: win.theme.muted
+                    font.family: win.theme.body
+                    font.pixelSize: 12
                 }
             }
         }

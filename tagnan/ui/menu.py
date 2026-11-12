@@ -102,6 +102,7 @@ class Menu(QObject):
             signal.connect(self._refresh)
         if updater is not None:
             updater.changed.connect(self._refresh)
+        controller.worker.accountChanged.connect(self._refresh)
 
     # --- What QML reads -----------------------------------------------------------------------
 
@@ -197,6 +198,8 @@ class Menu(QObject):
             "models": [{"key": m.model, "name": m.label, "hint": m.hint} for m in configs.MODELS],
             # His Update & Restart row (tagnan/ui/updater.py), None without updates.
             "update": self._updater.row() if self._updater else None,
+            # Whose Claude login writes his questions, at the foot of the menu; None: not known.
+            "account": c.worker.account,
         }
 
     # --- Opening and closing ------------------------------------------------------------------
@@ -209,6 +212,7 @@ class Menu(QObject):
         self._shown = True
         if self._updater is not None:
             self._updater.look_here()  # a commit of one's own since he started lights Update
+        self._controller.worker.look_up_account()  # signed in as someone else since? say so
         self._layout()
         self.changed.emit()
 

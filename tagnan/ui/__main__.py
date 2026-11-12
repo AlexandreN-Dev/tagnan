@@ -143,6 +143,13 @@ def demo(controller: Controller, what: str) -> None:
     elif what == "subject":
         controller.showSubject()
     elif what == "menu":
+        if controller.worker.offline:  # a snapshot asks nobody: an account for the picture
+            controller.worker.account = {
+                "signedIn": True,
+                "email": "athos@example.com",
+                "org": "Example Org",
+                "plan": "Max",
+            }
         controller.showMenu()
     elif what == "promotion":  # his evolution only: nothing saved
         before = min(controller.property("stage"), len(rules.GRADES) - 2)
@@ -329,6 +336,7 @@ def main() -> int:
     animator.start()
     controller.start()
     updater.start()
+    worker.look_up_account()
     logging.info(
         "Tagnan is up (grade %d, %d fresh questions)",
         game.progress.grade,

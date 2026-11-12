@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from tagnan.brain_client import BrainClient
+from tagnan.brain_client import BrainClient, BrainError
 from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
 from tagnan.progress import Progress
@@ -137,6 +137,7 @@ class FakeWorker(BrainWorker):
         self.requests: list[dict[str, Any]] = []
         self.explanations: list[int] = []
         self.plans: list[str] = []
+        self.lookups = 0
 
     def generate(self, request: dict[str, Any]) -> bool:
         self.requests.append(request)
@@ -150,6 +151,9 @@ class FakeWorker(BrainWorker):
         self.plans.append(words)
         self.planning = words
         return True
+
+    def look_up_account(self) -> None:
+        self.lookups += 1
 
 
 class Clock:
@@ -437,6 +441,58 @@ def test_his_menu_says_where_he_stands(game: Game) -> None:
     assert changes  # QML hears of it while open
     menu.close()
     assert menu.property("shown") is False
+
+
+def test_his_menu_says_whose_claude_login_writes_his_questions(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    menu = Menu(controller)
+    assert menu.property("content")["account"] is None  # not known yet: no line
+    controller.menuRequested.emit(300, 200)
+    assert worker.lookups == 1  # asked again each time his menu opens
+    changes: list[int] = []
+    menu.changed.connect(lambda: changes.append(1))
+    worker.account = {"signedIn": True, "email": "athos@example.com", "org": "", "plan": "Max"}
+    worker.accountChanged.emit()
+    assert changes  # the line appears in the menu already open
+    account = menu.property("content")["account"]
+    assert (account["email"], account["plan"]) == ("athos@example.com", "Max")
+
+
+class Accounts(BrainClient):
+    """A brain that says who is signed in, then fails."""
+
+    def __init__(self) -> None:
+        super().__init__(("false",))
+        self.answers: list[dict[str, Any] | None] = []
+
+    def account(self, timeout: float = 45.0) -> dict[str, Any]:
+        found = self.answers.pop(0)
+        if found is None:
+            raise BrainError("claude did not say who is signed in")
+        return found
+
+
+def test_the_account_is_asked_off_the_window_and_dropped_when_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(BrainWorker, "_start", staticmethod(lambda work: work()))
+    client = Accounts()
+    worker = BrainWorker(client)
+    heard: list[int] = []
+    worker.accountChanged.connect(lambda: heard.append(1))
+    athos = {"signedIn": True, "email": "athos@example.com", "org": "", "plan": "Max"}
+    client.answers = [athos, athos, None]
+    worker.look_up_account()
+    assert worker.account == athos
+    worker.look_up_account()
+    assert len(heard) == 1  # the same again: nothing to redraw
+    worker.look_up_account()
+    assert worker.account is None  # rather no line than one that may no longer be true
+    assert len(heard) == 2
+    worker.offline = True  # a development snapshot asks nobody
+    worker.look_up_account()
+    assert client.answers == []
 
 
 def test_his_menu_opens_at_the_pointer_and_stays_on_the_screen() -> None:

@@ -162,9 +162,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         stats(game)
         return 0
     brain = BrainClient.local()
+    nobody = cfg.brain.model == configs.NOBODY  # his catalogues only: no brain to call
     for _ in range(args.count):
         question = game.next_question(time.time())
-        if question is None or game.needs_questions():
+        if not nobody and (question is None or game.needs_questions()):
             try:
                 refill(game, brain)
             except BrainError as error:
@@ -173,7 +174,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     return 1
             question = question or game.next_question(time.time())
         if question is None:
-            print("No question available.", file=sys.stderr)
+            more = " Bring him a catalogue: his menu, Catalogues." if nobody else ""
+            print(f"No question available.{more}", file=sys.stderr)
             return 1
         show(question)
         chosen = read_choice(question)
@@ -181,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         outcome = game.answer(question, chosen, time.time())
         tell(outcome, rng)
-        if not outcome.correct and sys.stdin.isatty():
+        if not outcome.correct and not nobody and sys.stdin.isatty():
             more = input("  Enter to go on, 'e' for a longer explanation: ")
             if more.strip().lower() == "e":
                 try:

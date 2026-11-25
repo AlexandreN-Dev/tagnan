@@ -9,6 +9,7 @@ one by one, at the mockup's line heights.
 import logging
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -88,17 +89,41 @@ class Page:
     def metrics(self, f: QFont) -> QFontMetricsF:
         return QFontMetricsF(f, self.device)
 
-    def set(self, text: str, f: QFont, width: float, line_height: float) -> Text:
-        """The text wrapped at `width`, a word too long for a line cut where it must."""
-        m = self.metrics(f)
+    def wrap(self, words: Sequence[str], m: QFontMetricsF, width: float) -> list[str]:
+        """The words on as few lines as `width` allows, a word too long for a line cut where
+        it must."""
         lines: list[str] = []
-        for word in text.split():
+        for word in words:
             if lines and m.horizontalAdvance(f"{lines[-1]} {word}") <= width:
                 lines[-1] = f"{lines[-1]} {word}"
-            else:
-                lines.append(word)
-        if not lines:
-            lines = [""]
+                continue
+            while len(word) > 1 and m.horizontalAdvance(word) > width:
+                cut = len(word) - 1
+                while cut > 1 and m.horizontalAdvance(word[:cut]) > width:
+                    cut -= 1
+                lines.append(word[:cut])
+                word = word[cut:]
+            lines.append(word)
+        return lines or [""]
+
+    def set(self, text: str, f: QFont, width: float, line_height: float) -> Text:
+        """The text wrapped at `width`, its lines as even as that many lines can be, so that
+        no word stands alone on the last one. Evened out only to be drawn: that keeps the
+        number of lines, which is all that measuring counts."""
+        m = self.metrics(f)
+        words = text.split()
+        lines = self.wrap(words, m, width)
+        if self.draw and len(lines) > 1:
+            # Never narrower than its longest word: evening lines out cuts no word.
+            narrow = min(width, max(m.horizontalAdvance(word) for word in words))
+            wide = width
+            while wide - narrow > 0.5:
+                middle = (narrow + wide) / 2
+                if len(self.wrap(words, m, middle)) > len(lines):
+                    narrow = middle
+                else:
+                    wide = middle
+            lines = self.wrap(words, m, wide)
         widest = max(m.horizontalAdvance(line) for line in lines)
         return Text(lines, f, line_height, widest)
 

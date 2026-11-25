@@ -33,6 +33,11 @@ def pages(path: Path) -> int:
     return len(re.findall(rb"/Type\s*/Page(?!s)", path.read_bytes()))
 
 
+def setting() -> sheetpdf.Page:
+    """A page to set words on: nothing is painted."""
+    return sheetpdf.Page(QPainter(), QImage(8, 8, QImage.Format.Format_ARGB32), 0)
+
+
 def test_a_sheet_is_one_a4_page_in_the_folder(tmp_path: Path) -> None:
     path = sheetpdf.write(studysheet.clean(sheet_data()), META, tmp_path)
     assert path == tmp_path / "Tagnan – RAG or fine-tuning.pdf"
@@ -79,3 +84,29 @@ def test_too_long_a_sheet_shrinks_to_stay_above_the_footer() -> None:
     for x in range(0, 794, 7):
         for y in range(footer_line - 12, footer_line - 2):
             assert image.pixelColor(x, y) == QColor("white"), (x, y)
+
+
+def test_no_word_is_left_alone_on_a_last_line() -> None:
+    page = setting()
+    font = sheetpdf.font(40, 700)
+    metrics = page.metrics(font)
+    title = "Bedrock Guardrails: Denied Topics"
+    # Room for all but its last word: taken as they come, "Topics" would stand alone.
+    width = metrics.horizontalAdvance(title) - 10
+    assert page.wrap(title.split(), metrics, width) == ["Bedrock Guardrails: Denied", "Topics"]
+    assert page.set(title, font, width, 42).lines == ["Bedrock Guardrails:", "Denied Topics"]
+
+
+def test_evening_lines_out_cuts_no_word() -> None:
+    page = setting()
+    label = page.set("KNOWLEDGE RETRIEVAL EMBEDDING", sheetpdf.font(11, 700), 104, 12.65)
+    assert label.lines == ["KNOWLEDGE", "RETRIEVAL", "EMBEDDING"]
+
+
+def test_a_word_too_long_for_a_line_is_cut() -> None:
+    page = setting()
+    long = "pneumonoultramicroscopic" * 2
+    text = page.set(f"a {long}", sheetpdf.font(14), 120, 19)
+    assert len(text.lines) > 2
+    assert "".join(text.lines) == f"a{long}"
+    assert text.width <= 120

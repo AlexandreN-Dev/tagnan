@@ -868,6 +868,53 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 .pdoc .rtab td.is-bad { color: #B3382C; }
 .pdoc .rtab td.is-good { color: #1F6B42; }
 /* end of the real sheet */
+/* Catalogues (proposal): questions without a brain. */
+.s-row.is-act { padding-right: 10px; }
+.s-row > .lead { position: absolute; left: 8px; top: 50%; margin-top: -9px; }
+.s-k { padding: 2px 10px 0; font: 600 11px/1.3 var(--tg-body); color: var(--tg-muted); letter-spacing: .04em; text-transform: uppercase; flex: none; }
+.s-note.s-pad { padding: 0 10px 4px; flex: none; }
+/* A chat assistant, any of them: drawn as none in particular. */
+.cat-chat { position: relative; width: 640px; height: 560px; display: flex; flex-direction: column; background: #FFFFFF; color: #1F2328; font: 14px/1.5 system-ui, 'Segoe UI', sans-serif; border-radius: 12px; overflow: hidden; border: 1px solid #D9DCE1; }
+.cat-chat .cc-bar { height: 40px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 14px; background: #F4F5F7; border-bottom: 1px solid #E3E5E9; color: #5B6270; font-size: 13px; }
+.cat-chat .cc-bar i { width: 11px; height: 11px; border-radius: 50%; background: #D3D6DB; }
+.cat-chat .cc-bar span { margin-left: 8px; }
+.cat-chat .cc-body { flex: 1; min-height: 0; padding: 18px 22px 10px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.cat-chat .cc-me { align-self: flex-end; max-width: 80%; background: #EEF0F3; border-radius: 16px; padding: 10px 14px; font-size: 13px; line-height: 1.5; color: #2B3038; }
+.cat-chat .cc-me em { color: #7A818C; }
+.cat-chat .cc-it { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; min-height: 0; }
+.cat-chat .cc-code { position: relative; border-radius: 10px; background: #1E2127; color: #D7DAE0; font: 12px/1.55 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow: hidden; padding: 36px 14px 12px; height: 262px; }
+.cat-chat .cc-code::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(transparent, #1E2127); }
+.cat-chat .cc-lang { position: absolute; left: 14px; top: 9px; font: 12px system-ui, sans-serif; color: #9AA1AC; }
+.cat-chat .cc-copy { position: absolute; right: 10px; top: 6px; height: 24px; padding: 0 10px; border-radius: 6px; font: 600 12px/24px system-ui, sans-serif; color: #FFFFFF; background: #3A3F48; box-shadow: 0 0 0 2px #F2C14E; }
+.cat-chat .cc-ptr { position: absolute; right: 12px; top: 22px; width: 20px; height: 24px; }
+.cat-chat .cc-code .k { color: #9CDCFE; }
+.cat-chat .cc-code .s { color: #CE9178; }
+.cat-chat .cc-code .n { color: #B5CEA8; }
+.cat-chat .cc-field { flex: none; margin: 0 18px 16px; height: 44px; border-radius: 22px; border: 1px solid #D9DCE1; display: flex; align-items: center; padding: 0 18px; color: #9AA1AC; font-size: 13.5px; }
+/* His setup, in a terminal (tagnan/setup_ui.py). */
+.cat-term { width: 760px; padding: 18px 22px 20px; border-radius: 10px; background: #16181D; color: #D5D8DE; font: 13px/1.55 ui-monospace, 'Cascadia Mono', Consolas, monospace; white-space: pre; }
+.cat-term .d { color: #7C828D; }
+.cat-term .a { color: #87AFFF; }
+.cat-term .g { color: #5FBF77; }
+.cat-term .y { color: #E0B84F; }
+.cat-term .tag { background: #87AFFF; color: #16181D; font-weight: 700; }
+/* The proposal's documentation. */
+.pdoc .cat-code { margin: 0; padding: 14px 16px; border-radius: 10px; background: var(--doc-soft); font: 11.5px/1.6 var(--ui-mono); color: var(--doc-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pdoc .cat-code em { font-style: normal; color: var(--doc-faint); }
+.pdoc .cat-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 30px; margin: 4px 0 8px; }
+.pdoc .cat-prompts > div { min-width: 0; }
+.pdoc .cat-prompts h4 { margin: 0 0 8px; font: 600 13px/1.3 var(--ui-font); color: var(--doc-ink); }
+.pdoc .cat-prompts h4 span { font-weight: 400; color: var(--doc-faint); }
+.pdoc .cat-dec { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 14px; margin: 0 0 14px; }
+.pdoc .cat-dec > h4 { margin: 0; padding-top: 12px; font: 600 14px/1.35 var(--ui-font); color: var(--doc-ink); }
+.pdoc .cat-dec > h4 i { display: block; font: 600 11px/1.3 var(--ui-font); font-style: normal; letter-spacing: .06em; text-transform: uppercase; color: var(--doc-faint); margin-bottom: 4px; }
+.pdoc .cat-opt { border: 1px solid var(--doc-line); border-radius: 12px; padding: 12px 14px 14px; display: grid; gap: 6px; align-content: start; }
+.pdoc .cat-opt.is-pick { border-color: #9FD3B4; background: #F3FAF6; }
+.pdoc .cat-opt > b { font: 600 13.5px/1.35 var(--ui-font); color: var(--doc-ink); }
+.pdoc .cat-opt > span { font-size: 12.5px; line-height: 1.5; color: var(--doc-muted); }
+.pdoc .cat-fields td:first-child { width: 92px; }
+.pdoc .cat-fields code { white-space: nowrap; overflow-wrap: normal; }
+/* end of the catalogues */
 /* The PDF, opened in the system's reader. */
 .pdfwin { display: inline-flex; flex-direction: column; align-items: center; max-width: 100%; padding: 0 28px 28px; border-radius: 10px; overflow: hidden; background: #3A3E46; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); }
 .pdf-bar { align-self: stretch; margin: 0 -28px; height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; background: #26292F; color: #E6E9EE; font: 500 12.5px/1 var(--ui-font); white-space: nowrap; }
@@ -1214,9 +1261,15 @@ function bubble(c, u = {}) {
     P.push('<div class="b-line"></div>');
     P.push(`<div class="b-para b-12 b-semi">${esc(c.within)}</div>`);
     P.push(`<div class="b-flow">${c.choices.map(x => action(x.label, { primary: x.key.toLowerCase() === (c.current || '').toLowerCase(), act: L && 'focus:' + x.key })).join('')}</div>`);
-    P.push('<div class="b-para b-note">Or a corner of it, in your own words:</div>');
-    P.push(fieldRow(c.course === 'aif-c01' ? 'RAG, Bedrock Guardrails, prompt engineering…' : 'A corner of it, in your own words…', { value: u.subject, focus: false, ok: sp.ok, input: L && 'subject-field', okAct: L && 'subject-ok' }));
-    if (sp.text) P.push(`<div class="b-para b-12" style="color:${sp.ok ? 'var(--tg-text)' : 'var(--tg-bad)'}">${esc(sp.text)}</div>`);
+    if (!c.noWords) {
+      P.push('<div class="b-para b-note">Or a corner of it, in your own words:</div>');
+      P.push(fieldRow(c.course === 'aif-c01' ? 'RAG, Bedrock Guardrails, prompt engineering…' : 'A corner of it, in your own words…', { value: u.subject, focus: false, ok: sp.ok, input: L && 'subject-field', okAct: L && 'subject-ok' }));
+      if (sp.text) P.push(`<div class="b-para b-12" style="color:${sp.ok ? 'var(--tg-text)' : 'var(--tg-bad)'}">${esc(sp.text)}</div>`);
+    }
+    if (c.catalogueLine) {
+      P.push('<div class="b-line"></div><div class="b-para b-12 b-semi">Questions from elsewhere:</div>');
+      P.push(`<div class="b-flow">${['Paste questions', 'Import a file…', 'Export…', 'Prompts…'].map(l => action(l)).join('')}</div>`);
+    }
     P.push(`<div class="b-para b-news">${esc(c.status)}</div>`);
     P.push(action('Cancel', { act: L && 'dismiss' }));
   } else if (m === 'stats') {
@@ -1246,6 +1299,7 @@ function commandRows(c) {
     { action: 'sub:call', label: 'Sound', value: c.sound, icon: 'call', more: true },
     { action: 'sub:model', label: 'Questions by', value: c.model, icon: 'model', more: true },
   ];
+  if (c.catalogues !== undefined) list.push({ action: 'sub:catalogues', label: 'Catalogues', value: c.catalogues, icon: 'catalogue', more: true });
   if (c.account && c.accountAt === 'row') list.push({ action: 'sub:account', label: 'Account', value: c.account.email || 'Not signed in', icon: 'account', more: true, strong: !c.account.email });
   list.push({ separator: true });
   if (c.sheet) list.push({ action: 'sheet', label: 'Inking a sheet…', value: c.sheet, icon: 'spinner', busy: true });
@@ -1314,10 +1368,12 @@ function accountBlock(a, titled) {
     + '<div class="s-note">Not the right one? <code>claude /login</code> in a terminal.</div></div>';
 }
 function accountFoot(a) {
+  if (a.catalogues) return `<div class="m-acct">${glyph('catalogue', 'var(--tg-muted)', 14)}<span class="m-acct-mail">${esc(a.catalogues)}</span></div>`;
   if (!a.email) return `<div class="m-acct is-none">${glyph('account', 'var(--tg-goldInk)', 14)}<span class="m-acct-mail">Not signed in to Claude</span></div>`;
   return `<div class="m-acct">${glyph('account', 'var(--tg-muted)', 14)}<span class="m-acct-mail">${esc(a.email)}</span><span class="m-acct-plan">${esc(a.plan || '')}</span></div>`;
 }
 function sublist(c, u) {
+  if (u.sub === 'catalogues') return catalogueList(c, u);
   const which = u.sub;
   const list = choicesOf(c, which);
   const chosen = chosenOf(c, which);
@@ -2950,6 +3006,263 @@ function desktopFrame(id, name, mode, html, o = {}) {
   return { id, name, kind: 'Desktop', mode, cls: '', w: 1440, h: 900, html, cap: o.cap, notes: o.notes || [], src: SRC.desktop, data: o.data, ui: o.ui, tokens: o.tokens || TK.bubble, after: o.after };
 }
 
+// --- Catalogues (proposal): questions without a brain ----------------------------------------------
+/* Lot 1 of "Tagnan without a Claude licence": questions written by any chat assistant from a prompt
+   he copies, converted from a quiz one has, or shared by a colleague; pasted or imported, checked as
+   his brain's are, asked as usual. And a Tagnan who needs no brain at all. Nothing here is built. */
+Object.assign(PICONS, {
+  catalogue: 'M8 3h11a2 2 0 0 1 2 2v11M5 7h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM7 12h6M7 16h4',
+  paste: 'M9 3h6v3H9zM9 4.5H6.5A1.5 1.5 0 0 0 5 6v13.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H15M9 12h6M9 16h4',
+  import: 'M12 3v11M7.5 9.5 12 14l4.5-4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
+  export: 'M12 14V3M7.5 7.5 12 3l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
+  prompt: 'M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1',
+});
+const SRC_CAT = ['tagnan/ui/qml/TagnanMenu.qml', 'tagnan/ui/menu.py', 'tagnan/ui/controller.py', 'tagnan/catalogue.py (new)'];
+
+// "Nobody" beside the Claude models, in the setup and in his menu's list.
+const NOBODY = { key: 'none', name: 'Nobody: catalogues', hint: 'no Claude licence needed' };
+const MODELS_NONE = [...MODELS, NOBODY];
+// What his Catalogues list says of the course learned now.
+const CAT_HINTS = { export: '120 on AIF-C01, to share', write: 'on AIF-C01, 20 at a time', convert: 'a PDF, a page, a test' };
+const MENU_CAT = { ...MENU, catalogues: '', cat: CAT_HINTS, models: MODELS_NONE };
+const MENU_NOBRAIN = {
+  ...MENU, catalogues: '14 new', cat: { ...CAT_HINTS, export: '86 on AIF-C01, to share' }, models: MODELS_NONE,
+  model: 'Your catalogues', modelKey: 'none', account: { catalogues: 'Catalogues only · no licence used' },
+};
+const MODEL_ROW = 7, CAT_ROW = 8;  // Questions by, then Catalogues under it
+
+// Catalogues' list: actions rather than choices. Paste, import and export act at once; the two
+// prompts are copied to the clipboard.
+const CAT_ACTIONS = [
+  { icon: 'paste', name: 'Paste questions', hint: () => 'your assistant’s answer' },
+  { icon: 'import', name: 'Import a file…', hint: () => 'a catalogue, .json' },
+  { icon: 'export', name: 'Export my questions', hint: c => c.cat.export },
+];
+const CAT_PROMPTS = [
+  { icon: 'prompt', name: 'Write questions', hint: c => c.cat.write },
+  { icon: 'prompt', name: 'Convert a quiz', hint: c => c.cat.convert },
+];
+function catalogueList(c, u) {
+  const current = u.subCurrent ?? -1;
+  const row = (x, i) => `<div class="s-row is-act has-hint${current === i ? ' is-hl' : ''}">`
+    + glyph(x.icon, current === i ? 'var(--tg-ink)' : 'var(--tg-muted)', 18, 'lead')
+    + `<span class="s-text"><span class="s-name">${esc(x.name)}</span><span class="s-hint">${esc(x.hint(c))}</span></span></div>`;
+  return `<div class="m-subpanel${u.subLeft ? ' is-left' : ''}" data-subrow="${u.subRow}" data-m="list"><div class="s-title">Catalogues</div>`
+    + '<div class="s-subtitle">Questions from elsewhere, to keep or to share.</div>'
+    + CAT_ACTIONS.map((x, i) => row(x, i)).join('')
+    + '<div class="s-gap"></div><div class="s-sep"></div><div class="s-gap"></div>'
+    + '<div class="s-k">Prompts for your assistant</div><div class="s-note s-pad">Copied, to paste into ChatGPT, Gemini, Copilot…</div>'
+    + CAT_PROMPTS.map((x, i) => row(x, i + CAT_ACTIONS.length)).join('') + '</div>';
+}
+const SUGGEST_CAT = [
+  { label: 'Paste questions', sub: 'from the clipboard', action: 'paste' },
+  { label: 'Import a catalogue…', sub: 'a .json file', action: 'import' },
+  { label: 'Export my questions', sub: '120 on AIF-C01, to share', action: 'export' },
+  { label: 'A prompt to write questions', sub: 'on AIF-C01, 20 at a time', action: 'prompt:write' },
+  { label: 'A prompt to convert a quiz', sub: 'a PDF, a page, a test', action: 'prompt:convert' },
+];
+
+// What he says. Every number is the report of one paste or one import.
+const catButtons = (...labels) => labels.map((label, i) => ({ label, primary: i === 0, act: 'dismiss' }));
+const MSG_CAT = {
+  copied: { mode: 'message', title: 'Over to your assistant!', buttons: catButtons('Paste questions', 'Got it'),
+    text: 'The prompt is in your clipboard. Paste it into ChatGPT, Gemini or Copilot, then copy its whole answer and bring it to me: Paste questions.' },
+  pasted: { mode: 'message', title: 'Fresh ink!', buttons: catButtons('A question now', 'Got it'),
+    text: '18 new questions on AWS Certified AI Practitioner, written by your assistant. 2 I already had.' },
+  partial: { mode: 'message', title: 'Fresh ink, mostly', buttons: catButtons('A question now', 'Got it'),
+    text: '16 new questions on AWS Certified AI Practitioner. 2 set aside: in question 7, two choices are the same; question 12 says nothing against choice C.' },
+  cut: { mode: 'message', title: 'Cut short!', buttons: catButtons('A question now', 'Got it'),
+    text: 'Your assistant’s answer stops in the middle of a question: too long for it. I kept the 14 whole ones. For the rest, tell it “next”, then paste its answer again.' },
+  nothing: { mode: 'message', title: 'Nothing to read', buttons: catButtons('Got it'),
+    text: 'Your clipboard holds no questions I can read. Copy your assistant’s whole answer: the Copy button of its code block takes it all.' },
+  course: { mode: 'message', title: 'A new course!', buttons: catButtons('Learn it now', 'Later'),
+    text: 'Python for Data Analysis: 4 chapters, 20 questions. Shall we learn it now? AWS Certified AI Practitioner waits for you, progress and all.' },
+  convert: { mode: 'message', title: 'Over to your assistant!', buttons: catButtons('Paste questions', 'Got it'),
+    text: 'The prompt is in your clipboard. Paste it into your assistant, then your quiz: its text, or the file if it takes files. Twenty questions at a time: “next” for the rest.\nOnly a quiz you may use: never real exam questions.' },
+  converted: { mode: 'message', title: 'Fresh ink!', buttons: catButtons('A question now', 'Got it'),
+    text: '19 new questions on AWS Certified AI Practitioner, converted from your quiz: they stay with you, never exported. Your assistant left one out: question 7, the quiz gives no answer.' },
+  exported: { mode: 'message', title: 'Signed and sealed!', buttons: catButtons('Show in folder', 'Got it'),
+    text: '120 questions on AWS Certified AI Practitioner, in Downloads, ready to share. The 19 converted from your quizzes stay with you.',
+    file: 'Tagnan – AIF-C01 – 120 questions.json' },
+  imported: { mode: 'message', title: 'Fresh ink!', buttons: catButtons('A question now', 'Got it'),
+    text: '86 new questions on AWS Certified AI Practitioner, from a colleague’s catalogue. 34 I already had.' },
+  hello: { mode: 'message', title: 'Hello!', buttons: catButtons('Copy the prompt', 'Import a file…'),
+    text: 'No brain here to write my questions: bring me some. Copy a prompt for your assistant, or import a catalogue a colleague gave you.' },
+  empty: { mode: 'message', title: 'My satchel is empty', buttons: catButtons('Copy the prompt', 'Got it'),
+    text: 'I’ve asked you every question of your catalogues. Your 9 reviews come back as planned; for new questions, paste or import another catalogue.' },
+  learn: { mode: 'message', title: 'Over to your assistant!', buttons: catButtons('Paste questions', 'Got it'),
+    text: 'No brain here to draw up a course: the prompt for pottery is in your clipboard. Paste it into your assistant, then bring me its answer: Paste questions.' },
+};
+// Without a brain: no Tell me more and no study sheet; Ask your assistant copies the question.
+const R_WRONG_NOBRAIN = { ...R_WRONG, sheet: '', more: 'Ask your assistant' };
+const R_WRONG_ASKED = { ...R_WRONG_NOBRAIN, more: 'copied' };
+const SUBJECT_CAT_B = { ...SUBJECT, catalogueLine: true };
+const SUBJECT_NOBRAIN = { ...SUBJECT, noWords: true };
+
+// Any chat assistant, drawn as none in particular: the prompt pasted, its answer in a code block.
+function assistantChat() {
+  const k = t => `<span class="k">"${t}"</span>`, s = t => `<span class="s">"${esc(t)}"</span>`, n = t => `<span class="n">${t}</span>`;
+  const code = [
+    `{${k('tagnan')}: ${n(1)}, ${k('course')}: ${s('aif-c01')}, ${k('origin')}: ${s('written')},`,
+    ` ${k('questions')}: [`,
+    `  {${k('domain')}: ${n(3)}, ${k('task')}: ${s('3.1')}, ${k('topic')}: ${s('Bedrock Guardrails, denied topics')},`,
+    `   ${k('difficulty')}: ${s('medium')}, ${k('kind')}: ${s('single')},`,
+    `   ${k('stem')}: ${s('A team wants its assistant built on Amazon Bedrock to refuse requests outside its scope. Which feature should it use?')},`,
+    `   ${k('choices')}: [${s('Amazon Bedrock Guardrails')}, ${s('Amazon Comprehend')}, ${s('Amazon Kendra')}, ${s('Amazon SageMaker Clarify')}],`,
+    `   ${k('answers')}: [${n(0)}],`,
+    `   ${k('explanation')}: ${s('Guardrails applies denied topics to the prompts and to the answers.')},`,
+    `   ${k('why_wrong')}: [${s('')}, ${s('Comprehend analyzes text; it does not block an assistant.')}, …],`,
+    `   ${k('reference')}: ${s('Amazon Bedrock User Guide, Guardrails')}},`,
+    `  {${k('domain')}: ${n(1)}, ${k('task')}: ${s('1.2')}, …`,
+  ].join('\n');
+  const pointer = '<svg class="cc-ptr" viewBox="0 0 20 24" aria-hidden="true"><path d="M2 2v17l4.5-4.2 3 6.7 3-1.4-3-6.6H16z" fill="#FFFFFF" stroke="#1F2328" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  return '<div class="cat-chat"><div class="cc-bar"><i></i><i></i><i></i><span>Your assistant · any of them</span></div><div class="cc-body">'
+    + '<div class="cc-me">You write practice questions for Tagnan, a quiz game that helps me prepare for the AWS Certified AI Practitioner (AIF-C01) certification. Everything you write is in English.<br><br>'
+    + 'Write 20 practice questions for the AIF-C01 exam: 17 medium single-answer questions and 3 medium multiple-answer… <em>(the whole prompt, pasted)</em></div>'
+    + '<div class="cc-it"><span>Here are 20 new questions, in the format you asked for:</span>'
+    + `<div class="cc-code"><span class="cc-lang">json</span><span class="cc-copy">Copy</span>${pointer}${code}</div></div>`
+    + '</div><div class="cc-field">Message your assistant…</div></div>';
+}
+
+// His setup's new first question (tagnan/setup_ui.py's look: a rail, ◇ done, ◆ asking).
+function setupTerm() {
+  const sp = (cls, t) => `<span class="${cls}">${esc(t)}</span>`;
+  const art = ['      .-~~-.   ,', '  ___/______\\_/__', '     ( o  o )  /', '     (  ~~  ) /', "      '-..-' /"];
+  const rail = sp('d', '│');
+  return `<div class="cat-term">${[
+    ...art.map(t => sp('a', t)),
+    '',
+    `${sp('d', '┌')}  ${sp('tag', ' Tagnan ')}  ${sp('d', 'guided setup')}`,
+    rail,
+    `${sp('g', '◇')}  WSL  ${sp('d', 'Ubuntu')}`,
+    `${sp('g', '◇')}  uv  ${sp('d', '0.9.4')}`,
+    rail,
+    `${sp('a', '◆')}  Who writes his questions?`,
+    `${rail}  ${sp('d', '○ Claude')}`,
+    `${rail}  ${sp('a', '● Nobody: catalogues  ')}${sp('d', 'questions you bring him, written by any assistant')}`,
+    sp('d', '└  ↑↓ choose · enter confirm'),
+  ].join('\n')}</div>`;
+}
+
+// --- Its documentation -----------------------------------------------------------------------------
+function catHowDoc() {
+  const step = (where, title, text) => `<div class="pipe-step"><span class="pipe-where">${where}</span><b>${title}</b><span>${text}</span></div>`;
+  return '<div class="eyebrow">Catalogues · Proposal · 25 November 2026</div><h2>Questions without a brain</h2>'
+    + '<p class="lead">Today Claude writes every question, through the Claude Code CLI and the learner’s own subscription: without a Claude licence, Tagnan has nothing to ask. A catalogue fills his satchel another way: questions written by any chat assistant, converted from a quiz one already has, or shared by a colleague. He checks them as he checks Claude’s, then asks them as usual.</p>'
+    + `<div class="pipe">${[
+      step('His menu', 'Write questions', 'Catalogues copies a prompt: the course and its chapters, the level of his rank, the topics asked lately.'),
+      step('Your assistant', 'ChatGPT, Gemini, Copilot…', 'Writes twenty questions, or converts twenty of a quiz you have, as one block of JSON. A free account will do.'),
+      step('You', 'Copy its answer', 'The Copy button of its code block takes it all.'),
+      step('His menu', 'Paste questions', 'He reads the clipboard and checks each question as he checks Claude’s: the same rules, the same reasons.'),
+      step('His satchel', 'Asked as usual', 'Calls, verdicts, reviews, points and ranks, as for the questions Claude writes.'),
+    ].join('<span class="pipe-arrow" aria-hidden="true"></span>')}</div>`
+    + '<div class="two"><div><h3>What it opens</h3><ul class="dl">'
+    + '<li><b>No licence at all.</b> The setup offers to go without a brain, first of all when Claude Code is missing.</li>'
+    + '<li><b>Any assistant.</b> The prompts are plain text; a free account writes twenty questions in a minute or two.</li>'
+    + '<li><b>The quizzes one has.</b> A PDF, a page, a test: the assistant converts them twenty at a time and writes what they lack.</li>'
+    + '<li><b>A colleague’s questions.</b> Export writes yours to Downloads, course and all; Import a file… takes theirs.</li>'
+    + '</ul></div><div><h3>What still needs a brain</h3><ul class="dl">'
+    + '<li><b>Questions as you go.</b> Without one, the satchel empties: he says so once, and the reviews go on.</li>'
+    + '<li><b>Tell me more.</b> Becomes Ask your assistant: the question is copied for it.</li>'
+    + '<li><b>The study sheet.</b> Not offered without a brain.</li>'
+    + '<li><b>A corner in your own words.</b> Nothing writes questions on it: the chapters remain.</li>'
+    + '<li><b>A new course from a few words.</b> Its prompt goes to your assistant.</li>'
+    + '</ul></div></div>'
+    + '<div class="howto"><span><b>Later, in lot 2.</b> Another brain through its own CLI and the learner’s own login, as for Claude: OpenAI’s Codex for a ChatGPT account, Google’s Antigravity for a Google one. And Import a file… through that brain: a PDF read by it, with no copying and pasting.</span></div>'
+    + '<div class="src"><span>tagnan/ui/menu.py, TagnanMenu.qml: the Catalogues row and its list</span><span>tagnan/ui/controller.py: paste, import, export</span><span>tagnan/catalogue.py (new): the format, its checks, the prompts</span><span>tagnan/setup.py: Nobody</span></div>';
+}
+
+function catChoicesDoc() {
+  const dec = (n, title, a, b) => `<div class="cat-dec"><h4><i>${n}</i>${title}</h4>`
+    + `<div class="cat-opt is-pick"><b>A · ${a[0]}<span class="pick">recommended</span></b><span>${a[1]}</span></div>`
+    + `<div class="cat-opt"><b>B · ${b[0]}</b><span>${b[1]}</span></div></div>`;
+  return '<div class="eyebrow">Catalogues · Proposal · Choices</div><h2>What to choose</h2>'
+    + '<p class="lead">Five things are open. The recommended ones are drawn in this page’s frames; the first B is drawn beside its A, in his menu’s section.</p>'
+    + dec('1', 'Where it lives in his menu',
+      ['Its own row, its list beside', 'Under Questions by, where his questions come from. Paste, import and export act at once; the two prompts are copied. Typed too: “paste”, “import”, “export”, “prompt”.'],
+      ['A line in Subject…', 'No new row, but Subject… grows taller, and exporting one’s questions has little to do with choosing what to learn.'])
+    + dec('2', 'Going without a brain',
+      ['Nobody, in Who writes his questions?', 'Offered by the setup before Claude Code, and in his menu’s list beside the Claude models: one can change one’s mind as a licence comes or goes.'],
+      ['At setup only', 'One place fewer, but a colleague who loses a licence must run the setup again.'])
+    + dec('3', 'Tell me more, without a brain',
+      ['Ask your assistant', 'Copies the question, the right answer and the one given, as Tell me more’s prompt says them: the assistant explains in its own chat.'],
+      ['No button', 'Simpler, but a missed question loses its longer explanation.'])
+    + dec('4', 'Questions converted from a quiz',
+      ['Marked by the prompt, never exported', 'The convert prompt marks them converted: they stay with the learner, and an export says how many it left out.'],
+      ['Asked at each paste', '“Where do these come from?”: one more click each time, and as easy to answer wrong.'])
+    + dec('5', 'An answer cut off',
+      ['The whole questions kept', 'Those before the cut are kept, and he says how many; “next” in the assistant’s chat brings the rest.'],
+      ['Refused whole', 'Simpler to explain; fourteen good questions lost for one cut short.']);
+}
+
+const CAT_EXAMPLE = `{
+  "tagnan": 1,
+  "course": "aif-c01",
+  "origin": "written",
+  "questions": [
+    {
+      "domain": 3, "task": "3.1",
+      "topic": "Bedrock Guardrails, denied topics",
+      "difficulty": "medium", "kind": "single",
+      "stem": "A team wants its assistant built on Amazon Bedrock to refuse requests outside its scope. Which feature should it use?",
+      "choices": ["Amazon Bedrock Guardrails", "Amazon Comprehend", "Amazon Kendra", "Amazon SageMaker Clarify"],
+      "answers": [0],
+      "explanation": "Guardrails applies denied topics to the prompts and to the answers.",
+      "why_wrong": ["", "Comprehend analyzes text; it does not block an assistant.", "Kendra is a search engine.", "Clarify measures a model's bias."],
+      "reference": "Amazon Bedrock User Guide, Guardrails"
+    }
+  ]
+}`;
+const CAT_FIELDS = [
+  ['tagnan', 'His format, and its version', '1'],
+  ['course', 'A course he knows, by its key; or a new one, whole: its name, chapters and topics, as his brain draws them up', '"aif-c01"'],
+  ['origin', 'Who wrote them: written, by you, an assistant or his brain; or converted from a quiz', '"written"'],
+  ['left_out', 'What the assistant could not convert, and why', 'optional'],
+  ['questions', 'As his brain writes them, field for field', '1 to 200'],
+];
+function catFormatDoc() {
+  const rule = (colour, title, items) => `<div class="rule"><h4><i style="background:${colour}"></i>${title}</h4><ul>${items.map(x => `<li>${x}</li>`).join('')}</ul></div>`;
+  return '<div class="eyebrow">Catalogues · Proposal · The format</div><h2>A catalogue</h2>'
+    + '<p class="lead">One JSON object: the course its questions belong to, where they come from, and the questions in the very shape his brain gives him today. Pasted or in a file, with or without the code block around it.</p>'
+    + `<div class="two"><div><h3>An example, one question long</h3><pre class="cat-code">${esc(CAT_EXAMPLE)}</pre></div>`
+    + `<div><h3>What it holds</h3><table class="ftab cat-fields"><tbody>${CAT_FIELDS.map(([k, v, x]) => `<tr><td><code>${k}</code></td><td>${v}</td><td>${esc(x)}</td></tr>`).join('')}</tbody></table>`
+    + '<p class="small">A question holds its chapter (<code>domain</code>) and topic (<code>task</code>), a few words on what it tests, its level and kind, its stem, four to six choices, the right ones, why they fit, why each other one does not, and what to read again.</p></div></div>'
+    + '<h3>What he checks, as for Claude’s questions</h3><div class="rules4">'
+    + rule('#3B82F6', 'Its course', ['A chapter and a topic of the course', 'A kind the course allows: several answers only where it has them'])
+    + rule('#8B6CF0', 'Its choices', ['Four to six, none twice', 'One right answer; two or three for a multiple-answer question'])
+    + rule('#F0A92E', 'Its words', ['A stem of 900 characters at most', 'Why the right answer fits; why each other choice does not'])
+    + rule('#16A374', 'Already known', ['The same stem in the same course: skipped, and counted', 'A question once reported: never back'])
+    + '</div><p class="small">A question that fails is set aside with its reason, said plainly in his report; the others are kept. Questions converted from a quiz stay with the learner: an export leaves them out. A catalogue holds questions one wrote or had written: never real exam questions.</p>'
+    + '<div class="src"><span>tagnan/model.py: parse_question, the checks</span><span>tagnan/game.py: add_batch</span><span>tagnan/catalogue.py (new)</span></div>';
+}
+
+function catPromptsDoc() {
+  const block = (title, where, text) => `<div><h4>${title} <span>· ${where}</span></h4><pre class="cat-code">${text}</pre></div>`;
+  const t = s => esc(s), e = s => `<em>${esc(s)}</em>`;
+  return '<div class="eyebrow">Catalogues · Proposal · The prompts</div><h2>What he copies for your assistant</h2>'
+    + '<p class="lead">Plain text, built from his brain’s own prompts, so that any assistant writes as Claude does for him: the course with its chapters and their notions, the level of his rank, the topics asked lately, then the exact shape of the answer. In English, as he speaks.</p>'
+    + '<div class="cat-prompts">'
+    + block('Write questions', 'his menu, Catalogues',
+      t('You write practice questions for Tagnan, a quiz game that helps me prepare for the AWS Certified AI Practitioner (AIF-C01) certification. Everything you write is in English.\n\nWrite 20 practice questions for the AIF-C01 exam: 17 medium single-answer questions and 3 medium multiple-answer questions, spread over the domains below.\n\n')
+      + e('[The exam’s five domains, their tasks and each task’s notions.]\n[How to write each question, word for word as his brain is told.]\n\n')
+      + t('These notions were asked recently: choose others.\n') + e('[The last sixty topics.]\n\n')
+      + t('Answer with one JSON object only, in a single code block, shaped exactly like this:\n{"tagnan": 1, "course": "aif-c01", "origin": "written", "questions": [ … ]}'))
+    + block('Convert a quiz', 'his menu, Catalogues',
+      t('I prepare for the AWS Certified AI Practitioner (AIF-C01) exam with Tagnan, a quiz game. After this message I give you a quiz I have: its text, or a file. Turn its questions into Tagnan’s format. Everything you write is in English.\n\nFor each question of the quiz:\n- keep its stem, its choices and the right answers it gives; if it has fewer than four choices, add plausible wrong ones;\n- if the quiz gives no right answer and you are not sure of one, leave the question out, and say why in "left_out";\n- write what the quiz lacks: why the right answers fit, why each other choice does not, the AWS document to read again;\n- give it the exam’s domain and task:\n')
+      + e('[The exam’s five domains and their tasks.]\n\n')
+      + t('Convert 20 questions at most, in the quiz’s order. If there are more, I will say “next”.\n\nAnswer with one JSON object only, in a single code block, shaped exactly like this:\n{"tagnan": 1, "course": "aif-c01", "origin": "converted", "left_out": [{"number": 7, "why": "…"}], "questions": [ … ]}'))
+    + block('Learn something new', 'Subject…, without a brain',
+      t('I want to learn pottery with Tagnan, a quiz game. Draw up a course on it, as a good teacher would plan one for an adult: four to six chapters, from foundations to finer points, each with two to four topics and the notions each covers. Then write its first 20 questions. Everything you write is in English.\n\n')
+      + e('[How a course is laid out, and how to write each question, as his brain is told.]\n\n')
+      + t('Answer with one JSON object only, in a single code block, shaped exactly like this:\n{"tagnan": 1, "course": {"code": "Pottery", "name": "…", "exam": false, "domains": [ … ]}, "origin": "written", "questions": [ … ]}'))
+    + block('Ask your assistant', 'a verdict, without a brain',
+      t('Someone learning AWS Certified AI Practitioner (AIF-C01) got this question wrong.\n\nQuestion: A support team wants a chatbot that answers from its internal runbooks, which change every week, without retraining a model. Which approach fits best?\n\nChoices:\nA. Fine-tune a foundation model on the runbooks every week\nB. Retrieval Augmented Generation with Amazon Bedrock Knowledge Bases\n')
+      + e('[C and D.]\n') + t('\nRight answer: B\nAnswer given: A\n\nExplanation already shown: Knowledge Bases index the runbooks and the model reads the relevant passages at query time…\n\n')
+      + e('[Then what Tell me more asks his brain, word for word.]'))
+    + '</div><p class="small">Twenty at a time: past that, an assistant often cuts its answer short. Each prompt carries the course itself, so that the questions fit its chapters wherever they were written.</p>'
+    + '<div class="src"><span>tagnan/prompts/system.md, generate.md, plan.md, explain.md: reused</span><span>tagnan/prompts/catalogue-*.md (new)</span></div>';
+}
+// --- end of the catalogues ------------------------------------------------------------------------
 // --- Pages -----------------------------------------------------------------------------------------
 function coverHtml() {
   return `<div class="cover"><div class="cv-top"><span class="cv-mark">${tagIcon(5, 32)}</span><span class="cv-eyebrow">Tagnan · Interface design</span><span class="cv-date">Updated 25 November 2026</span></div>`
@@ -3048,7 +3361,8 @@ const SHEET_FIELDS = [
 // A verdict's row (Bubble.qml): Continue or Got it, Tell me more, and the sheet once proposed.
 function verdictBar(c, u, L, m) {
   const buttons = [action(c.correct ? 'Continue' : 'Got it', { primary: true, act: L && 'dismiss' })];
-  if (m === 'result' && !c.correct) buttons.push(action('Tell me more', { act: L && 'more', hover: u.moreHover }));
+  if (m === 'result' && !c.correct) buttons.push(c.more === 'copied' ? '<span class="b-thinking">Copied: paste it into your assistant</span>'
+    : action(c.more || 'Tell me more', { act: L && 'more', hover: u.moreHover }));
   if (m === 'thinking') buttons.push(`<span class="b-thinking">Tagnan is thinking${'.'.repeat(u.dots || 3)}</span>`);
   const asLink = c.sheetAt === 'link';
   if (m === 'result' && c.sheet && !asLink) buttons.push(sheetButton(c, u, L));
@@ -3694,6 +4008,83 @@ const PAGES = [
       ] }],
     ],
   },
+  // Catalogues (proposal).
+  {
+    id: 'catalogues', name: 'Catalogues', blurb: 'Without a Claude licence: questions written by any chat assistant, converted from a quiz or shared by a colleague, pasted or imported; and a Tagnan who needs no brain (proposal).',
+    desc: 'Lot 1 of “Tagnan without a Claude licence”, proposed on 25 November 2026: nothing on this page is built.',
+    rows: [
+      [{ id: 's-cat-why', name: 'Catalogues · the idea, and what to choose (proposal)', desc: 'Questions that need no brain: any chat assistant writes them from a prompt he copies, or converts a quiz one has; a colleague shares theirs. He checks them as he checks Claude’s. Five things are open, each with a recommended answer.', frames: [
+        docFrame('cat-how', 'Questions without a brain', catHowDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: SRC_CAT }),
+        docFrame('cat-choices', 'What to choose', catChoicesDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: SRC_CAT }),
+      ] }],
+      [{ id: 's-cat-menu', name: 'In his menu', desc: 'Where catalogues come in and go out: a row of its own under Questions by (A), or a line at the foot of Subject… (B).', frames: [
+        menuShot('cat-menu', 'A · a Catalogues row, its list beside (recommended)', MENU_CAT, { current: CAT_ROW, sub: 'catalogues', subRow: CAT_ROW }, {
+          cap: 'A · Paste, import, export, and two prompts for one’s assistant.',
+          notes: ['A row under Questions by, where his questions come from; its list opens beside it, as How often’s does.', 'Paste, import and export act at once; the two prompts are copied to the clipboard.', 'Its value, without a brain: how many new questions are left.'] }),
+        shot('cat-menu-b', 'B · a line in Subject… (not recommended)', SUBJECT_CAT_B, {
+          cap: 'B · The same actions, at the foot of Subject….',
+          notes: ['No new row in his menu: four buttons under the course’s chapters.', 'Subject… already fills its 590 px with the exam’s chapters: the line falls below the fold, to scroll to.', 'And exporting one’s questions has little to do with choosing what to learn.'] }),
+        menuShot('cat-typed', 'Typed · catalogue', MENU_CAT, { typed: 'catalogue', suggestions: SUGGEST_CAT, current: 0 }, {
+          notes: ['“catalogue”, “paste”, “import”, “export”, “prompt”: each finds its action, as “break 45” finds a break.'] }),
+      ] }],
+      [{ id: 's-cat-flow', name: 'From an assistant', desc: 'Twenty questions written by any chat assistant: a prompt copied from his menu, the assistant’s answer copied back, then pasted. What he says when all goes well, and when it does not.', grid: { cols: 4, gap: [120, 200] },
+        links: [['cf-prompt', 'cf-copied', 'Write questions'], ['cf-copied', 'cf-assistant', 'paste the prompt there'], ['cf-assistant', 'cf-pasted', 'Copy, then Paste questions'],
+          ['cf-assistant', 'cf-nothing', 'not its answer'], ['cf-assistant', 'cf-cut', 'its answer cut short'], ['cf-assistant', 'cf-partial', 'some fail his checks'], ['cf-assistant', 'cf-course', 'a course of its own']],
+        frames: [
+          menuShot('cf-prompt', 'Write questions', MENU_CAT, { current: CAT_ROW, sub: 'catalogues', subRow: CAT_ROW, subCurrent: 3 }, { cell: [1, 1],
+            notes: ['The pointer on Write questions.', 'Its hint names the course and the batch: the prompt carries both.'] }),
+          shot('cf-copied', 'Over to your assistant', MSG_CAT.copied, { expr: 'wink', cell: [2, 1],
+            notes: ['In the clipboard: the course, its chapters and their notions, the level of his rank (medium for a Cadet), the topics asked lately, the shape of the answer.', 'Paste questions waits here for one’s return; his menu has it too.', '12 s, unless the pointer rests on it.'] }),
+          { id: 'cf-assistant', name: 'Your assistant', kind: 'Elsewhere · any chat assistant', mode: 'none', html: assistantChat, cell: [3, 1], src: ['tagnan/catalogue.py (new): the prompts'],
+            notes: ['Any chat assistant: ChatGPT, Gemini, Copilot; a free account will do. Drawn here as none of them.', 'It answers with one block of JSON; the Copy button of its code block takes it all.', 'Tagnan reads only what one copies: he never goes to a site.'] },
+          shot('cf-pasted', 'Fresh ink!', MSG_CAT.pasted, { expr: 'happy', cell: [4, 1],
+            notes: ['He reads the clipboard: the JSON, with or without the code block’s fences and the words around it.', 'Each question checked as Claude’s are; the same stem already in the course is skipped, and counted.', 'A question now asks the first; otherwise they come at his next calls.'] }),
+          shot('cf-nothing', 'Nothing to read', MSG_CAT.nothing, { expr: 'annoyed', cell: [1, 2],
+            notes: ['No JSON object in the clipboard, or not his.', 'Nothing is kept; Paste questions is in his menu for the next try.'] }),
+          shot('cf-cut', 'Cut short!', MSG_CAT.cut, { expr: 'annoyed', cell: [2, 2],
+            notes: ['An answer too long for the assistant stops mid-question: the whole questions before the cut are kept.', 'Twenty a batch keeps this rare; “next” asks the assistant for the rest.'] }),
+          shot('cf-partial', 'Fresh ink, mostly', MSG_CAT.partial, { cell: [3, 2],
+            notes: ['The reasons are his checks’ own, said plainly: up to three, then “and 2 more”.', 'The others are kept: one bad question never costs the batch.'] }),
+          shot('cf-course', 'A new course!', MSG_CAT.course, { expr: 'happy', cell: [4, 2],
+            notes: ['A catalogue that brings its own course: from the prompt for something new, or from a colleague.', 'Later keeps it among his courses, in Subject…; the course learned now goes on.'] }),
+        ] }],
+      [{ id: 's-cat-more', name: 'A quiz one has, a colleague’s catalogue', desc: 'A PDF, a page, a test one already has: the assistant converts it twenty questions at a time. And one’s questions, exported for a colleague who has no licence, imported from a file.', frames: [
+        shot('cv-copied', 'Convert a quiz', MSG_CAT.convert, { expr: 'wink',
+          notes: ['The quiz goes into the assistant after the prompt: its text, or the file if the assistant takes files.', 'Twenty at a time; “next” in the assistant’s chat gives the next twenty, pasted the same way.', 'The reminder each time: real exam questions are forbidden by the certification’s rules, and can cost it.'] }),
+        shot('cv-pasted', 'Converted', MSG_CAT.converted, { expr: 'happy',
+          notes: ['The prompt marks them converted: they stay with this learner, and an export leaves them out.', 'The assistant lists the questions it left out, and why; he passes it on.'] }),
+        shot('cx-export', 'Export my questions', MSG_CAT.exported, { expr: 'happy',
+          notes: ['The course and its questions, in his format, in Downloads: named after the course’s code, never over another file.', 'Left out: the questions converted from quizzes, and those reported as wrong.', 'Show in folder: Explorer, the file selected (Finder on a Mac).'] }),
+        shot('cx-imported', 'Import a file…', MSG_CAT.imported, { expr: 'happy',
+          notes: ['Import a file…: the system’s Open dialog, in Downloads, on .json files.', 'The same checks and the same report as a paste; the questions already known are skipped.'] }),
+      ] }],
+      [{ id: 's-cat-none', name: 'Without a brain', desc: 'For whoever has no Claude licence: Nobody writes his questions. He asks those of the catalogues he is given, and leaves out what only a brain can do.', frames: [
+        { id: 'nb-setup', name: 'Setup · who writes his questions', kind: 'Terminal · scripts/setup', mode: 'none', html: setupTerm, src: ['tagnan/setup.py', 'tagnan/setup_ui.py'],
+          notes: ['A new first question, before Claude Code: who writes his questions.', 'Claude, as today, says what it needs when it has the focus: Claude Code and a Claude subscription.', 'Nobody skips Claude Code, its sign-in, the model and the trial.'] },
+        shot('nb-hello', 'His first words', MSG_CAT.hello, {
+          notes: ['Instead of “I’m writing my first questions”.', 'Copy the prompt: the prompt to write questions. Import a file…: a colleague’s catalogue.', 'Until a catalogue comes, he stays quiet: no call, nothing to ask.'] }),
+        menuShot('nb-menu', 'His menu', MENU_NOBRAIN, { current: -1 }, {
+          notes: ['Questions by: your catalogues. Catalogues: how many new questions are left.', 'At the foot, instead of the Claude account: catalogues only, no licence used.', 'Everything else as with a brain: pace, hours, sound, breaks.'] }),
+        menuShot('nb-who', 'Who writes his questions?', MENU_NOBRAIN, { current: MODEL_ROW, sub: 'model', subRow: MODEL_ROW }, {
+          notes: ['Nobody: catalogues, beside the Claude models: his menu’s choice as well as the setup’s.', 'A model chosen again needs Claude Code signed in; otherwise he says so and keeps to catalogues.'] }),
+        shot('nb-wrong', 'A wrong answer', R_WRONG_NOBRAIN, { expr: 'angry',
+          notes: ['No Tell me more and no Study sheet: they need a brain.', 'Ask your assistant copies the question, the right answer and the one given, as Tell me more’s prompt says them.', 'Report as ever: the question is dropped for good.'] }),
+        shot('nb-asked', 'Ask your assistant', R_WRONG_ASKED, {
+          notes: ['Copied: in italics, where the button was, as “Tagnan is thinking”.', 'The bubble closes as a verdict does; the assistant explains in its own chat.'] }),
+        shot('nb-empty', 'My satchel is empty', MSG_CAT.empty, {
+          notes: ['Once, when the last new question has been asked.', 'Reviews go on as planned: a question missed comes back the next day, then after 3, 7 and 21 days.', 'A question now, meanwhile: a review if one is due, else this.'] }),
+        shot('nb-subject', 'Subject…', SUBJECT_NOBRAIN, { ui: { course: 'pottery', coursePreview: { ok: true, text: 'Pottery: I’ll copy the prompt that draws up the course, for your assistant.' } },
+          notes: ['Learn something else stays: its prompt goes to the assistant.', 'A corner in your own words goes: without a brain, nothing writes questions on it. The chapters stay.'] }),
+        shot('nb-learn', 'Learn something new', MSG_CAT.learn, { expr: 'wink',
+          notes: ['The prompt draws up a course on pottery and writes its first twenty questions.', 'Its answer, pasted, brings the course: “A new course!”.'] }),
+      ] }],
+      [{ id: 's-cat-docs', name: 'The format and the prompts', desc: 'What a catalogue holds and what he checks in it; the prompts he copies for one’s assistant.', frames: [
+        docFrame('cat-format', 'A catalogue', catFormatDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: ['tagnan/model.py', 'tagnan/game.py', 'tagnan/catalogue.py (new)'] }),
+        docFrame('cat-prompts', 'The prompts', catPromptsDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: ['tagnan/prompts', 'tagnan/catalogue.py (new)'] }),
+      ] }],
+    ],
+  },
+  // end of the catalogues
 ];
 
 /* The editor around the frames: pages, layers, a canvas to pan and zoom, the inspector. */

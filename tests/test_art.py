@@ -186,12 +186,12 @@ def test_the_quill_fell_with_the_inkwell_onto_the_spilt_ink() -> None:
     assert y > art.PUDDLE.cy - art.PUDDLE.ry - 1
 
 
-@pytest.mark.parametrize("stage", [1, 2])
-def test_the_gascon_and_cadet_drops_are_finished(stage: int) -> None:
+@pytest.mark.parametrize("stage", [1, 2, 3])
+def test_the_gascon_cadet_and_musketeer_drops_are_finished(stage: int) -> None:
     spec = art.figure(stage)
     assert len(spec["dropShades"]) == len(spec["dropLights"]) == len(spec["drops"])
     assert all(d.startswith("M") and d.endswith("Z") for d in spec["dropShades"])
-    assert not art.figure(3)["dropShades"]
+    assert not art.figure(4)["dropShades"]
     assert not art.figure(0)["dropLights"]
 
 
@@ -229,7 +229,7 @@ def test_the_cadet_hat_rides_his_ripple_around_its_rest() -> None:
     assert abs(sum(a for _, a in rides)) < 1e-2
     assert 0.5 < max(abs(y) for y, _ in rides) < 3
     assert 1 < max(abs(a) for _, a in rides) < 6  # damped: it rides, it does not wobble
-    assert art.hat_ride(3, 1.0) == (0.0, 0.0)
+    assert art.hat_ride(4, 1.0) == (0.0, 0.0)
     assert art.figure(2)["underHat"] < art.CADET_HAT[1]
     assert art.figure(3)["underHat"] < 0
 
@@ -248,7 +248,8 @@ def test_the_cadet_inkwell_is_split_at_the_desk_its_quill_still_in_it() -> None:
     assert all(abs(y - dip[1]) < 6 for x, y in (art.sunk_point(*p) for p in _pairs(paths)))
     assert tip[0] > dip[0]  # out through the mouth, level with the desk
     assert {"tails", "front"} <= set(art.layer_names(2))
-    assert not {"tails", "front"} & set(art.layer_names(3))
+    assert "front" not in art.layer_names(3)
+    assert not {"tails", "front"} & set(art.layer_names(4))
 
 
 def _pairs(paths: list[str]) -> list[tuple[float, float]]:
@@ -262,3 +263,139 @@ def test_the_cadet_icon_hat_is_redrawn_to_read_small() -> None:
     assert art.FELT_SHADE not in svg  # none of the figure's fine shading
     assert art.CREAM_SHADE not in svg
     assert art.cadet_hat() not in svg
+
+
+# --- The Musketeer (grade 3): his ink takes a man's shape --------------------------------------
+
+
+def test_the_musketeer_body_is_fluid_below_only() -> None:
+    body = art.MUSKETEER_BODY
+    rests = art.fluid_points(body, 0.0)
+    for phase in (1.0, 2.5, 4.0):
+        points = art.fluid_points(body, phase)
+        moved = []
+        for i, ((x, y), (x0, y0)) in enumerate(zip(points, rests, strict=True)):
+            s = math.sin(-math.pi / 2 + 2 * math.pi * i / body.points)
+            if s <= art.MUSKETEER_FLUID[0]:  # his shoulders stay put
+                assert (x, y) == pytest.approx((x0, y0))
+            else:
+                moved.append(math.dist((x, y), (x0, y0)))
+        assert max(moved) > 0.5  # his bottom ripples
+    dragged = art.fluid_points(body, 0.0, 3.0)
+    drops = [y - y0 for (_, y), (_, y0) in zip(dragged, rests, strict=True)]
+    assert min(drops) == pytest.approx(0.0)
+    assert max(drops) == pytest.approx(3.0)  # a hop's trail pulls his bottom down
+    assert art.blob_path(3, 0.0) == art.body_path(0.0)
+
+
+def test_the_musketeer_head_and_body_are_lit_and_shaded() -> None:
+    for shading, blob in (
+        (art.head_shading(1.0), art.MUSKETEER_HEAD),
+        (art.body_shading(1.0), art.MUSKETEER_BODY),
+    ):
+        assert set(shading) == {"shade", "light", "rim"}
+        assert all(d.startswith("M") and d.endswith("Z") for d in shading.values())
+        shade = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", shading["shade"])]
+        light = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", shading["light"])]
+        assert sum(shade[0::2]) / len(shade[0::2]) > blob.cx  # shaded on his right
+        assert sum(light[0::2]) / len(light[0::2]) < blob.cx  # lit on his left
+    assert art.ink_shading(3, 1.0) == art.body_shading(1.0)
+    assert art.figure(3)["shadeOffset"] == [0.0, 0.0]
+
+
+def test_the_musketeer_drips_hang_from_his_trailing_body() -> None:
+    spec = art.figure(3)
+    assert spec["dripsUnder"]
+    assert [spec["staticDrips"][0][1], spec["drip"][1]] == art.drip_tops(3, 0.0)
+    assert art.drip_tops(3, 1.0) != art.drip_tops(3, 0.0)
+    rest, dragged = art.drip_tops(3, 0.0), art.drip_tops(3, 0.0, 2.0)
+    assert all(d > r + 1 for r, d in zip(rest, dragged, strict=True))
+
+
+def test_the_musketeer_floats_over_his_puddle_and_his_drip_lands_on_it() -> None:
+    spec = art.figure(3)
+    samples = art.curve_samples(art.fluid_points(art.MUSKETEER_BODY, 0.0))
+    lowest = max(y for _, y in samples) - spec["lift"]
+    puddle = art.MUSKETEER_PUDDLE
+    assert lowest < puddle.cy - puddle.ry - 1
+    assert spec["landing"] == puddle.cy
+    assert spec["man"]
+    assert not art.figure(2)["man"]
+    assert not art.figure(4)["man"]
+
+
+def test_the_musketeer_hat_rides_his_head_around_its_rest() -> None:
+    rides = [art.hat_ride(3, 2 * math.pi * k / art.RIDE_PHASES) for k in range(art.RIDE_PHASES)]
+    assert abs(sum(y for y, _ in rides)) < 1e-2
+    assert abs(sum(a for _, a in rides)) < 1e-2
+    assert 0.1 < max(abs(y) for y, _ in rides) < 2
+    assert max(abs(a) for _, a in rides) < 3
+    assert art.figure(3)["underHat"] < 0  # nothing to clip: his head stays under his felt
+
+
+def test_the_musketeer_arms_bend_at_the_elbow_with_a_cuff_and_a_hand() -> None:
+    shoulder, elbow, hand = art.SHOULDERS[0], *art.ARMS["idle"][0]
+    parts = art.arm_parts(shoulder, elbow, hand)
+    numbers = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", parts["sleeve"])]
+    assert numbers[:2] == pytest.approx(list(shoulder), abs=0.01)
+    assert numbers[-2:] == pytest.approx(list(hand), abs=0.01)
+    cuff = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", parts["cuff"])]
+    a, b = cuff[:2], cuff[-2:]
+    assert math.dist(a, hand) > math.dist(b, hand)  # towards the hand, short of it
+    assert math.dist(b, hand) < 2 * art.ARM_WIDTH
+    assert len(parts["lace"]) == 3
+    assert all(math.dist(p, b) < 3.5 for p in parts["lace"])
+    assert parts["hand"] == list(hand)
+    assert parts["handShade"].startswith("M")
+
+
+def test_the_musketeer_arms_take_each_mood() -> None:
+    assert set(art.ARMS) == set(art.EXPRESSIONS)
+    (_, shoulder_y), _ = art.SHOULDERS
+    for mood in ("happy", "ask"):
+        assert min(hand[1] for _, hand in art.ARMS[mood]) < shoulder_y - 10  # a hand up
+    (_, right), (_, left) = art.ARMS["annoyed"]
+    assert abs(right[0] - 60) < 6
+    assert abs(left[0] - 60) < 6  # arms crossed on his chest
+    for mood in art.EXPRESSIONS:
+        assert art.arms(mood).count(f'fill="{art.CREAM}"') >= 6  # cuffs' lace
+
+
+def test_the_musketeer_is_dressed_between_his_body_and_his_head() -> None:
+    svg = art.still_svg(3)
+    body, head = art.body_path(0.0), art.head_path(0.0)
+    order = [
+        svg.index(f'd="{body}" fill="{art.INK}"'),
+        svg.index(art.BAND_BLUE),  # the tabard
+        svg.index(art.felt_tails()),
+        svg.index(f'd="{head}" fill="{art.INK}"'),
+        svg.index(art.arms("idle")),
+        svg.index(art.felt_hat()),
+        svg.index(art.felt_quill()),
+        svg.index(art.felt_front()),
+    ]
+    assert order == sorted(order)
+    assert art.STEEL in art.felt_front()  # a steel button at his bow
+    assert art.quill(*art.QUILL_STANDING) in art.felt_quill()  # the inkwell's own quill
+
+
+def test_the_musketeer_layers() -> None:
+    names = art.layer_names(3)
+    assert {"ground", "tails", "cross", "collar", "plume", "hat", "bow"} <= set(names)
+    assert not {"moustache", "rapier", "front"} & set(names)
+    assert not {"collar", "bow"} & set(art.layer_names(2) + art.layer_names(4))
+    assert art.layer_body(3, "cross") == art.tabard()
+    assert art.layer_body(3, "plume") == art.felt_quill()
+    assert art.layer_body(3, "ground") == art._puddle(art.MUSKETEER_PUDDLE)
+
+
+def test_the_musketeer_droplets_leave_his_head_upwards_and_his_body_below() -> None:
+    head, body = art.MUSKETEER_HEAD, art.MUSKETEER_BODY
+    droplets = art.burst(3)
+    assert len(droplets) == 8
+    for d in droplets:
+        on_head = math.hypot((d.x - head.cx) / head.rx, (d.y - head.cy) / head.ry)
+        on_body = math.hypot((d.x - body.cx) / body.rx, (d.y - body.cy) / body.ry)
+        assert min(on_head, on_body) == pytest.approx(0.9, abs=0.01)
+        if d.dy < 0:
+            assert on_head == pytest.approx(0.9, abs=0.01)

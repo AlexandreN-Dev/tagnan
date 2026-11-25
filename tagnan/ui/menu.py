@@ -61,6 +61,8 @@ SMALL_WORDS = ("minimize", "minimise", "small", "smaller", "tiny", "mini", "shri
 FULL_WORDS = ("full size", "big", "bigger", "grow", "normal size", "maximize", "maximise")
 # Catalogues (tagnan.catalogue), typed: (action, label, words); "catalogue" finds them all.
 CATALOGUE_WORDS = ("catalogue", "catalogues", "catalog", "catalogs")
+NOBODY_WORDS = ("nobody", "no brain", "no claude", "catalogues only", "without claude")
+NOBODY_HINT = "no Claude licence needed"
 CATALOGUE_COMMANDS = (
     ("paste", "Paste questions", ("paste", "paste questions", "clipboard")),
     ("import", "Import a catalogue…", ("import", "import a catalogue", "open a catalogue")),
@@ -180,6 +182,7 @@ class Menu(QObject):
         pace = rhythm.pace
         call = dict(calls.CALLS).get(str(c.call), "Silent")
         model = configs.find_model(str(c.model))
+        brainless = bool(c.brainless)
         return {
             "stage": s["grade"],
             "grade": s["grade_name"],
@@ -207,16 +210,19 @@ class Menu(QObject):
             "calls": [{"key": k, "name": name} for k, name in calls.CALLS]
             + [{"key": calls.SILENT, "name": "Silent"}],
             # A model of one's own in the config file: its name as written there.
-            "model": model.name if model else str(c.model),
+            "model": "Your catalogues" if brainless else model.name if model else str(c.model),
             "modelKey": str(c.model),
             "theme": str(c.theme),
-            "models": [{"key": m.model, "name": m.label, "hint": m.hint} for m in configs.MODELS],
+            "models": [{"key": m.model, "name": m.label, "hint": m.hint} for m in configs.MODELS]
+            + [{"key": configs.NOBODY, "name": "Nobody: catalogues", "hint": NOBODY_HINT}],
+            # Nobody writes his questions: no Claude account at the foot, but what he runs on.
+            "brainless": brainless,
             # His Update & Restart row (tagnan/ui/updater.py), None without updates.
             "update": self._updater.row() if self._updater else None,
             # Whose Claude login writes his questions, at the foot of the menu; None: not known.
             "account": c.worker.account,
             # Catalogues: its row's value, and its list beside: actions, then the prompts.
-            "catalogues": "",
+            "catalogues": f"{s['fresh']} new" if brainless else "",
             "catalogueList": self._catalogue_list(bp),
             # A study sheet on its way: a busy row, as Update's.
             "sheet": "a minute or two" if c.inking() else "",
@@ -279,7 +285,8 @@ class Menu(QObject):
         self._shown = True
         if self._updater is not None:
             self._updater.look_here()  # a commit of one's own since he started lights Update
-        self._controller.worker.look_up_account()  # signed in as someone else since? say so
+        if not self._controller.brainless:
+            self._controller.worker.look_up_account()  # signed in as someone else? say so
         self._layout()
         self.changed.emit()
 
@@ -402,6 +409,8 @@ class Menu(QObject):
         for m in configs.MODELS:
             if everything or m.name.casefold().startswith(folded):
                 add(f"Questions by {m.name}", f"model:{m.model}", m.hint)
+        if everything or (len(folded) > 2 and any(w.startswith(folded) for w in NOBODY_WORDS)):
+            add("Questions by nobody: catalogues", f"model:{configs.NOBODY}", NOBODY_HINT)
         return found[:MAX_SUGGESTIONS]
 
     # --- Running ------------------------------------------------------------------------------

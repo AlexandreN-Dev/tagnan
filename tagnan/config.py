@@ -35,6 +35,11 @@ MODELS = (
 )
 
 
+# Nobody writes his questions: he asks those of the catalogues he is given (tagnan.catalogue),
+# with no Claude licence. A model's place in the config file and in his menu's list.
+NOBODY = "none"
+
+
 def find_model(model: str) -> Model | None:
     return next((m for m in MODELS if m.model == model), None)
 

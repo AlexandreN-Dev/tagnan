@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from tagnan import art, catalogue, studysheet
+from tagnan import art, blueprint, catalogue, studysheet
 from tagnan.brain_client import BrainClient, BrainError
 from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
@@ -895,6 +895,118 @@ def test_his_menu_has_catalogues_beside_who_writes_his_questions(game: Game) -> 
     ]
 
 
+def test_without_a_brain_he_asks_his_catalogues_and_calls_none(game: Game) -> None:
+    files = FakeCatalogues()
+    clock = Clock()
+    controller, worker, _ = make(game, clock=clock, model="none", catalogues=files)
+    assert controller.property("brainless") is True
+    controller.start()
+    bubble = controller.property("bubble")
+    assert bubble["text"].startswith("No brain here to write my questions: bring me some.")
+    assert [b["action"] for b in bubble["buttons"]] == ["prompt:write", "import"]
+    assert worker.requests == []  # no brain is called, ever
+    controller.bubbleAction("prompt:write")
+    assert files.clipboard.startswith("You write the questions of Tagnan")
+    files.clipboard = catalogue_text(*numbered(2))
+    controller.pasteQuestions()
+    assert controller.scheduler.next_at == clock.now + 20  # the first question comes soon
+    assert worker.requests == []
+    # A wrong answer: no study sheet; Tell me more asks one's own assistant.
+    answered(controller)
+    bubble = controller.property("bubble")
+    assert (bubble["sheet"], bubble["more"]) == ("", "Ask your assistant")
+    controller.explainMore()
+    assert files.clipboard.startswith("Someone learning AWS Certified AI Practitioner")
+    assert controller.property("bubble")["more"] == "copied"
+    assert worker.explanations == []
+    controller.dismiss()
+    assert controller.property("bubble")["mode"] == "hidden"  # one question left
+    # The last one answered: his satchel is empty, said once; the reviews go on.
+    answered(controller, right=True)
+    controller.dismiss()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "My satchel is empty"
+    assert bubble["text"] == (
+        "I've asked you every question of your catalogues on AWS Certified AI Practitioner."
+        " Your 1 review comes back as planned; for new questions, paste or import another"
+        " catalogue."
+    )
+    controller.dismiss()
+    assert controller.property("bubble")["mode"] == "hidden"  # not twice
+    controller.askNow()  # nothing to ask, nothing to review yet
+    assert controller.property("bubble")["title"] == "My satchel is empty"
+    assert worker.requests == []
+
+
+def test_a_question_reported_without_a_brain_promises_no_other(game: Game) -> None:
+    controller, _, _ = make(game, model="none")
+    fill(game, 2)
+    controller.askNow()
+    controller.flag()
+    assert controller.property("bubble")["text"] == "Thank you, I won't ask it again."
+
+
+def test_nobody_is_chosen_in_his_menu_and_claude_again(game: Game, tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    controller, worker, _ = make(game, settings=Settings(path))
+    fill(game, 2)
+    menu = Menu(controller)
+    content = menu.property("content")
+    assert content["models"][-1] == {
+        "key": "none",
+        "name": "Nobody: catalogues",
+        "hint": "no Claude licence needed",
+    }
+    assert content["brainless"] is False
+    assert [s["action"] for s in menu.suggest("nobody")] == ["model:none"]
+    menu.openAt(10, 10)
+    lookups = worker.lookups
+    assert menu.run("model:none") is False
+    assert controller.property("brainless") is True
+    assert controller.property("bubble")["text"].startswith("Nobody writes my questions now")
+    assert json.loads(path.read_text())["model"] == "none"
+    content = menu.property("content")
+    assert (content["model"], content["brainless"], content["catalogues"]) == (
+        "Your catalogues",
+        True,
+        "2 new",
+    )
+    menu.openAt(10, 10)
+    assert worker.lookups == lookups  # no Claude account to look up
+    controller._refill_if_needed(force=True)
+    assert worker.requests == []
+    again, _, _ = make(game, settings=Settings(path))
+    assert again.property("brainless") is True  # kept
+    menu.run("model:claude-sonnet-5-5")
+    assert controller.property("brainless") is False
+    assert worker.lookups == lookups + 1  # whose login writes now, at his menu's foot
+    assert worker.requests[-1]["model"] == "claude-sonnet-5-5"
+
+
+def test_without_a_brain_a_new_course_is_drawn_up_by_ones_assistant(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, worker, _ = make(game, model="none", catalogues=files)
+    controller.showSubject()
+    assert controller.property("bubble")["noWords"] is True
+    assert controller.previewCourse("pottery")["text"] == (
+        "Pottery: I'll copy the prompt that draws up the course, for your assistant."
+    )
+    assert controller.learnWith("pottery") is True
+    assert worker.plans == []
+    assert files.clipboard.startswith(
+        'I use Tagnan, a quiz game, to learn something new: "pottery"'
+    )
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Over to your assistant!"
+    assert bubble["buttons"][0]["action"] == "paste"
+    # A course he has, but no question on it yet.
+    game.keep_course(blueprint.from_dict(pottery_data()))
+    controller.setCourse("pottery")
+    assert controller.property("bubble")["text"].endswith(
+        "Bring me questions on it: my menu, Catalogues."
+    )
+
+
 def test_a_flagged_question_never_comes_back(game: Game) -> None:
     fill(game, 1)
     controller, _, _ = make(game)
@@ -1536,7 +1648,13 @@ def test_a_few_words_find_a_model(game: Game) -> None:
     assert found[0]["label"] == "Questions by Haiku 5.5"
     assert [f["action"] for f in menu.suggest("model")] == [
         f"model:{m}"
-        for m in ("claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+        for m in (
+            "claude-fable-5-1",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "none",  # nobody: his catalogues only
+        )
     ]
 
 

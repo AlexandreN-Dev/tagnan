@@ -136,8 +136,9 @@ class Controller(QObject):
         self._volume = calls.DEFAULT_VOLUME if volume is None else volume
         # The model chosen in his menu wins over the config file's (`model`).
         self._config_model = model
-        chosen = configs.find_model(str(self.settings.get("model", "")))
-        self._model = chosen.model if chosen else ""
+        kept = str(self.settings.get("model", ""))
+        chosen = configs.find_model(kept)
+        self._model = configs.NOBODY if kept == configs.NOBODY else chosen.model if chosen else ""
         theme = self.settings.get("theme", "")
         self._theme = theme if theme in THEMES else ""
         # Minimized: small in his corner, but while he asks (FULL_SIZE_MODES).
@@ -167,6 +168,7 @@ class Controller(QObject):
         # last export, to show in its folder.
         self._pasted_course: blueprints.Blueprint | None = None
         self._last_export: Path | None = None
+        self._told_empty = False  # without a brain: "My satchel is empty", once till refilled
         animator.set_stage(self._stage)
         animator.tapped.connect(self._on_tapped)
         worker.batchReady.connect(self._on_batch)
@@ -195,14 +197,28 @@ class Controller(QObject):
     def start(self) -> None:
         self._tick_timer.start(TICK_MS)
         if not self._tell_updated() and self.game.store.fresh_count(self.game.exam) == 0:
-            self._show(
-                {
-                    "mode": "message",
-                    "title": "Hello!",
-                    "text": "I'm writing my first questions: give me a few minutes. "
-                    "Poke me meanwhile, if you like.",
-                }
-            )
+            if self.brainless:
+                self._show(
+                    {
+                        "mode": "message",
+                        "title": "Hello!",
+                        "text": "No brain here to write my questions: bring me some. Copy a"
+                        " prompt for your assistant, or import a catalogue a colleague gave you.",
+                        "buttons": [
+                            {"label": "Copy the prompt", "action": "prompt:write", "primary": True},
+                            {"label": "Import a file…", "action": "import"},
+                        ],
+                    }
+                )
+            else:
+                self._show(
+                    {
+                        "mode": "message",
+                        "title": "Hello!",
+                        "text": "I'm writing my first questions: give me a few minutes. "
+                        "Poke me meanwhile, if you like.",
+                    }
+                )
         self._refill_if_needed()
 
     def _tell_updated(self) -> bool:
@@ -267,8 +283,15 @@ class Controller(QObject):
 
     @Property(str, notify=prefsChanged)
     def model(self) -> str:
-        """The model that writes his questions: his menu's choice, else the config file's."""
+        """The model that writes his questions: his menu's choice, else the config file's;
+        config.NOBODY for none."""
         return self._model or self._config_model
+
+    @Property(bool, notify=prefsChanged)
+    def brainless(self) -> bool:
+        """Nobody writes his questions: he asks those of his catalogues, and leaves out what
+        only a brain can do (Tell me more, the study sheet, a subject in one's own words)."""
+        return (self._model or self._config_model) == configs.NOBODY
 
     @Property(bool, notify=prefsChanged)
     def small(self) -> bool:
@@ -409,7 +432,9 @@ class Controller(QObject):
             "news": news,
             "promoted": outcome.promoted,
             "rank": rules.GRADES[after.grade].name if outcome.promoted else "",
-            "sheet": self._sheet_state(q.id),
+            # Without a brain: no study sheet, and Tell me more asks one's own assistant.
+            "sheet": "" if self.brainless else self._sheet_state(q.id),
+            "more": "Ask your assistant" if self.brainless else "Tell me more",
         }
 
     @Slot()
@@ -433,7 +458,8 @@ class Controller(QObject):
             {
                 "mode": "message",
                 "title": "Question set aside",
-                "text": "Thank you, I won't ask it again. My brain will write others.",
+                "text": "Thank you, I won't ask it again."
+                + ("" if self.brainless else " My brain will write others."),
             }
         )
         self._hide_timer.start(6000)
@@ -444,8 +470,17 @@ class Controller(QObject):
 
     @Slot()
     def explainMore(self) -> None:
+        """Tell me more: his brain explains; without one, the question goes to the clipboard,
+        for one's own assistant."""
         outcome = self._outcome
         if outcome is None or outcome.question.id is None:
+            return
+        if self.brainless:
+            self.catalogue_files.copy(
+                catalogue.explain_prompt(self.game.blueprint, outcome.question, outcome.chosen)
+            )
+            if self._bubble["mode"] == "result":
+                self._show({**self._bubble, "more": "copied"})
             return
         self._hide_timer.stop()
         self._show({**self._bubble, "mode": "thinking"})
@@ -458,6 +493,11 @@ class Controller(QObject):
         if self._bubble["mode"] in ("question", "thinking") or self._pending_question is not None:
             return
         if not self._ask(self._clock()):
+            if self.brainless:
+                self._told_empty = True
+                self._show(self._satchel_empty())
+                self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+                return
             self._show(
                 {
                     "mode": "message",
@@ -467,6 +507,24 @@ class Controller(QObject):
                 }
             )
             self._hide_timer.start(6000)
+
+    def _satchel_empty(self) -> dict[str, Any]:
+        """Without a brain, every question of his catalogues asked: the reviews go on."""
+        reviews = self.game.store.reviews_pending(self.game.exam)
+        come = "comes" if reviews == 1 else "come"
+        then = (
+            f"Your {counted(reviews, 'review')} {come} back as planned; for" if reviews else "For"
+        )
+        return {
+            "mode": "message",
+            "title": "My satchel is empty",
+            "text": f"I've asked you every question of your catalogues on {self.subject}. {then}"
+            " new questions, paste or import another catalogue.",
+            "buttons": [
+                {"label": "Copy the prompt", "action": "prompt:write", "primary": True},
+                {"label": "Got it", "action": "dismiss"},
+            ],
+        }
 
     @Slot()
     def showStats(self) -> None:
@@ -590,6 +648,8 @@ class Controller(QObject):
                 },
                 "within": f"Within {bp.name}:",
                 "choices": choices,
+                # Without a brain, nothing writes questions on a subject in one's own words.
+                "noWords": self.brainless,
                 "current": self.game.subject.key,
                 "status": f"Now: {self.subject}."
                 + (f" I'm drawing up a course on {planning}." if planning else ""),
@@ -607,6 +667,12 @@ class Controller(QObject):
             return {"ok": True, "text": f"Back to {known.name}."}
         if len(said) > MAX_COURSE_WORDS:
             return {"ok": False, "text": f"Shorter, please: {MAX_COURSE_WORDS} characters at most."}
+        if self.brainless:
+            return {
+                "ok": True,
+                "text": f"{said[0].upper() + said[1:]}: I'll copy the prompt that draws up the"
+                " course, for your assistant.",
+            }
         return {"ok": True, "text": "I'll draw up a course on it: a minute or two."}
 
     @Slot(str, result=bool)
@@ -619,6 +685,14 @@ class Controller(QObject):
         known = self.game.find_course(said)
         if known is not None:
             self._change_course(known)
+            return True
+        if self.brainless:
+            self.catalogue_files.copy(catalogue.course_prompt(said))
+            logger.info("course prompt copied: %r", said)
+            self._show_catalogue_prompt(
+                f"No brain here to draw up a course: the prompt for {said} is in your clipboard."
+                " Paste it into your assistant, then bring me its answer: Paste questions."
+            )
             return True
         if self.worker.planning:
             title = "One at a time!"
@@ -677,7 +751,11 @@ class Controller(QObject):
             text = intro or f"From now on, we learn {bp.name}."
             text += f" Here I'm {grade}."
             if not self.game.fresh_count():
-                text += " Give me a few minutes to write the questions."
+                text += (
+                    " Bring me questions on it: my menu, Catalogues."
+                    if self.brainless
+                    else " Give me a few minutes to write the questions."
+                )
             self._refill_if_needed(force=True)
         self._set_mood("idle")
         self._show({"mode": "message", "title": "As you wish!", "text": text})
@@ -719,6 +797,11 @@ class Controller(QObject):
             self.statusChanged.emit()
             if self.game.fresh_count():
                 text = f"From now on, I ask about {name}, until you tell me otherwise."
+            elif self.brainless:
+                text = (
+                    f"From now on, I ask about {name}. I have no new question on it: bring me"
+                    " some, from my menu's Catalogues."
+                )
             else:
                 text = (
                     f"From now on, I ask about {name}. Give me a few minutes to write the"
@@ -816,14 +899,38 @@ class Controller(QObject):
 
     @Slot(str)
     def setModel(self, key: str) -> None:
-        """The model that writes his next questions; those already written stay."""
+        """The model that writes his next questions, or config.NOBODY: those of his catalogues
+        only. The questions already written stay."""
         chosen = configs.find_model(key)
+        if key == configs.NOBODY:
+            if self.brainless:
+                return
+            self._model = configs.NOBODY
+            self.settings.set("model", configs.NOBODY)
+            logger.info("model: nobody, catalogues only")
+            self.prefsChanged.emit()
+            if self._bubble["mode"] not in BUSY_MODES:
+                self._set_mood("idle")
+                self._show(
+                    {
+                        "mode": "message",
+                        "title": "As you wish!",
+                        "text": "Nobody writes my questions now: I ask those of your catalogues."
+                        " My menu's Catalogues has a prompt for your assistant.",
+                    }
+                )
+                self._hide_timer.start(9000)
+            return
         if chosen is None or chosen.model == (self._model or self._config_model):
             return
+        was_brainless = self.brainless
         self._model = chosen.model
         self.settings.set("model", chosen.model)
         logger.info("model: %s", chosen.model)
         self.prefsChanged.emit()
+        if was_brainless:
+            self.worker.look_up_account()  # whose Claude login he writes with, at his menu's foot
+            self._refill_if_needed(force=True)
         if self._bubble["mode"] in BUSY_MODES:
             return  # not a word over a question: his menu shows the model
         text = (
@@ -1118,6 +1225,8 @@ class Controller(QObject):
         if added.ids:
             if new:
                 self.game.keep_course(bp)
+            if current:
+                self._told_empty = False
             if current and self._first_run:
                 self._first_run = False
                 self.scheduler.next_at = self._clock() + FIRST_QUESTION_DELAY
@@ -1280,7 +1389,7 @@ class Controller(QObject):
 
     def _refill_if_needed(self, force: bool = False) -> None:
         now = self._clock()
-        if self.worker.generating or (not force and now < self._refill_after):
+        if self.brainless or self.worker.generating or (not force and now < self._refill_after):
             return
         if self.game.needs_questions():
             logger.info("asking the brain for a batch")
@@ -1482,7 +1591,8 @@ class Controller(QObject):
     def _close(self) -> None:
         self._unanswered_timer.stop()
         self._hide_timer.stop()
-        if self._bubble["mode"] == "question":
+        closed = self._bubble["mode"]
+        if closed == "question":
             self._current = None
         self._show({"mode": "hidden"})
         if self.animator.mood_name() == "ask":
@@ -1497,6 +1607,16 @@ class Controller(QObject):
             bp, intro = self._pending_course
             self._pending_course = None
             self._change_course(bp, intro)
+            return
+        if (
+            closed in VERDICT_MODES
+            and self.brainless
+            and not self._told_empty
+            and self.game.fresh_count() == 0
+        ):  # the last new question of his catalogues answered: said once
+            self._told_empty = True
+            self._show(self._satchel_empty())
+            self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
 
     def _auto_hide(self) -> None:
         if self._held:

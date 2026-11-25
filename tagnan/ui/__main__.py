@@ -359,7 +359,8 @@ def main() -> int:
     animator.start()
     controller.start()
     updater.start()
-    worker.look_up_account()
+    if not controller.brainless:
+        worker.look_up_account()  # whose Claude login writes his questions, for his menu's foot
     logging.info(
         "Tagnan is up (grade %d, %d fresh questions)",
         game.progress.grade,

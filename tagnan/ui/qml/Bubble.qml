@@ -434,10 +434,22 @@ Item {
                         primary: true
                         onActivated: bubble.controller.dismiss()
                     }
+                    // Tell me more; without a brain, Ask your assistant: the question copied for
+                    // it, then said so where the button was.
                     Action {
                         visible: bubble.mode === "result" && !bubble.content.correct
-                        label: "Tell me more"
+                                 && bubble.content.more !== "copied"
+                        label: bubble.content.more || "Tell me more"
                         onActivated: bubble.controller.explainMore()
+                    }
+                    Text {
+                        visible: bubble.mode === "result" && bubble.content.more === "copied"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Copied: paste it into your assistant"
+                        color: bubble.theme.muted
+                        font.family: bubble.theme.body
+                        font.pixelSize: 13
+                        font.italic: true
                     }
                     SheetControl {
                         visible: bubble.mode === "result" && (bubble.content.sheet || "") !== ""
@@ -769,14 +781,15 @@ Item {
                     }
                 }
             }
+            // A corner in one's own words: none without a brain, nothing would write on it.
             Para {
-                visible: bubble.mode === "subject"
+                visible: bubble.mode === "subject" && !bubble.content.noWords
                 text: "Or a corner of it, in your own words:"
                 color: bubble.theme.muted
                 font.pixelSize: 12
             }
             Item {
-                visible: bubble.mode === "subject"
+                visible: bubble.mode === "subject" && !bubble.content.noWords
                 width: column.width
                 height: 32
                 TextField {
@@ -810,7 +823,7 @@ Item {
                 }
             }
             Para {
-                visible: bubble.mode === "subject" && bubble.subjectPreview.text !== ""
+                visible: bubble.mode === "subject" && !bubble.content.noWords && bubble.subjectPreview.text !== ""
                 text: bubble.subjectPreview.text
                 color: bubble.subjectPreview.ok ? bubble.theme.text : bubble.theme.bad
                 font.pixelSize: 12

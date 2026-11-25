@@ -825,18 +825,20 @@ Window {
             Item {
                 id: accountLine
                 objectName: "account"
-                readonly property var account: win.c.account || null
+                // Without a brain, what he runs on instead: his catalogues, no licence.
+                readonly property bool brainless: win.c.brainless === true
+                readonly property var account: brainless ? null : (win.c.account || null)
                 readonly property bool signedIn: account !== null && account.signedIn === true
-                readonly property color tint: signedIn ? win.theme.muted : win.theme.goldInk
-                visible: account !== null && !win.typing
+                readonly property color tint: signedIn || brainless ? win.theme.muted : win.theme.goldInk
+                visible: (brainless || account !== null) && !win.typing
                 width: column.width
                 height: 26
                 Accessible.role: Accessible.StaticText
-                Accessible.name: "Claude account: " + accountMail.text
+                Accessible.name: brainless ? accountMail.text : "Claude account: " + accountMail.text
                 Glyph {
                     x: 10
                     anchors.verticalCenter: parent.verticalCenter
-                    name: "account"
+                    name: accountLine.brainless ? "catalogue" : "account"
                     tint: accountLine.tint
                     scale: 14 / 18
                     transformOrigin: Item.Left
@@ -847,12 +849,13 @@ Window {
                     width: accountPlan.x - 8 - x
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
-                    text: !accountLine.signedIn ? "Not signed in to Claude"
+                    text: accountLine.brainless ? "Catalogues only · no licence used"
+                        : !accountLine.signedIn ? "Not signed in to Claude"
                         : (accountLine.account.email || "Signed in to Claude")
                     color: accountLine.tint
                     font.family: win.theme.body
                     font.pixelSize: 12
-                    font.weight: accountLine.signedIn ? Font.Normal : Font.DemiBold
+                    font.weight: accountLine.signedIn || accountLine.brainless ? Font.Normal : Font.DemiBold
                 }
                 Text {
                     id: accountPlan

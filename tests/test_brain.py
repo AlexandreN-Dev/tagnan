@@ -284,6 +284,16 @@ def test_live_generation_writes_usable_questions(bp: Blueprint) -> None:
     assert json.loads(done.stdout)["questions"]
 
 
+@pytest.mark.live
+def test_live_study_sheet_is_usable() -> None:
+    """Calls the real claude CLI with Sonnet at low effort, schema and all: a few cents."""
+    cfg = config.Config(brain=config.Brain(explain_model="claude-sonnet-5-5", explain_effort="low"))
+    sheet = brain.sheet({"exam": "aif-c01", "question": question_data()}, cfg)
+    assert sheet["title"]
+    assert sheet["tagline"]
+    assert sheet["versus"] or sheet["steps"]
+
+
 def test_any_course_travels_with_the_request_and_leaves_aws_out(fake_claude: Path) -> None:
     answer(fake_claude, {"questions": [pottery_question()]})
     request = {

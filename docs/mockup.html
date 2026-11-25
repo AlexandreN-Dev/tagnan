@@ -914,7 +914,7 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 .pdoc .cat-opt > span { font-size: 12.5px; line-height: 1.5; color: var(--doc-muted); }
 .pdoc .cat-fields td:first-child { width: 92px; }
 .pdoc .cat-fields code { white-space: nowrap; overflow-wrap: normal; }
-/* Questions in plain text (proposal). */
+/* Questions in plain text. */
 .tx-pair { display: flex; align-items: center; gap: 28px; padding: 36px 40px 30px; }
 .tx-pair > .scene { padding: 0; }
 .tx-note { flex: none; width: 430px; border-radius: 10px; overflow: hidden; background: #FFFFFF; border: 1px solid #D9DCE1; box-shadow: 0 10px 30px rgba(0, 0, 0, .12); }
@@ -3286,7 +3286,7 @@ function catPromptsDoc() {
     + '</div><p class="small">Twenty at a time: past that, an assistant often cuts its answer short. Each prompt carries the course itself, so that the questions fit its chapters wherever they were written.</p>'
     + '<div class="src"><span>tagnan/catalogue.py: write_prompt, convert_prompt, course_prompt, explain_prompt</span><span>tagnan/prompts/catalogue-format.md, catalogue-convert.md, catalogue-course.md</span><span>tagnan/prompts/system.md, generate.md, explain.md: reused</span></div>';
 }
-// --- Questions in plain text (proposal): read by Tagnan himself, no assistant, no licence ---------
+// --- Questions in plain text: read by Tagnan himself, no assistant, no licence ---------
 /* A note, a text file or a spreadsheet saved as CSV: questions written by hand in a simple shape,
    as many already keep them. Tagnan reads the lines himself; a file is a course of its own. */
 const CAT_ACTIONS_TEXT = [
@@ -3362,7 +3362,7 @@ function textSheetHtml() {
 function textHowDoc() {
   const row = (what, reads) => `<tr><td><b>${what}</b></td><td>${reads}</td></tr>`;
   const code = s => `<code>${esc(s)}</code>`;
-  return '<div class="eyebrow">Catalogues · Proposal · 25 November 2026</div><h2>Questions in plain text</h2>'
+  return '<div class="eyebrow">Catalogues · Built 25 November 2026</div><h2>Questions in plain text</h2>'
     + '<p class="lead">For whoever writes their questions by hand, keeps them in notes or in a spreadsheet: Tagnan reads a simple shape himself, with no assistant, no licence and no network. A note, a text file or a CSV pasted or imported; a file is a course of its own, its headings its chapters.</p>'
     + '<div class="two"><div><h3>The shape he reads</h3>'
     + `<pre class="cat-code">${esc(TEXT_FORMAT)}</pre>`
@@ -3388,11 +3388,11 @@ function textHowDoc() {
     + '<div class="src"><span>tagnan/catalogue.py: the plain text and the CSV, read with the standard library</span><span>tagnan/model.py: the lighter checks</span></div>';
 }
 function textChoicesDoc() {
-  const dec = (n, title, a, b, open) => `<div class="cat-dec"><h4><i>${n}</i>${title}</h4>`
-    + `<div class="cat-opt is-pick"><b>A · ${a[0]}<span class="pick">${open ? 'recommended' : 'retained'}</span></b><span>${a[1]}</span></div>`
-    + `<div class="cat-opt"><b>B · ${b[0]}${open ? '' : ' (not retained)'}</b><span>${b[1]}</span></div></div>`;
-  return '<div class="eyebrow">Catalogues · Proposal · Plain text · Choices</div><h2>What was chosen, and one thing still open</h2>'
-    + '<p class="lead">The first two were retained on 25 November; the third is to choose.</p>'
+  const dec = (n, title, a, b) => `<div class="cat-dec"><h4><i>${n}</i>${title}</h4>`
+    + `<div class="cat-opt is-pick"><b>A · ${a[0]}<span class="pick">retained</span></b><span>${a[1]}</span></div>`
+    + `<div class="cat-opt"><b>B · ${b[0]} (not retained)</b><span>${b[1]}</span></div></div>`;
+  return '<div class="eyebrow">Catalogues · Built 25 November 2026 · Plain text · Choices</div><h2>What was chosen</h2>'
+    + '<p class="lead">The three recommended answers were retained on 25 November, and built.</p>'
     + dec('1', 'Where they go',
       ['A course of its own', 'Named by its # title or the file’s name, its ## headings its chapters: nothing to guess. The same title again adds to the same course.'],
       ['Into the course learned now', 'Each question would need a chapter of it, which plain text does not say.'])
@@ -3401,7 +3401,7 @@ function textChoicesDoc() {
       ['As Claude’s', 'Four choices and every reason: most notes would be set aside.'])
     + dec('3', 'When one exports',
       ['Shared, as one’s own', 'They are what one writes by hand: one’s notes, for colleagues. A quiz of someone else’s goes through Convert a quiz, and stays with one.'],
-      ['Kept for oneself', 'As converted ones: safer, but one’s own notes could not be shared.'], true);
+      ['Kept for oneself', 'As converted ones: safer, but one’s own notes could not be shared.']);
 }
 // --- end of plain text ----------------------------------------------------------------------------
 // --- end of the catalogues ------------------------------------------------------------------------
@@ -4224,10 +4224,10 @@ const PAGES = [
         docFrame('cat-format', 'A catalogue', catFormatDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: ['tagnan/model.py', 'tagnan/game.py', 'tagnan/catalogue.py'] }),
         docFrame('cat-prompts', 'The prompts', catPromptsDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: ['tagnan/prompts', 'tagnan/catalogue.py'] }),
       ] }],
-      // Plain text (proposal).
-      [{ id: 's-cat-text', name: 'Questions in plain text (proposal)', desc: 'Questions one writes by hand, in a note, a text file or a spreadsheet: Tagnan reads a simple shape himself, no assistant, no licence. A file is a course of its own, its headings its chapters; the checks are lighter. Proposed on 25 November 2026, not built.', frames: [
-        docFrame('tx-how', 'Questions in plain text', textHowDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: ['tagnan/catalogue.py', 'tagnan/model.py'] }),
-        { id: 'tx-note', name: 'From a note to a question', kind: 'Proposal · plain text', mode: 'follow', cls: 'desk', html: textPairHtml, src: ['tagnan/catalogue.py'], tokens: TK.bubble,
+      // Plain text.
+      [{ id: 's-cat-text', name: 'Questions in plain text', desc: 'Questions one writes by hand, in a note, a text file or a spreadsheet: Tagnan reads a simple shape himself, no assistant, no licence. A file is a course of its own, its headings its chapters; the checks are lighter. Built on 25 November 2026.', frames: [
+        docFrame('tx-how', 'Questions in plain text', textHowDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: ['tagnan/catalogue.py', 'tagnan/model.py'] }),
+        { id: 'tx-note', name: 'From a note to a question', kind: 'Catalogues · plain text', mode: 'follow', cls: 'desk', html: textPairHtml, src: ['tagnan/catalogue.py'], tokens: TK.bubble,
           notes: ['A note as one keeps it, in any notes app or text file: letters, ticked boxes or numbers for the choices, an Answer line in English or in French.', 'Its # title is the course, its ## headings its chapters.', 'A true or false question: two choices will do.'],
           cap: 'The note on the left, the question it gives on the right.' },
         menuShot('tx-menu', 'Catalogues · the plain-text format', MENU_TEXT, { current: CAT_ROW, sub: 'catalogues', subRow: CAT_ROW, subCurrent: 5 }, {
@@ -4244,10 +4244,10 @@ const PAGES = [
           notes: ['Asked as any other: “Your question” where the level would be.', 'Two choices for true or false.'] }),
         shot('tx-verdict', 'Its verdict, no explanation', R_TEXT, { expr: 'angry',
           notes: ['No explanation was written: the right answer alone.', 'Tell me more has one written (Ask your assistant, without a brain).'] }),
-        { id: 'tx-csv', name: 'A spreadsheet, saved as CSV', kind: 'Proposal · plain text', mode: 'none', html: textSheetHtml, src: ['tagnan/catalogue.py'],
+        { id: 'tx-csv', name: 'A spreadsheet, saved as CSV', kind: 'Catalogues · plain text', mode: 'none', html: textSheetHtml, src: ['tagnan/catalogue.py'],
           notes: ['One row a question, the first naming the columns; empty cells for fewer choices.', 'Excel: File, Save as, CSV. Commas or semicolons alike.'],
           cap: 'The same questions, kept in a spreadsheet.' },
-        docFrame('tx-choices', 'What was chosen, and one thing still open', textChoicesDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: ['tagnan/catalogue.py'] }),
+        docFrame('tx-choices', 'What was chosen', textChoicesDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: ['tagnan/catalogue.py'] }),
       ] }],
       // end of plain text
     ],

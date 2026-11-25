@@ -10,6 +10,9 @@ from tagnan.blueprint import Blueprint
 DIFFICULTIES = ("easy", "medium", "hard")
 KINDS = ("single", "multiple")
 MAX_STEM, MAX_CHOICE, MAX_TEXT = 900, 220, 700
+# Who wrote a question that his brain did not (tagnan.catalogue): someone, or an assistant, for
+# him; or converted from a quiz of someone else's, kept for oneself and never exported.
+WRITTEN, CONVERTED = "written", "converted"
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,7 @@ class Question:
     why_wrong: tuple[str, ...]  # one per choice, "" for the right ones
     reference: str = ""  # the AWS document to read
     subject: str = ""  # the subject it was written for (tagnan.subject's key), "" for the exam
+    origin: str = ""  # "" his brain; WRITTEN or CONVERTED: from a catalogue
     id: int | None = None
 
     def is_correct(self, chosen: Iterable[int]) -> bool:

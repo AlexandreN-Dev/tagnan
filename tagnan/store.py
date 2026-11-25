@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
 
-from tagnan.model import Question
+from tagnan.model import CONVERTED, Question
 from tagnan.progress import Progress
 
 SCHEMA = """
@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS questions (
     created_at REAL NOT NULL,
     flagged INTEGER NOT NULL DEFAULT 0,
     lang TEXT NOT NULL DEFAULT 'fr',
-    subject TEXT NOT NULL DEFAULT ''
+    subject TEXT NOT NULL DEFAULT '',
+    origin TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS answers (
     id INTEGER PRIMARY KEY,
@@ -70,6 +71,9 @@ class Store:
                 self._db.execute(
                     "ALTER TABLE questions ADD COLUMN subject TEXT NOT NULL DEFAULT ''"
                 )
+        if "origin" not in columns:  # a database from before catalogues: his brain's, all
+            with self._db:
+                self._db.execute("ALTER TABLE questions ADD COLUMN origin TEXT NOT NULL DEFAULT ''")
 
     def close(self) -> None:
         self._db.close()
@@ -83,8 +87,8 @@ class Store:
                 cursor = self._db.execute(
                     "INSERT INTO questions (exam, domain, task, topic, difficulty, kind, stem,"
                     " choices, answers, explanation, why_wrong, reference, created_at, lang,"
-                    " subject)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " subject, origin)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         exam,
                         q.domain,
@@ -101,6 +105,7 @@ class Store:
                         now,
                         self.lang,
                         q.subject,
+                        q.origin,
                     ),
                 )
                 ids.append(int(cursor.lastrowid or 0))
@@ -126,6 +131,32 @@ class Store:
             "SELECT COUNT(*) FROM questions q WHERE exam = ? AND lang = ? AND flagged = 0"
             " AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.question_id = q.id)",
             (exam, self.lang),
+        ).fetchone()
+        return int(row[0])
+
+    def stems(self, exam: str) -> list[str]:
+        """The stems of every question a course was ever given, reported or not: a question
+        pasted twice is kept once (tagnan.game)."""
+        rows = self._db.execute("SELECT stem FROM questions WHERE exam = ?", (exam,))
+        return [str(r[0]) for r in rows]
+
+    def shareable(self, exam: str) -> list[Question]:
+        """The questions one may give a colleague: not reported as wrong, not converted from a
+        quiz of someone else's (tagnan.catalogue's export)."""
+        rows = self._db.execute(
+            "SELECT * FROM questions WHERE exam = ? AND lang = ? AND flagged = 0 AND origin != ?"
+            " ORDER BY id",
+            (exam, self.lang, CONVERTED),
+        )
+        return [_question(r) for r in rows]
+
+    def count(self, exam: str, origin: str) -> int:
+        """How many questions of a course came from there (tagnan.model's WRITTEN, CONVERTED;
+        "" his brain), reported ones left out."""
+        row = self._db.execute(
+            "SELECT COUNT(*) FROM questions WHERE exam = ? AND lang = ? AND flagged = 0"
+            " AND origin = ?",
+            (exam, self.lang, origin),
         ).fetchone()
         return int(row[0])
 
@@ -265,4 +296,5 @@ def _question(row: sqlite3.Row) -> Question:
         why_wrong=tuple(json.loads(row["why_wrong"])),
         reference=str(row["reference"]),
         subject=str(row["subject"]),
+        origin=str(row["origin"]),
     )

@@ -185,6 +185,7 @@ def test_an_older_database_gains_the_subject(tmp_path: Path) -> None:
     db.close()
     store = Store(path)
     assert store.question(1).subject == ""
+    assert store.question(1).origin == ""  # his brain's, from before catalogues
 
 
 def test_a_course_drawn_up_is_kept_and_found_again(tmp_path: Path, bp: Blueprint) -> None:

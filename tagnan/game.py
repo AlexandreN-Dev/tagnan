@@ -29,6 +29,21 @@ PUT_AWAY = "courses put away"  # setting: the keys of the courses no longer offe
 
 
 @dataclass(frozen=True)
+class Added:
+    """What became of questions from elsewhere (a catalogue): those kept, by their ids; how many
+    the course already had; those set aside, by their number among them, and why."""
+
+    ids: list[int]
+    known: int
+    rejected: list[tuple[int, str]]
+
+
+def plain(stem: str) -> str:
+    """A stem as two alike are told apart: case and spacing aside."""
+    return " ".join(stem.casefold().split())
+
+
+@dataclass(frozen=True)
 class Outcome:
     question: Question
     chosen: tuple[int, ...]
@@ -89,10 +104,15 @@ class Game:
 
     def set_course(self, bp: Blueprint) -> None:
         """Learn this course from now on; one drawn up by the brain is kept for good."""
+        self.keep_course(bp)
+        self.store.set_setting("course", bp.key)
+
+    def keep_course(self, bp: Blueprint) -> None:
+        """Keep a course for good among those offered (one drawn up by the brain, or brought by
+        a catalogue), learned now or not."""
         if bp.key not in blueprints.known():
             self.store.set_setting(f"course:{bp.key}", json.dumps(bp.to_dict(), ensure_ascii=False))
         self._courses[bp.key] = bp
-        self.store.set_setting("course", bp.key)
         self.bring_back(bp.key)
 
     def courses(self) -> list[Blueprint]:
@@ -269,6 +289,35 @@ class Game:
             except ValueError as error:
                 rejected.append(f"question {i} : {error}")
         return self.store.add_questions(bp.key, kept, now), rejected
+
+    def add_questions(
+        self,
+        bp: Blueprint,
+        raw: Sequence[Mapping[str, Any]],
+        now: float,
+        origin: str,
+        subject: str = "",
+    ) -> Added:
+        """Questions from elsewhere (tagnan.catalogue): each checked as the brain's are, the
+        good ones shuffled and kept, but those whose stem the course already has, even reported
+        ones."""
+        known = {plain(stem) for stem in self.store.stems(bp.key)}
+        kept: list[Question] = []
+        already = 0
+        rejected = []
+        for number, data in enumerate(raw, 1):
+            try:
+                question = parse_question(data, bp).shuffled(self._rng)
+            except ValueError as error:
+                rejected.append((number, str(error)))
+                continue
+            stem = plain(question.stem)
+            if stem in known:
+                already += 1
+                continue
+            known.add(stem)
+            kept.append(replace(question, subject=subject, origin=origin))
+        return Added(self.store.add_questions(bp.key, kept, now), already, rejected)
 
     def explain_request(self, question: Question, chosen: Sequence[int]) -> dict[str, Any]:
         return {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tagnan Mockup</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Tagnan's interface as a design file: foundations, components, character, screens, flows, desktops and a playable prototype.">
+<meta name="description" content="Tagnan's interface as a design file: foundations, components, character, screens, flows, desktops, two proposals and a playable prototype.">
 <!-- Generated from Tagnan's sources (Theme.qml, Bubble.qml, TagnanMenu.qml, controller.py, menu.py, art.py, assets/sounds). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -729,6 +729,188 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 @keyframes bubblein { from { opacity: 0; } to { opacity: 1; } }
 .gone { display: grid; place-items: center; gap: 12px; text-align: center; color: #1B2232; font: 15px var(--ui-font); }
 
+/* --- The study sheet and Minimize (built 25 November 2026) ------------------------------------ */
+/* His menu: Minimize as a switch (A) or as a button beside the moon (B). */
+.m-switch { position: relative; width: 30px; height: 18px; border-radius: 9px; flex: none; background: color-mix(in srgb, var(--tg-muted) 42%, var(--tg-panel)); }
+.m-switch > i { position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--tg-panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .22); transition: left .15s ease; }
+.m-switch.is-on { background: var(--tg-ink); }
+.m-switch.is-on > i { left: 14px; }
+.m-hbtns { display: flex; gap: 6px; flex: none; }
+.m-head.has-two .m-hcol { width: 136px; }
+.m-theme.is-on { background: var(--tg-ink); }
+/* The bubble: the sheet as a link (B), the file just written. */
+.b-sheetlink { display: inline-flex; align-items: center; gap: 5px; }
+.b-file { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 7px; background: var(--tg-choice); font: 600 12.5px/1 var(--tg-body); color: var(--tg-text); white-space: nowrap; overflow: hidden; flex: none; }
+.b-file > span { overflow: hidden; text-overflow: ellipsis; }
+.wb { width: 372px; }
+
+/* The study sheet: one A4 page (794 × 1123 at 96 dpi), as his window would draw it into the PDF.
+   A: cards on white; B: a poster on his ink. Fixed colours: a PDF has no dark mode. */
+.ss {
+  --ss-paper: #FFFFFF; --ss-ink: #1B2232; --ss-muted: #5B6478; --ss-line: #E6EAF0; --ss-card: #F3F6FB;
+  --ss-band: linear-gradient(128deg, #213D7C 0%, #2E57A8 58%, #4A72CC 100%);
+  --ss-gold: #F2C14E; --ss-coral: #EF6351; --ss-coral-soft: #FFE8E3; --ss-mint: #16A374; --ss-sky: #3B82F6; --ss-violet: #8B6CF0; --ss-sun: #F0A92E;
+  --ss-side-l: #FFF0EC; --ss-side-r: #E6F7EF; --ss-say: #E6F7EF; --ss-say-ink: #0C5B42; --ss-say-key: #16A374; --ss-trap-ink: #9B2C22; --ss-trap-key: #EF6351;
+  --ss-title: 700 56px/1.04 var(--tg-body);
+  position: relative; width: 794px; height: 1123px; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--ss-paper); color: var(--ss-ink); font-family: var(--tg-body); text-align: left;
+}
+.ss-hero { position: relative; flex: none; padding: 48px 56px 40px; background: var(--ss-band); color: #FFFFFF; overflow: hidden; }
+.ss-blob { position: absolute; border-radius: 50%; }
+.ss-blob.b1 { right: -90px; bottom: -150px; width: 300px; height: 300px; background: var(--ss-coral); }
+.ss-blob.b2 { right: 150px; top: -48px; width: 120px; height: 120px; background: var(--ss-gold); }
+.ss-blob.b3 { right: 182px; bottom: 30px; width: 52px; height: 52px; background: var(--ss-mint); }
+.ss-chips { position: relative; display: flex; gap: 8px; }
+.ss-chips span { padding: 6px 11px; border-radius: 999px; background: rgba(255, 255, 255, .16); font: 600 12px/1 var(--tg-body); letter-spacing: .02em; }
+.ss-title { position: relative; margin: 18px 0 0; max-width: 600px; font: var(--ss-title); letter-spacing: -.02em; }
+.ss-tag { position: relative; margin: 16px 0 0; max-width: 470px; font: 20px/1.4 var(--tg-body); color: #DFE8F8; }
+.ss-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 24px; padding: 32px 56px 0; }
+.ss-h { margin: 0 0 14px; font: 700 13px/1 var(--tg-body); letter-spacing: .12em; text-transform: uppercase; color: var(--ss-muted); }
+.ss-vs { display: grid; grid-template-columns: 1fr 112px 1fr; }
+.ss-side { border-radius: 22px; padding: 18px 20px 8px; }
+.ss-side.l { background: var(--ss-side-l); }
+.ss-side.r { background: var(--ss-side-r); }
+.ss-sh { display: flex; align-items: center; gap: 14px; height: 64px; }
+.ss-sh b { display: block; font: 700 24px/1.1 var(--tg-body); }
+.ss-sh div > span { display: block; margin-top: 3px; font: italic 15px/1.2 var(--tg-display); color: var(--ss-muted); }
+.ss-ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; flex: none; }
+.ss-cell { height: 50px; display: flex; align-items: center; gap: 12px; border-top: 1px dashed rgba(27, 34, 50, .16); font: 600 16.5px/1.2 var(--tg-body); }
+.ss-mark { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.ss-mark.yes { background: var(--ss-mint); }
+.ss-mark.no { background: var(--ss-coral); }
+.ss-mid { display: flex; flex-direction: column; align-items: center; padding-top: 18px; }
+.ss-vsb { height: 64px; display: grid; place-items: center; }
+.ss-vsb i { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: var(--ss-ink); color: #FFFFFF; font: 800 16px/1 var(--tg-body); font-style: normal; }
+.ss-lab { height: 50px; display: grid; place-items: center; text-align: center; font: 700 11px/1.15 var(--tg-body); letter-spacing: .08em; text-transform: uppercase; color: var(--ss-muted); }
+.ss-steps { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ss-steps::before { content: ""; position: absolute; left: 12.5%; right: 12.5%; top: 31px; height: 3px; background: repeating-linear-gradient(90deg, #C9D2E2 0 9px, transparent 9px 16px); }
+.ss-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.ss-dot { position: relative; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 0 0 6px var(--ss-paper); }
+.ss-dot em { position: absolute; right: -4px; top: -4px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--ss-ink); color: var(--ss-paper); font: 800 12px/1 var(--tg-body); font-style: normal; box-shadow: 0 0 0 3px var(--ss-paper); }
+.ss-step b { margin-top: 6px; font: 700 18px/1.1 var(--tg-body); }
+.ss-step span { font: 14px/1.35 var(--tg-body); color: var(--ss-muted); }
+.ss-terms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.ss-term { border-radius: 18px; padding: 16px 18px 18px; background: var(--ss-card); }
+.ss-term b { display: flex; align-items: center; gap: 8px; font: 700 16px/1.2 var(--tg-body); }
+.ss-term b i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.ss-term span { display: block; margin-top: 7px; font: 14px/1.4 var(--tg-body); color: var(--ss-muted); }
+.ss-end { display: grid; grid-template-columns: .9fr 1.3fr; gap: 22px; align-items: end; }
+.ss-k { display: flex; align-items: center; gap: 8px; font: 800 12.5px/1 var(--tg-body); letter-spacing: .12em; text-transform: uppercase; }
+.ss-trap { border: 2.5px solid var(--ss-coral); border-radius: 20px; padding: 16px 20px 18px; background: var(--ss-coral-soft); transform: rotate(-1.5deg); }
+.ss-trap .ss-k { color: var(--ss-trap-key); }
+.ss-trap p { margin: 10px 0 0; font: 600 16px/1.4 var(--tg-body); color: var(--ss-trap-ink); }
+.ss-remember { display: flex; align-items: flex-end; gap: 6px; }
+.ss-say { position: relative; flex: 1; min-width: 0; margin-bottom: 30px; border-radius: 20px; padding: 16px 20px 18px; background: var(--ss-say); }
+.ss-say::after { content: ""; position: absolute; right: -8px; bottom: 26px; width: 18px; height: 18px; border-radius: 3px; background: var(--ss-say); transform: rotate(45deg); }
+.ss-say .ss-k { color: var(--ss-say-key); }
+.ss-say p { position: relative; margin: 9px 0 0; font: italic 700 18px/1.3 var(--tg-display); color: var(--ss-say-ink); }
+.ss-foot { flex: none; margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 56px 24px; border-top: 1px solid var(--ss-line); font: 12.5px/1.3 var(--tg-body); color: var(--ss-muted); }
+.ss-foot > span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ss-foot b { color: var(--ss-ink); font-weight: 600; }
+.ss.ss-b {
+  --ss-paper: #14213F; --ss-ink: #F4EDE1; --ss-muted: #A9B6D3; --ss-line: rgba(255, 255, 255, .12); --ss-card: rgba(255, 255, 255, .07);
+  --ss-band: transparent; --ss-side-l: rgba(239, 99, 81, .17); --ss-side-r: rgba(22, 163, 116, .2);
+  --ss-coral-soft: #EF6351; --ss-trap-ink: #FFFFFF; --ss-trap-key: #FFFFFF; --ss-say: #F2C14E; --ss-say-ink: #14213F; --ss-say-key: #14213F;
+  --ss-title: italic 700 54px/1.06 var(--tg-display);
+  background: radial-gradient(640px 520px at 88% -4%, rgba(74, 114, 204, .55), transparent 62%), radial-gradient(520px 420px at -10% 100%, rgba(242, 193, 78, .14), transparent 60%), linear-gradient(168deg, #172752, #14213F 55%, #101A33);
+}
+.ss-b .ss-hero { padding-top: 54px; padding-bottom: 34px; }
+.ss-b .ss-tag { color: #C9D2E3; }
+.ss-b .ss-chips span { background: rgba(242, 193, 78, .16); color: var(--ss-gold); }
+.ss-b .ss-blob.b1 { right: -130px; bottom: -180px; background: transparent; border: 3px solid var(--ss-coral); }
+.ss-b .ss-blob.b3 { background: transparent; border: 3px solid var(--ss-mint); }
+.ss-b .ss-cell { border-top-color: rgba(255, 255, 255, .13); }
+.ss-b .ss-vsb i { background: var(--ss-gold); color: #14213F; }
+.ss-b .ss-steps::before { background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .3) 0 9px, transparent 9px 16px); }
+.ss-b .ss-dot em { background: #F4EDE1; color: #14213F; }
+/* The PDF, opened in the system's reader. */
+.pdfwin { display: inline-flex; flex-direction: column; align-items: center; max-width: 100%; padding: 0 28px 28px; border-radius: 10px; overflow: hidden; background: #3A3E46; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); }
+.pdf-bar { align-self: stretch; margin: 0 -28px; height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; background: #26292F; color: #E6E9EE; font: 500 12.5px/1 var(--ui-font); white-space: nowrap; }
+.pdf-bar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pdf-bar > em { margin-left: auto; font-style: normal; color: #A1A8B4; font-variant-numeric: tabular-nums; }
+.pdf-page { position: relative; flex: none; margin-top: 28px; overflow: hidden; background: #FFFFFF; box-shadow: 0 6px 22px rgba(0, 0, 0, .4); }
+.pdf-page > div { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+/* Documentation of the proposals. */
+.pdoc .pipe { display: flex; align-items: stretch; margin: 4px 0 40px; }
+.pdoc .pipe-step { flex: 1; min-width: 0; display: grid; align-content: start; gap: 7px; padding: 14px 14px 16px; border: 1px solid var(--doc-line); border-radius: 12px; }
+.pdoc .pipe-where { font: 600 10.5px/1 var(--ui-font); letter-spacing: .1em; text-transform: uppercase; color: var(--doc-faint); }
+.pdoc .pipe-step b { font: 600 14px/1.3 var(--ui-font); color: var(--doc-ink); overflow-wrap: anywhere; }
+.pdoc .pipe-step > span:last-child { font-size: 12.5px; line-height: 1.45; color: var(--doc-muted); }
+.pdoc .pipe-arrow { position: relative; flex: none; width: 30px; }
+.pdoc .pipe-arrow::before { content: ""; position: absolute; left: 6px; right: 10px; top: 50%; height: 2px; margin-top: -1px; background: var(--doc-accent); }
+.pdoc .pipe-arrow::after { content: ""; position: absolute; right: 4px; top: 50%; margin-top: -5px; border: 5px solid transparent; border-right: 0; border-left: 7px solid var(--doc-accent); }
+.pdoc .two { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; margin-bottom: 30px; }
+.pdoc .two > div { min-width: 0; }
+.pdoc .quote { margin: 0; padding: 16px 20px; border-left: 3px solid var(--doc-gold); border-radius: 0 10px 10px 0; background: #FBF6EA; font: italic 16px/1.55 var(--tg-display); color: var(--doc-ink); }
+.pdoc .small { margin: 10px 0 0; font-size: 12.5px; color: var(--doc-muted); }
+.pdoc .ftab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pdoc .ftab td { padding: 8px 12px 8px 0; border-top: 1px solid var(--doc-line); vertical-align: top; color: var(--doc-muted); }
+.pdoc .ftab td:last-child { padding-right: 0; white-space: nowrap; text-align: right; font: 12px/1.5 var(--ui-mono); color: var(--doc-faint); }
+.pdoc .dl { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13.5px; color: var(--doc-muted); }
+.pdoc .dl b { color: var(--doc-ink); font-weight: 600; }
+.pdoc code { padding: 1px 5px; border-radius: 4px; background: var(--doc-soft); font: 12px/1.5 var(--ui-mono); color: var(--doc-ink); overflow-wrap: anywhere; }
+.pdoc .pick { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; background: #E3F4EA; color: #1F6B42; font: 700 10px/1.4 var(--ui-font); letter-spacing: .04em; text-transform: uppercase; vertical-align: 1px; }
+.pdoc .rules4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 6px 0 30px; }
+.pdoc .rule { border: 1px solid var(--doc-line); border-radius: 12px; padding: 14px 16px 16px; }
+.pdoc .rule h4 { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; font: 600 13px/1.2 var(--ui-font); color: var(--doc-ink); }
+.pdoc .rule h4 i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.pdoc .rule ul { margin: 0; padding-left: 16px; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; color: var(--doc-muted); }
+.pdoc .tl { display: block; margin: 0 0 28px; }
+
+/* Minimize: his corner of a 13-inch laptop at 150 % (1280 × 720 points), notes open behind him. */
+.lap {
+  --la-bg: #FFFFFF; --la-chrome: #F3F4F7; --la-ink: #1B2232; --la-muted: #6B7385; --la-line: #E2E6EC; --la-skel: #DFE4EC; --la-nav: #F7F8FA; --la-on: #E4ECFA;
+  position: relative; width: 1280px; height: 720px; overflow: hidden; background: linear-gradient(160deg, #DCE7F6, #C7D7EE);
+}
+.tg-dark .lap { --la-bg: #1E2230; --la-chrome: #191C26; --la-ink: #E6E9F0; --la-muted: #9AA3B5; --la-line: #2C3242; --la-skel: #353C4E; --la-nav: #1A1E29; --la-on: #26324A; background: linear-gradient(160deg, #0E1525, #111B2E); }
+.lap-app { position: absolute; left: 0; top: 0; right: 0; bottom: 48px; display: flex; flex-direction: column; background: var(--la-bg); color: var(--la-ink); font-family: 'Segoe UI', system-ui, sans-serif; }
+.la-bar { height: 34px; flex: none; display: flex; align-items: center; padding-left: 14px; background: var(--la-chrome); font-size: 12px; color: var(--la-muted); }
+.la-bar .la-title { flex: 1; }
+.la-ctl { display: flex; }
+.la-ctl i { width: 46px; height: 34px; display: grid; place-items: center; font-style: normal; font-size: 12px; color: var(--la-muted); }
+.la-tools { height: 44px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--la-line); background: var(--la-chrome); }
+.la-tools i { width: 26px; height: 18px; border-radius: 4px; background: var(--la-skel); }
+.la-tools i:nth-child(4n) { width: 64px; }
+.la-body { flex: 1; min-height: 0; display: flex; }
+.la-nav { width: 240px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 20px 12px; border-right: 1px solid var(--la-line); background: var(--la-nav); font-size: 13px; color: var(--la-muted); }
+.la-nav span { padding: 7px 10px; border-radius: 6px; }
+.la-nav .on { background: var(--la-on); color: var(--la-ink); font-weight: 600; }
+.la-doc { flex: 1; min-width: 0; padding: 32px 56px; overflow: hidden; }
+.la-doc h1 { margin: 0 0 18px; font: 600 26px/1.2 'Segoe UI', system-ui, sans-serif; }
+.la-doc h2 { margin: 24px 0 12px; font: 600 18px/1.2 'Segoe UI', system-ui, sans-serif; }
+.la-lines { display: grid; gap: 11px; margin: 0; }
+.la-lines i { display: block; height: 9px; border-radius: 5px; background: var(--la-skel); }
+.la-table { display: grid; grid-template-columns: 1.3fr 1fr 1fr; margin-top: 16px; border: 1px solid var(--la-line); border-radius: 8px; overflow: hidden; }
+.la-table span { padding: 8px 12px; border-top: 1px solid var(--la-line); font-size: 12.5px; color: var(--la-muted); }
+.la-table .h { border-top: 0; background: var(--la-nav); color: var(--la-ink); font-weight: 600; }
+.crop { position: relative; overflow: hidden; }
+.crop-in { position: absolute; left: 0; top: 0; }
+.crop > .tstamp { z-index: 5; padding: 6px 9px; border-radius: 7px; border: 1px solid var(--tg-line); background: var(--tg-panel); }
+/* Annotations: where he stood, how he moves (the editor's blue, not his). */
+.ghost-box { position: absolute; z-index: 3; border: 1.5px dashed var(--ui-sel); border-radius: 6px; pointer-events: none; }
+.ghost-box.is-faint { border-color: color-mix(in srgb, var(--ui-sel) 55%, transparent); }
+.ghost-box > span { position: absolute; left: 50%; top: -26px; transform: translateX(-50%); padding: 4px 8px; border-radius: 999px; background: var(--ui-sel); color: #FFFFFF; font: 600 11px/1 var(--ui-font); white-space: nowrap; }
+.ghost-box.is-below > span { top: auto; bottom: -26px; }
+.lap-ann { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; overflow: visible; }
+.note-pill { position: absolute; z-index: 4; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--ui-sel); color: #FFFFFF; font: 600 12px/1 var(--ui-font); white-space: nowrap; }
+/* His sizes, on a desk. */
+.sizes { display: grid; gap: 18px; padding: 44px 56px 44px; }
+.sz-row { display: flex; align-items: flex-end; gap: 52px; }
+.sz-col { display: grid; justify-items: center; gap: 4px; min-width: 150px; text-align: center; }
+.sz-stage { height: 186px; display: flex; align-items: flex-end; }
+.sz-base { width: 100%; height: 1px; margin: 4px 0 12px; background: var(--tg-line); }
+.sz-col b { font: 700 16px/1.2 var(--tg-display); color: var(--tg-text); }
+.sz-col b em { margin-left: 6px; padding: 3px 7px; border-radius: 999px; background: var(--tg-ink); color: var(--tg-panel); font: 600 10.5px/1 var(--tg-body); font-style: normal; letter-spacing: .05em; text-transform: uppercase; vertical-align: 2px; }
+.sz-col span { font: 12px/1.45 var(--tg-body); color: var(--tg-muted); font-variant-numeric: tabular-nums; }
+.sz-sub { margin-top: 22px; font: 600 11px/1 var(--tg-body); letter-spacing: .1em; text-transform: uppercase; color: var(--tg-muted); }
+.sz-ranks { display: flex; align-items: flex-end; gap: 44px; }
+.sz-rank { display: grid; justify-items: center; gap: 8px; font: 12px/1.2 var(--tg-body); color: var(--tg-muted); }
+/* The prototype: his size, the PDF. */
+.live-fig { transform-origin: 100% 100%; transition: transform .45s cubic-bezier(.65, 0, .35, 1); }
+.live-fig.is-growing { transition: transform .35s cubic-bezier(.34, 1.56, .64, 1); }
+.p-pdf { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(8, 10, 14, .72); padding: calc(20px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+
 /* --- Narrow screens ---------------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "bar" "canvas"; }
@@ -765,7 +947,7 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
   <aside class="panel left" id="left" aria-label="Pages and layers">
     <div class="file">
       <span class="file-mark" id="file-mark"></span>
-      <div><div class="file-name">Tagnan</div><div class="file-sub">Interface design · October 2026</div></div>
+      <div><div class="file-name">Tagnan</div><div class="file-sub">Interface design · November 2026</div></div>
     </div>
     <div class="ph">Pages <span id="page-count"></span></div>
     <nav class="pages" id="pages" aria-label="Pages"></nav>
@@ -811,6 +993,7 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
     <span style="margin-left:auto;display:flex;gap:8px"><button class="pbtn" id="p-restart">Restart</button><button class="pbtn primary" id="p-close">Close</button></span>
   </div>
   <div class="pstage" id="pstage"></div>
+  <div class="p-pdf" id="p-pdf" hidden></div>
 </div>
 
 <script>
@@ -859,9 +1042,22 @@ const ICONS = {
   account: 'M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4.5 4-6.5 8-6.5s7 2 8 6.5',
 };
 
+// Icons the proposals add: the study sheet's, and Minimize's corner and grow.
+const PICONS = {
+  corner: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 8l8 8M16 11v5h-5',
+  grow: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM16 16L8 8M8 13V8h5',
+  doc: 'M6 3h8l5 5v13H6zM14 3v5h5M9 13h6M9 17h6',
+  book: 'M12 6.5C9.5 4.8 6.5 4.5 3 5.2v13c3.5-.7 6.5-.4 9 1.3 2.5-1.7 5.5-2 9-1.3v-13c-3.5-.7-6.5-.4-9 1.3zM12 6.5v13',
+  chunks: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  vector: 'M6 18L18 6M11 6h7v7M6 16.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
+  quote: 'M10 7H6.5A1.5 1.5 0 0 0 5 8.5V12h4v1c0 2-1 3.2-3 3.8M19 7h-3.5A1.5 1.5 0 0 0 14 8.5V12h4v1c0 2-1 3.2-3 3.8',
+  cross: 'M6 6l12 12M18 6L6 18',
+  warn: 'M12 3.5 22 20.5H2zM12 10v4.5M12 17.5v.5',
+};
+
 function glyph(name, tint = 'var(--tg-muted)', size = 18, cls = '') {
   return `<svg class="glyph${cls ? ' ' + cls : ''}" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">`
-    + `<path d="${ICONS[name] || ''}" fill="none" stroke="${tint}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    + `<path d="${ICONS[name] || PICONS[name] || ''}" fill="none" stroke="${tint}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 // Each inline SVG gets ids of its own, or its glow filter would point at another figure's.
@@ -944,14 +1140,14 @@ function bubble(c, u = {}) {
         + `<div class="b-para">${esc(c.news)}</div></div>`);
     }
     P.push(`<div class="b-para b-note">${esc(c.points)}</div>`);
-    const buttons = [action(c.correct ? 'Continue' : 'Got it', { primary: true, act: L && 'dismiss' })];
-    if (m === 'result' && !c.correct) buttons.push(action('Tell me more', { act: L && 'more', hover: u.moreHover }));
-    if (m === 'thinking') buttons.push(`<span class="b-thinking">Tagnan is thinking${'.'.repeat(u.dots || 3)}</span>`);
-    P.push(`<div class="b-bar"><div class="b-row8">${buttons.join('')}</div>${m === 'result' ? link('Report', { act: L && 'flag' }) : ''}</div>`);
+    P.push(verdictBar(c, u, L, m));
   } else if (m === 'explanation' || m === 'message') {
     P.push(`<div class="b-para b-14">${esc(c.text)}</div>`);
-    if (m === 'explanation') P.push(action('Got it', { primary: true, act: L && 'dismiss' }));
+    if (m === 'explanation') P.push(c.sheet ? `<div class="b-row8">${action('Got it', { primary: true, act: L && 'dismiss' })}${sheetButton(c, u, L)}</div>`
+      : action('Got it', { primary: true, act: L && 'dismiss' }));
+    if (m === 'message' && c.file) P.push(`<div class="b-file">${glyph('doc', 'var(--tg-ink)', 16)}<span>${esc(c.file)}</span></div>`);
     if (m === 'message' && c.button) P.push(action(c.button, { primary: true, act: L && 'dismiss' }));
+    if (m === 'message' && c.buttons) P.push(`<div class="b-row8">${c.buttons.map(b => action(b.label, { primary: b.primary, act: L && b.act })).join('')}</div>`);
   } else if (m === 'pause') {
     const pv = u.preview || { ok: false, text: '' };
     P.push(`<div class="b-flow">${c.choices.map(x => action(x.label, { act: L && 'pause:' + x.text, hover: u.hoverChoice === x.text })).join('')}</div>`);
@@ -1004,12 +1200,14 @@ function commandRows(c) {
   ];
   if (c.account && c.accountAt === 'row') list.push({ action: 'sub:account', label: 'Account', value: c.account.email || 'Not signed in', icon: 'account', more: true, strong: !c.account.email });
   list.push({ separator: true });
+  if (c.sheet) list.push({ action: 'sheet', label: 'Inking a sheet…', value: c.sheet, icon: 'spinner', busy: true });
   if (c.paused) {
     list.push({ action: 'resume', label: 'Resume now', value: c.next, icon: 'resume' });
     list.push({ action: 'pause', label: 'Change the break…', icon: 'pause' });
   } else {
     list.push({ action: 'pause', label: 'A break…', icon: 'pause' });
   }
+  if (c.small !== undefined && c.smallAt !== 'head') list.push({ action: 'small', label: 'Minimize', icon: 'corner', toggle: !!c.small });
   const up = c.update;
   if (up) list.push({ action: 'update', label: up.label, value: up.value, icon: up.busy ? 'spinner' : 'update', pill: up.pill, busy: up.busy, strong: up.strong });
   list.push({ action: 'quit', label: 'Quit Tagnan', icon: 'quit', quiet: true });
@@ -1019,8 +1217,8 @@ function suggestionRows(found) {
   return found.map(s => {
     const verb = s.action === 'sub:hours' ? 'hours' : s.action.split(':')[0];
     const name = verb === 'theme' ? (s.action === 'theme:dark' ? 'moon' : 'sun')
-      : ({ pace: 'pace', hours: 'hours', days: 'hours', call: 'call', pause: 'pause', learn: 'learn', focus: 'focus' })[verb] || verb;
-    return { action: s.action, label: s.label, value: s.sub, icon: ICONS[name] ? name : 'search', more: s.action.startsWith('sub:') };
+      : ({ pace: 'pace', hours: 'hours', days: 'hours', call: 'call', pause: 'pause', learn: 'learn', focus: 'focus', small: 'corner' })[verb] || verb;
+    return { action: s.action, label: s.label, value: s.sub, icon: ICONS[name] || PICONS[name] ? name : 'search', more: s.action.startsWith('sub:') };
   });
 }
 function menuRow(r, i, u, typed) {
@@ -1030,7 +1228,7 @@ function menuRow(r, i, u, typed) {
   const tint = r.primary ? 'var(--tg-panel)' : r.strong ? 'var(--tg-gold)' : r.busy ? 'var(--tg-ink)' : 'var(--tg-muted)';
   const cls = ['m-row', r.primary && 'is-primary', on && !r.primary && 'is-hl', on && r.primary && u.keyboard && 'is-ring',
     two && 'is-two', r.quiet && 'is-quiet', r.strong && 'is-strong'].filter(Boolean).join(' ');
-  const value = two ? '' : r.pill ? `<span class="m-pill">${esc(r.value)}</span>`
+  const value = two ? '' : r.toggle !== undefined ? `<span class="m-switch${r.toggle ? ' is-on' : ''}" aria-hidden="true"><i></i></span>` : r.pill ? `<span class="m-pill">${esc(r.value)}</span>`
     : (r.value || r.more) ? `<span class="m-value">${esc((r.value || '') + (r.more ? '  ›' : ''))}</span>` : '';
   const label = two ? `<span class="m-two"><span class="m-label">${esc(r.label)}</span><span class="m-sub">${esc(r.value)}</span></span>`
     : `<span class="m-label">${esc(r.label)}</span>`;
@@ -1104,10 +1302,11 @@ function sublist(c, u) {
 function menu(c, u = {}) {
   const typed = (u.typed || '').trim() !== '';
   const rows = typed ? suggestionRows(u.suggestions || []) : commandRows(c);
-  const head = `<div class="m-head" data-m="head">${tagIcon(c.stage, 40)}<div class="m-hcol"><div class="m-grade">${esc(c.grade)}</div>`
+  const two = c.smallAt === 'head';
+  const head = `<div class="m-head${two ? ' has-two' : ''}" data-m="head">${tagIcon(c.stage, 40)}<div class="m-hcol"><div class="m-grade">${esc(c.grade)}</div>`
     + `<div class="m-bar"><i style="width:${(c.share * 100).toFixed(1)}%"></i></div><div class="m-points">${esc(c.points)}</div></div>`
-    + `<span class="m-theme${u.themeHover ? ' is-hover' : ''}"${act(u.live && 'theme')} aria-label="Dark or light">`
-    + `<span class="when-light">${glyph('moon', 'var(--tg-ink)')}</span><span class="when-dark">${glyph('sun', 'var(--tg-ink)')}</span></span></div>`;
+    + (two ? `<span class="m-hbtns">${smallButton(c, u)}` : '') + `<span class="m-theme${u.themeHover ? ' is-hover' : ''}"${act(u.live && 'theme')} aria-label="Dark or light">`
+    + `<span class="when-light">${glyph('moon', 'var(--tg-ink)')}</span><span class="when-dark">${glyph('sun', 'var(--tg-ink)')}</span></span>${two ? '</span>' : ''}</div>`;
   const input = u.live ? `<input id="menu-field" data-input="menu" value="${esc(u.typed || '')}" placeholder="Type: break 45, often, learn pottery…" autocomplete="off" spellcheck="false" aria-label="Tell Tagnan what to do">`
     : typed ? `<span>${esc(u.typed)}</span><i class="caret"></i>` : `<i class="caret at-start"></i><span class="f-ph">Type: break 45, often, learn pottery…</span>`;
   const fieldHtml = `<div class="m-field${typed ? ' is-typing' : ''}" data-m="field">${glyph('search')}${input}</div>`;
@@ -1190,6 +1389,7 @@ const MENU = {
   pace: 'Regularly', paceKey: 'regularly', call: 'Bugle call', sound: 'Bugle call · 65 %', volume: 65, callKey: 'bugle',
   paces: PACES, calls: CALLS, model: 'Opus 5.5', modelKey: 'claude-opus-5-5', theme: '', models: MODELS, update: UPDATE_NEW,
   account: ACCOUNT, accountAt: 'foot',
+  small: false, smallAt: 'head',  // Minimize, the button beside the moon
 };
 Object.assign(MENU, withHours(MENU, 9, 19, false));
 const MENU_PAUSED = { ...MENU, paused: true, next: 'until 16:00' };
@@ -1222,17 +1422,20 @@ const RIGHT_B = 'B. Retrieval Augmented Generation with Amazon Bedrock Knowledge
 const R_RIGHT = {
   mode: 'result', correct: true, title: 'Touché!', chosen: [], right: RIGHT_B, explanation: EXPL,
   reference: 'Amazon Bedrock User Guide, Knowledge Bases', points: '+13 points · 1284 in all · streak of 4', news: '', promoted: false, rank: '',
+  sheet: 'ready',
 };
 const R_WRONG = {
   mode: 'result', correct: false, title: 'Sacrebleu!',
   chosen: [{ letter: 'A', text: 'Fine-tune a foundation model on the runbooks every week', why: 'fine-tuning bakes knowledge into the weights; retraining every week costs time and money, and the answers still lag behind the runbooks.' }],
   right: RIGHT_B, explanation: EXPL, reference: 'Amazon Bedrock User Guide, Knowledge Bases',
   points: '−8 points · 1263 in all · streak reset', news: 'This question will come back tomorrow.', promoted: false, rank: '',
+  sheet: 'ready',
 };
 const R_THINKING = { ...R_WRONG, mode: 'thinking' };
 const EXPLANATION = {
   mode: 'explanation', title: 'Listen well',
   text: 'Fine-tuning changes what the model knows by heart; RAG hands it the pages to read before it answers. Runbooks that change every week call for the pages.\n\nKnowledge Bases split the runbooks into chunks, store their embeddings in a vector store and fetch the closest chunks for each question. The model answers from them and can cite them: sync the data source, and the next answer already knows this week’s procedure.\n\nTo remember it: fine-tuning for how to speak, RAG for what to say.',
+  sheet: 'ready',
 };
 const R_PROMO = {
   mode: 'result', correct: true, title: 'Well parried!', chosen: [],
@@ -1240,6 +1443,7 @@ const R_PROMO = {
   explanation: 'Clarify measures bias in the training data and in the model’s predictions before launch; Model Monitor watches for bias drift once the model runs in production.',
   reference: 'Amazon SageMaker AI Developer Guide, Clarify', points: '+15 points · 2004 in all · streak of 6',
   news: 'Promotion! Tagnan is now a Musketeer: the musketeers’ cross and a white plume.', promoted: true, rank: 'Musketeer',
+  sheet: 'ready',
 };
 const STATS = {
   mode: 'stats', title: 'Cadet', points: 1284, next: '2000 for Musketeer', share: 0.349,
@@ -2452,7 +2656,7 @@ function desktopFrame(id, name, mode, html, o = {}) {
 
 // --- Pages -----------------------------------------------------------------------------------------
 function coverHtml() {
-  return `<div class="cover"><div class="cv-top"><span class="cv-mark">${tagIcon(5, 32)}</span><span class="cv-eyebrow">Tagnan · Interface design</span><span class="cv-date">Updated 27 October 2026</span></div>`
+  return `<div class="cover"><div class="cv-top"><span class="cv-mark">${tagIcon(5, 32)}</span><span class="cv-eyebrow">Tagnan · Interface design</span><span class="cv-date">Updated 25 November 2026</span></div>`
     + '<h1 class="cv-title">Tagnan</h1><p class="cv-tag">An ink musketeer who quizzes you from the corner of your screen.</p>'
     + '<p class="cv-lead">Claude writes the questions, on an AWS exam or anything else you are learning. He asks them in a speech bubble, cheers or scolds, explains what you missed, and climbs six ranks as you get them right.</p>'
     + `<div class="cv-ladder">${GRADES.map((g, i) => `<div class="cv-rank">${figure(i, i === 5 ? 'happy' : 'idle', { w: 140 })}<span class="cv-rname">${g.name}</span><span class="cv-rpts">${g.threshold.toLocaleString('en-GB')} pts</span></div>`).join('')}</div>`
@@ -2468,6 +2672,293 @@ function tocHtml() {
     + '<span><b>Light / Dark</b> at the top right switches every Tagnan frame between his two modes. <b>Present</b> opens a prototype you can play with.</span></div>';
 }
 function frameCount(p) { return p.rows.flat().reduce((n, s) => n + s.frames.length, 0); }
+
+// --- The study sheet and Minimize (built 25 November 2026) -------------------------------------
+/* The study sheet: under each verdict, a button that has Claude write a one-page PDF on what the
+   question was about, drawn by Tagnan and saved in Downloads. Minimize: a button beside the moon
+   in his menu that keeps him small in his corner, full size only to ask. Their pages come last,
+   with the alternatives that were not retained; the prototype plays both. */
+const MINI = 0.35;  // minimized, his 150 × 176 figure becomes 53 × 62
+const px = v => Math.round(v + 1e-6);  // 59.5 is 60, though 170 × 0.35 is a hair under it
+const sheetIcon = (name, colour = '#FFFFFF', size = 24, width = 2.2) => `<svg class="glyph" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">`
+  + `<path d="${ICONS[name] || PICONS[name] || ''}" fill="none" stroke="${colour}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+// What Claude would write for the question of the Bubble page: RAG or fine-tuning.
+const SHEET = {
+  file: 'Tagnan – RAG or fine-tuning.pdf',
+  course: 'AWS Certified AI Practitioner', where: 'Domain 3',
+  title: 'RAG or fine-tuning?',
+  tagline: 'Facts that change every week? Hand the model the pages. Don’t retrain it.',
+  versus: {
+    l: { name: 'Fine-tuning', what: 'learns by heart', icon: 'learn' },
+    r: { name: 'RAG', what: 'reads, then answers', icon: 'book' },
+    rows: [
+      { label: 'To update', l: [false, 'Retrain: hours, $$$'], r: [true, 'Sync: minutes'] },
+      { label: 'Best for', l: [true, 'Style, tone, format'], r: [true, 'Facts that change'] },
+      { label: 'Sources', l: [false, 'None to show'], r: [true, 'Cites its passages'] },
+    ],
+  },
+  steps: { title: 'How RAG answers', list: [
+    { name: 'Chunk', what: 'docs into passages', icon: 'chunks' },
+    { name: 'Embed', what: 'each as a vector', icon: 'vector' },
+    { name: 'Retrieve', what: 'the closest ones', icon: 'search' },
+    { name: 'Answer', what: 'and cite them', icon: 'quote' },
+  ] },
+  terms: [
+    { name: 'Knowledge Bases', what: 'Bedrock’s managed RAG, from your own documents.' },
+    { name: 'Embedding', what: 'Text as numbers that keep its meaning.' },
+    { name: 'Vector store', what: 'Finds the nearest meaning, fast.' },
+  ],
+  trap: 'Fine-tuning to teach facts that change: slow, costly, and stale by next week.',
+  remember: 'RAG is an open-book exam. Fine-tuning is learning by heart.',
+  source: 'Amazon Bedrock User Guide, Knowledge Bases',
+  date: '25 November 2026',
+};
+// What the controller would send the bubble: `sheet` is the button's state under a verdict.
+const R_RIGHT_SHEET = R_RIGHT;
+const R_WRONG_SHEET = R_WRONG;
+const R_WRONG_INKING = { ...R_WRONG, sheet: 'inking' };
+const R_WRONG_DONE = { ...R_WRONG, sheet: 'done' };
+const EXPLANATION_SHEET = EXPLANATION;
+const MSG_SHEET_READY = {
+  mode: 'message', title: 'Signed and sealed!', text: 'Your sheet is in Downloads: one page, to read at a glance.', file: SHEET.file,
+  buttons: [{ label: 'Open it', primary: true, act: 'opensheet' }, { label: 'Show in folder', act: 'showfolder' }],
+};
+const MSG_SHEET_FAILED = {
+  mode: 'message', title: 'My quill broke', text: 'I couldn’t ink the sheet: Claude did not answer in time. Shall I try again?',
+  buttons: [{ label: 'Try again', primary: true, act: 'sheet' }, { label: 'Not now', act: 'dismiss' }],
+};
+const MENU_SHEET = { ...MENU, sheet: 'a minute or two' };
+// Minimize in his menu: a button beside the moon (B, retained), or a switch under A break… (A).
+const MENU_MINI = { ...MENU, small: false, smallAt: 'row' };
+const MENU_MINI_ON = { ...MENU, small: true, smallAt: 'row' };
+const MENU_MINI_HEAD = MENU;
+const MENU_MINI_HEAD_ON = { ...MENU, small: true };
+const SUGGEST_SMALL = [{ label: 'Minimize', sub: 'Small in his corner, full size to ask', action: 'small:on' }];
+// The user's prompt, in English as all his prompts are (tagnan/prompts/sheet.md).
+const SHEET_PROMPT = 'Make an explanatory PDF of this subject. I want the PDF graphic and visual, in a modern, colourful, friendly style. It must be clear and concise, with as few pages and as little text as possible: something one takes in at a glance.';
+const SHEET_FIELDS = [
+  ['title', 'The notion, as a name or a question', '≤ 6 words'],
+  ['tagline', 'The whole idea in one line', '≤ 16 words'],
+  ['versus', 'Two sides compared, three rows', '≤ 5 words a cell'],
+  ['steps', 'How it works, three to five steps', '≤ 6 words a step'],
+  ['terms', 'Three words to know', '≤ 10 words each'],
+  ['trap', 'The classic mistake', '≤ 16 words'],
+  ['remember', 'A way to remember it, in his voice', '≤ 14 words'],
+  ['source', 'What to read again', 'the question’s'],
+];
+
+// --- The bubble's parts the study sheet adds ------------------------------------------------------
+// A verdict's row (Bubble.qml): Continue or Got it, Tell me more, and the sheet once proposed.
+function verdictBar(c, u, L, m) {
+  const buttons = [action(c.correct ? 'Continue' : 'Got it', { primary: true, act: L && 'dismiss' })];
+  if (m === 'result' && !c.correct) buttons.push(action('Tell me more', { act: L && 'more', hover: u.moreHover }));
+  if (m === 'thinking') buttons.push(`<span class="b-thinking">Tagnan is thinking${'.'.repeat(u.dots || 3)}</span>`);
+  const asLink = c.sheetAt === 'link';
+  if (m === 'result' && c.sheet && !asLink) buttons.push(sheetButton(c, u, L));
+  const report = link('Report', { act: L && 'flag' });
+  const right = m !== 'result' ? '' : c.sheet && asLink ? `<div class="b-links">${sheetLink(c, u, L)}${report}</div>` : report;
+  return `<div class="b-bar"><div class="b-row8">${buttons.join('')}</div>${right}</div>`;
+}
+// Study sheet, then Inking your sheet… while Claude writes it, then Open the sheet.
+function sheetButton(c, u, L) {
+  if (c.sheet === 'inking') return `<span class="b-thinking">Inking your sheet${'.'.repeat(u.inkDots || 3)}</span>`;
+  if (c.sheet === 'done') return action('Open the sheet', { act: L && 'opensheet', hover: u.sheetHover });
+  return action('Study sheet', { act: L && 'sheet', hover: u.sheetHover });
+}
+function sheetLink(c, u, L) {
+  const label = c.sheet === 'inking' ? 'Inking…' : c.sheet === 'done' ? 'Open the sheet' : 'Study sheet';
+  return `<span class="tg-link b-sheetlink${u.sheetHover ? ' is-hover' : ''}"${act(L && (c.sheet === 'done' ? 'opensheet' : 'sheet'))}>${glyph('doc', 'currentColor', 14)}${esc(label)}</span>`;
+}
+// B: Minimize beside the moon, in ink once on.
+function smallButton(c, u) {
+  return `<span class="m-theme${c.small ? ' is-on' : ''}${u.smallHover ? ' is-hover' : ''}"${act(u.live && 'small')} aria-label="${c.small ? 'Full size' : 'Minimize'}">`
+    + `${glyph(c.small ? 'grow' : 'corner', c.small ? 'var(--tg-panel)' : 'var(--tg-ink)')}</span>`;
+}
+
+// --- The study sheet itself: one A4 page ------------------------------------------------------------
+function studySheet(look = 'a', s = SHEET) {
+  const mark = ok => `<i class="ss-mark ${ok ? 'yes' : 'no'}">${sheetIcon(ok ? 'check' : 'cross', '#FFFFFF', 14, 3)}</i>`;
+  const side = (k, colour) => {
+    const x = s.versus[k];
+    return `<div class="ss-side ${k}"><div class="ss-sh"><span class="ss-ic" style="background:${colour}">${sheetIcon(x.icon, '#FFFFFF', 28)}</span>`
+      + `<div><b>${esc(x.name)}</b><span>${esc(x.what)}</span></div></div>`
+      + s.versus.rows.map(r => `<div class="ss-cell">${mark(r[k][0])}<span>${esc(r[k][1])}</span></div>`).join('') + '</div>';
+  };
+  const hues = ['var(--ss-sky)', 'var(--ss-violet)', 'var(--ss-sun)', 'var(--ss-mint)'];
+  return `<div class="ss ss-${look}">`
+    + '<header class="ss-hero"><i class="ss-blob b1"></i><i class="ss-blob b2"></i><i class="ss-blob b3"></i>'
+    + `<div class="ss-chips"><span>${esc(s.course)}</span><span>${esc(s.where)}</span></div>`
+    + `<h1 class="ss-title">${esc(s.title)}</h1><p class="ss-tag">${esc(s.tagline)}</p></header>`
+    + '<div class="ss-body">'
+    + `<section class="ss-vs">${side('l', 'var(--ss-coral)')}<div class="ss-mid"><span class="ss-vsb"><i>vs</i></span>`
+    + s.versus.rows.map(r => `<span class="ss-lab">${esc(r.label)}</span>`).join('') + `</div>${side('r', 'var(--ss-mint)')}</section>`
+    + `<section><h4 class="ss-h">${esc(s.steps.title)}</h4><div class="ss-steps">`
+    + s.steps.list.map((x, i) => `<div class="ss-step"><span class="ss-dot" style="background:${hues[i % hues.length]}">${sheetIcon(x.icon, '#FFFFFF', 28)}<em>${i + 1}</em></span>`
+      + `<b>${esc(x.name)}</b><span>${esc(x.what)}</span></div>`).join('') + '</div></section>'
+    + '<section><h4 class="ss-h">Words to know</h4><div class="ss-terms">'
+    + s.terms.map((t, i) => `<div class="ss-term"><b><i style="background:${hues[i % hues.length]}"></i>${esc(t.name)}</b><span>${esc(t.what)}</span></div>`).join('') + '</div></section>'
+    + `<section class="ss-end"><div class="ss-trap"><div class="ss-k">${sheetIcon('warn', 'currentColor', 18, 2.4)}The trap</div><p>${esc(s.trap)}</p></div>`
+    + `<div class="ss-remember"><div class="ss-say"><div class="ss-k">Remember</div><p>${esc(s.remember)}</p></div>${figure(2, 'happy', { w: 108, glow: look === 'b' })}</div></section>`
+    + '</div>'
+    + `<footer class="ss-foot"><span>Read again: <b>${esc(s.source)}</b></span><span>${tagIcon(2, 18)}Tagnan · ${esc(s.date)} · 1 / 1</span></footer>`
+    + '</div>';
+}
+// The PDF in the system's reader, the page at `scale`.
+function pdfWindow(scale = 0.5, look = 'a', close = false) {
+  const w = Math.round(794 * scale), h = Math.round(1123 * scale);
+  return `<div class="pdfwin"><div class="pdf-bar">${sheetIcon('doc', '#C9D2E3', 16, 2)}<span>${esc(SHEET.file)}</span><em>1 / 1</em>`
+    + `${close ? '<button class="pbtn" data-pdf="close">Close</button>' : ''}</div>`
+    + `<div class="pdf-page" style="width:${w}px;height:${h}px"><div style="transform:scale(${scale})">${studySheet(look)}</div></div></div>`;
+}
+function sheetWhereHtml() {
+  const row = c => `<div class="wb">${verdictBar(c, {}, false, 'result')}</div>`;
+  return '<div class="stack">'
+    + variant('A · a button beside the others (retained)', row(R_RIGHT_SHEET) + row(R_WRONG_SHEET))
+    + variant('B · a quiet link beside Report (not retained)', row({ ...R_RIGHT_SHEET, sheetAt: 'link' }) + row({ ...R_WRONG_SHEET, sheetAt: 'link' }))
+    + variant('Its states, in A: offered, hovered, being inked, written', `<div class="b-row8">${action('Study sheet')}${action('Study sheet', { hover: true })}`
+      + `<span class="b-thinking">Inking your sheet...</span>${action('Open the sheet')}</div>`)
+    + '</div>';
+}
+function sheetHowDoc() {
+  const step = (where, title, text) => `<div class="pipe-step"><span class="pipe-where">${where}</span><b>${title}</b><span>${text}</span></div>`;
+  return '<div class="eyebrow">Study sheet · Built 25 November 2026</div><h2>How a sheet is made</h2>'
+    + '<p class="lead">One click under a verdict. Claude writes the words through his brain, as for Tell me more; Tagnan draws the page himself and saves it in Downloads. Nobody waits for it: the bubble may close meanwhile.</p>'
+    + `<div class="pipe">${[
+      step('Window', 'Study sheet', 'The question, its right answer, the explanation and the course go to his brain.'),
+      step('WSL · his brain', '<code>scripts/brain sheet</code>', 'claude -p as for Tell me more: clean environment, no tools, the answer checked against a schema.'),
+      step('Claude', 'Fills in the sheet', 'Your prompt, and his fields to fill: every one capped in words, so the page always fits.'),
+      step('Window', 'Draws one A4 page', 'With Qt’s own PDF writer (QPdfWriter): no new dependency. His colours, his faces, his figure.'),
+      step('Downloads', 'Tagnan – RAG or fine-tuning.pdf', 'Then “Signed and sealed!”, with Open it and Show in folder.'),
+    ].join('<span class="pipe-arrow" aria-hidden="true"></span>')}</div>`
+    + '<div class="two">'
+    + `<div><h3>Your prompt, as his brain sends it</h3><blockquote class="quote">${esc(SHEET_PROMPT)}</blockquote>`
+    + '<p class="small">Translated, as everything in his repository is in English. After it come the question, its answer and the explanation already shown; the sheet is written in English, as he speaks.</p></div>'
+    + `<div><h3>What Claude fills in</h3><table class="ftab"><tbody>${SHEET_FIELDS.map(([k, v, cap]) => `<tr><td><code>${k}</code></td><td>${v}</td><td>${cap}</td></tr>`).join('')}</tbody></table>`
+    + '<p class="small"><code>versus</code> and <code>steps</code>: one of them or both, as the notion calls for.</p></div>'
+    + '</div><div class="two">'
+    + '<div><h3>Where it lands</h3><ul class="dl"><li><b>Windows</b> <code>C:\\Users\\you\\Downloads\\Tagnan – RAG or fine-tuning.pdf</code></li>'
+    + '<li><b>macOS</b> <code>~/Downloads/Tagnan – RAG or fine-tuning.pdf</code></li>'
+    + '<li>A name already taken gets a number, <code>(2)</code>: nothing is ever overwritten, nothing is kept in his database.</li>'
+    + '<li>A minute or two at Opus 5.5’s max effort, the model and effort of Tell me more.</li></ul></div>'
+    + '<div><h3>Chosen</h3><ul class="dl"><li><b>The look</b>: A, cards on white<span class="pick">retained</span>, which prints well; not B, a poster on his ink.</li>'
+    + '<li><b>Who draws the page</b>: Tagnan, from Claude’s fields<span class="pick">retained</span>, one page every time; not Claude as free SVG, more varied but apt to spill over.</li>'
+    + '<li><b>The button</b>: “Study sheet”, beside the others<span class="pick">retained</span>, under every verdict, right or wrong; not a link beside Report.</li></ul></div>'
+    + '</div>'
+    + '<div class="src"><span>tagnan/prompts/sheet.md</span><span>tagnan/brain.py: sheet</span><span>tagnan/studysheet.py: the words, the icons</span><span>tagnan/ui/sheetpdf.py: the page</span><span>tagnan/ui/worker.py</span><span>tagnan/ui/controller.py</span><span>tagnan/ui/qml/Bubble.qml</span></div>';
+}
+
+// --- Minimize: his corner of a 13-inch laptop at 150 % (1280 × 720 points) ---------------------------
+const LX = 1090, LY = 484;  // his figure's box at full size: 40 px from the right, 12 above the taskbar
+const CROP = [640, 160, 640, 560];  // the corner a flow frame shows: x, y, width, height
+function lapApp() {
+  const lines = ws => `<p class="la-lines">${ws.map(w => `<i style="width:${w}%"></i>`).join('')}</p>`;
+  return '<div class="lap-app"><div class="la-bar"><span class="la-title">Study notes · AIF-C01</span><span class="la-ctl"><i>&#x2013;</i><i>&#x25A2;</i><i>&#x2715;</i></span></div>'
+    + `<div class="la-tools">${'<i></i>'.repeat(12)}</div><div class="la-body"><nav class="la-nav">`
+    + ['Fundamentals of AI and ML', 'Generative AI', 'Foundation models', 'Responsible AI', 'Security and governance'].map((t, i) => `<span${i === 2 ? ' class="on"' : ''}>${i + 1}. ${t}</span>`).join('')
+    + '</nav><article class="la-doc"><h1>Applications of Foundation Models</h1>' + lines([96, 92, 98, 64])
+    + '<h2>RAG or fine-tuning</h2>' + lines([94, 97, 88, 72])
+    + '<div class="la-table"><span class="h">When</span><span class="h">RAG</span><span class="h">Fine-tuning</span>'
+    + '<span>Facts change weekly</span><span>Sync the source</span><span>Retrain</span>'
+    + '<span>Answers must cite</span><span>Yes</span><span>No</span>'
+    + '<span>A house style</span><span>Prompt it</span><span>Yes</span></div>'
+    + '<h2>Prompt engineering</h2>' + lines([95, 90, 97, 93, 58]) + '</article></div></div>';
+}
+const gbox = (x, y, w, h, label = '', o = {}) => `<div class="ghost-box${o.below ? ' is-below' : ''}${o.faint ? ' is-faint' : ''}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">${label ? `<span>${label}</span>` : ''}</div>`;
+function annArrow(x1, y1, x2, y2) {
+  const n = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / n, uy = (y2 - y1) / n;
+  const hx = x2 - ux * 11, hy = y2 - uy * 11;
+  return `<path d="M${x1} ${y1}L${hx} ${hy}" style="fill:none;stroke:var(--ui-sel);stroke-width:2;stroke-dasharray:5 4"/>`
+    + `<path d="M${x2} ${y2}L${hx - uy * 6} ${hy + ux * 6}L${hx + uy * 6} ${hy - ux * 6}Z" style="fill:var(--ui-sel)"/>`;
+}
+const RING = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="2"/><path d="M7 1.5a5.5 5.5 0 1 1-5.2 3.7" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/></svg>';
+// o.scale: his size (1, MINI, or a moment of the spring between them); o.bubble, o.menu beside him.
+function laptop(o = {}) {
+  const s = o.scale ?? 1, w = 150 * s, h = 176 * s, stage = o.stage ?? 2;
+  const left = LX + 150 - w, top = LY + 176 - h;  // he shrinks into the corner: his box keeps its bottom right
+  const tw = 150 * MINI, th = 176 * MINI;
+  const parts = [lapApp()];
+  if (o.ghost) {
+    parts.push(gbox(LX - 10, LY - 34, 170, 210, 'His window today: 170 × 210'),
+      gbox(left - 10 * s, top - 34 * s, 170 * s, 210 * s, `${px(170 * s)} × ${px(210 * s)}`, { below: true }));
+  }
+  if (o.arrow) {
+    const from = [LX + 150 - tw - 3, LY + 176 - th - 3], to = [LX + 3, LY + 3];
+    parts.push(gbox(LX, LY, 150, 176, '', { faint: true }), gbox(LX + 150 - tw, LY + 176 - th, tw, th, '', { faint: true }),
+      `<svg class="lap-ann" width="1280" height="720" viewBox="0 0 1280 720" aria-hidden="true">${o.arrow === 'shrink' ? annArrow(...to, ...from) : annArrow(...from, ...to)}</svg>`);
+  }
+  parts.push(`<div class="onscreen" style="left:${left}px;top:${top}px">${figure(stage, o.expr || 'idle', { w })}</div>`);
+  if (o.bubble) parts.push(`<div class="onscreen" style="right:${1280 - (left + 2)}px;bottom:${720 - (top + h / 2 + 24)}px">${bubble(o.bubble, o.ui || {})}</div>`);
+  if (o.menu) {
+    const [px, py] = o.pointer;
+    parts.push(`<div class="onscreen" style="right:${1280 - px}px;bottom:${720 - py}px">${menu(o.menu, o.menuUi || {})}</div>`
+      + `<svg class="cursor" style="left:${px}px;top:${py}px" viewBox="0 0 18 24"><path d="M1 1l0 18l5-4.8l3.4 7.6l3-1.3l-3.3-7.4l7-.5z" fill="#111" stroke="#FFF" stroke-width="1.3"/></svg>`);
+  }
+  if (o.wait) parts.push(`<span class="note-pill" style="left:${LX + 6}px;top:${LY - 42}px">${RING}Small again in 3 s</span>`);
+  parts.push(`<div class="when-light">${taskbar(false, stage)}</div><div class="when-dark">${taskbar(true, stage)}</div>`);
+  return `<div class="lap">${parts.join('')}</div>`;
+}
+function corner(o) {
+  const [x, y, w, h] = o.crop || CROP;
+  return `<div class="crop" style="width:${w}px;height:${h}px"><div class="crop-in" style="transform:translate(${-x}px, ${-y}px)">${laptop(o)}</div>`
+    + `${o.stamp ? `<span class="tstamp"><b>${o.stamp[0]}</b> · ${o.stamp[1]}</span>` : ''}</div>`;
+}
+const SRC_SMALL = ['tagnan/ui/qml/Main.qml', 'tagnan/ui/controller.py', 'tagnan/ui/placement.py'];
+function lapFrame(id, name, o, extra = {}) {
+  return { id, name, kind: 'Desktop', mode: 'follow', w: 1280, h: 720, html: () => laptop(o), src: SRC_SMALL, tokens: TK.bubble,
+    figure: { stage: o.stage ?? 2, expr: o.expr || 'idle' }, ...extra };
+}
+function cornerFrame(id, name, o, extra = {}) {
+  const [, , w, h] = o.crop || CROP;
+  const c = o.bubble || o.menu;
+  const tokens = o.menu ? TK.menu : !c ? TK.plain : c.mode === 'result' ? TK.result : c.mode === 'quip' ? TK.quip : TK.bubble;
+  return { id, name, kind: 'Screen', mode: 'follow', w, h, html: () => corner(o), data: c, src: o.menu ? [...SRC_SMALL, 'tagnan/ui/qml/TagnanMenu.qml'] : SRC_SMALL,
+    tokens, figure: { stage: o.stage ?? 2, expr: o.expr || 'idle' }, ...extra };
+}
+// Today and three smaller sizes, at their real size; then 35 % at every rank.
+function sizesHtml() {
+  const free = 1280 * 672;  // a 13-inch laptop at 150 %, above the taskbar
+  const col = ([s, name, badge]) => {
+    const w = 150 * s, h = px(176 * s), ww = px(170 * s), wh = px(210 * s);
+    return `<div class="sz-col"><div class="sz-stage">${figure(2, 'idle', { w })}</div><div class="sz-base"></div>`
+      + `<b>${name}${badge ? `<em>${badge}</em>` : ''}</b><span>Figure ${px(w)} × ${h}</span>`
+      + `<span>Window ${ww} × ${wh}, ${(ww * wh / free * 100).toFixed(1)} % of the screen</span></div>`;
+  };
+  return `<div class="sizes"><div class="sz-row">${[[1, 'Today', ''], [0.5, '50 %', ''], [MINI, '35 %', 'Chosen'], [0.25, '25 %', '']].map(col).join('')}</div>`
+    + `<div class="sz-sub">At 35 %, every rank</div><div class="sz-ranks">${GRADES.map((g, i) => `<div class="sz-rank">${i === 3 ? r3('b', 'idle', { w: 150 * MINI }) : figure(i, 'idle', { w: 150 * MINI })}`
+    + `<span>${i === 3 ? 'Musketeer (B, retained)' : g.name}</span></div>`).join('')}</div></div>`;
+}
+function miniRulesDoc() {
+  const Y1 = 64, Ys = 196, axis = 226, line = '#C9D1DD', muted = '#5B6478';
+  const mark = (x, label, sub) => `<line x1="${x}" y1="40" x2="${x}" y2="${axis}" stroke="${line}" stroke-dasharray="3 4"/>`
+    + `<text x="${x}" y="${axis + 22}" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1B2232">${label}</text>`
+    + (sub ? `<text x="${x}" y="${axis + 40}" text-anchor="middle" font-size="12" fill="${muted}">${sub}</text>` : '');
+  const band = (x1, x2, label, fill) => `<rect x="${x1}" y="40" width="${x2 - x1}" height="${axis - 40}" fill="${fill}"/>`
+    + `<text x="${(x1 + x2) / 2}" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="${muted}">${label}</text>`;
+  const svg = '<svg class="tl" width="1032" height="280" viewBox="0 0 1032 280" role="img" aria-label="His size over time: small, he grows in 0.35 s when he asks, stays at full size while a bubble is open, and shrinks 3 s after it closes.">'
+    + '<defs><pattern id="mini-wait" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#CFE4FA" stroke-width="3"/></pattern></defs>'
+    + band(236, 640, 'A bubble he asks with: the question, the verdict, Tell me more', '#EEF1F6') + band(640, 800, 'He waits 3 s', 'url(#mini-wait)')
+    + `<line x1="56" y1="${axis}" x2="1010" y2="${axis}" stroke="#AEB6C4"/>`
+    + `<text x="46" y="${Y1 + 4}" text-anchor="end" font-size="12" fill="${muted}">100 %</text><text x="46" y="${Ys + 4}" text-anchor="end" font-size="12" fill="${muted}">35 %</text>`
+    + mark(170, 'His call', 'grows in 0.35 s') + mark(440, 'An answer', 'the verdict') + mark(640, 'The bubble closes', '') + mark(800, 'He shrinks', 'in 0.45 s')
+    + `<path d="M56 ${Ys}H170C186 ${Ys} 192 ${Y1 - 10} 212 ${Y1 - 9}S228 ${Y1} 240 ${Y1}H800C826 ${Y1} 838 ${Ys} 864 ${Ys}H1010" fill="none" stroke="#2B4A8C" stroke-width="3" stroke-linejoin="round"/>`
+    + '</svg>';
+  const rule = (colour, title, items) => `<div class="rule"><h4><i style="background:${colour}"></i>${title}</h4><ul>${items.map(x => `<li>${x}</li>`).join('')}</ul></div>`;
+  return '<div class="eyebrow">Minimize · Built 25 November 2026</div><h2>Small, except to ask</h2>'
+    + '<p class="lead">With Minimize on, his figure shrinks to 35 % in the corner he stands in. A question brings back his full size; once you are done with it, he goes back to his corner.</p>'
+    + svg + '<div class="rules4">'
+    + rule('#2B4A8C', 'Grows him', ['A question he asks on his own, with his call', '“A question now”, from his menu or from Progress'])
+    + rule('#2D7A4E', 'Keeps him big', ['The question, until answered or put off', 'The verdict, Tell me more and its explanation', 'The pointer on him or on his bubble'])
+    + rule('#8F6A12', 'Small again 3 s after', ['Continue or Got it', 'A right answer closing itself after 15 s', 'A click elsewhere, or Later', 'A question left alone ten minutes'])
+    + rule('#5B6478', 'Leaves him small', ['A tap, and his quips', 'His menu, Progress, a break, the subject', 'His messages', 'Being dragged'])
+    + '</div><div class="two">'
+    + '<div><h3>Where he shrinks</h3><ul class="dl"><li>Into the corner of the screen he stands nearest, so that the room he gives back is all of a piece; grown again, he stands exactly where he was.</li>'
+    + '<li>Only his figure shrinks: his bubbles, quips and menu keep their size, beside him.</li><li>Dragged while small, he keeps his new place at both sizes.</li></ul></div>'
+    + '<div><h3>Kept, and calm</h3><ul class="dl"><li>The button beside the moon is kept with his settings, as his theme is: he starts small next time.</li>'
+    + '<li>With reduced motion, no spring: his size changes at once.</li><li>The same on a Mac.</li></ul></div>'
+    + '</div><div class="src"><span>tagnan/ui/qml/Main.qml: his figure 150 × 176 → 53 × 62, his window with it</span><span>tagnan/ui/controller.py: small, grown</span>'
+    + '<span>tagnan/ui/menu.py, TagnanMenu.qml: the button beside the moon</span><span>tagnan/ui/placement.py: the bubble beside him, his nearest corner</span></div>';
+}
 
 const PAGES = [
   {
@@ -2715,6 +3206,105 @@ const PAGES = [
         { data: MENU, tokens: TK.menu, after: placeSublists, notes: ['Opened at the pointer near the corner: flipped up and left, its list on the left.'] }),
       desktopFrame('d-mac', 'macOS · light', 'light', () => macDesktop({ bubble: R_WRONG, expr: 'angry' }), { data: R_WRONG, tokens: TK.result, notes: ['On a Mac: Helvetica Neue, no Dock icon, an icon in the menu bar.', 'He follows you on every desktop (Spaces).'] }),
     ] }]],
+  },
+  // --- The study sheet and Minimize (built 25 November 2026) ---------------------------------------
+  {
+    id: 'sheet', name: 'Study sheet', blurb: 'Under each verdict, a button that has Claude write a one-page PDF on the question’s subject, drawn by Tagnan and saved in Downloads.',
+    desc: 'A study sheet in one click, built on 25 November 2026.',
+    rows: [
+      [{ id: 's-sheet-button', name: 'The button', desc: 'Under every verdict, right or wrong, and under Tell me more’s explanation. One click, and Claude writes a sheet on what the question was about; Tagnan speaks English, so it reads “Study sheet”.', frames: [
+        shot('sh-right', 'Right answer', R_RIGHT_SHEET, { expr: 'happy', cap: 'A right answer: one click, and the sheet is on its way.',
+          notes: ['Study sheet sits beside Continue, a secondary button.', 'The bubble still closes after 15 s unless the pointer rests on it; the sheet goes on being written.'] }),
+        shot('sh-wrong', 'Wrong answer', R_WRONG_SHEET, { expr: 'angry', cap: 'A wrong answer, where a sheet helps most.',
+          notes: ['After Got it and Tell me more; Report keeps its place on the right.', 'The three buttons and Report fit the 372 px row.'] }),
+        shot('sh-explain', 'Tell me more · explanation', EXPLANATION_SHEET, {
+          notes: ['The same button under the longer explanation.', 'One sheet a question: asked for from the verdict, it shows here as being inked, or as Open the sheet.'] }),
+        sheetFrame('sh-where', 'Where it sits, and its states', sheetWhereHtml, { cap: 'A is seen at once; B leaves the row as it is today.',
+          notes: ['Being inked: in italics, as “Tagnan is thinking”, its dots turning.', 'Open the sheet: once it is written, while the bubble that asked for it is still open.', 'A second sheet asked for meanwhile waits its turn.'],
+          tokens: ['ink', 'panel', 'choice', 'choiceHover', 'text', 'muted'], styles: ['button', 'note'] }),
+      ] }],
+      [{ id: 's-sheet-pdf', name: 'The sheet', max: 3000, desc: 'One A4 page, to take in at a glance: Claude chooses the words, Tagnan draws the page in his colours. Two looks to choose from, with the words of a real sheet on the question above.', frames: [
+        { id: 'sheet-a', name: 'A · Cards on white (retained)', kind: 'PDF', mode: 'none', w: 794, h: 1123, html: () => studySheet('a'),
+          src: ['tagnan/ui/sheetpdf.py', 'tagnan/studysheet.py', 'tagnan/prompts/sheet.md'],
+          notes: ['One A4 page every time: Claude’s words are capped field by field, so they fit.', 'His ink, gold and cream with four bright colours; Segoe UI and Georgia, his faces (Helvetica Neue on a Mac).', 'Prints well: white paper, colour where it counts.'],
+          cap: 'Claude chooses the words and which blocks to fill; Tagnan lays them out: the title, one line, a comparison, the steps, three words to know, the trap, a way to remember.' },
+        { id: 'sheet-b', name: 'B · Poster on his ink (not retained)', kind: 'PDF', mode: 'none', w: 794, h: 1123, html: () => studySheet('b'),
+          src: ['tagnan/ui/sheetpdf.py'],
+          notes: ['The same words and blocks, on his Prussian-blue ink.', 'Striking on a screen; heavy on ink if printed.'],
+          cap: 'The same sheet, as a poster.' },
+        docFrame('sheet-how', 'How a sheet is made', sheetHowDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc',
+          src: ['tagnan/brain.py', 'tagnan/ui/worker.py', 'tagnan/ui/controller.py'] }),
+      ] }],
+      [{ id: 's-sheet-flow', name: 'Making one', desc: 'From the click to the file in Downloads. Claude takes a minute or two, as for Tell me more; nobody waits for it.', grid: { cols: 4, gap: [120, 200] },
+        links: [['fs-click', 'fs-inking', 'Study sheet'], ['fs-inking', 'fs-ready', 'written, bubble closed'], ['fs-inking', 'fs-done', 'written, bubble open'],
+          ['fs-ready', 'fs-pdf', 'Open it'], ['fs-done', 'fs-pdf', 'Open the sheet'], ['fs-inking', 'fs-menu', 'meanwhile'], ['fs-inking', 'fs-failed', 'Claude fails']],
+        frames: [
+          shot('fs-click', 'A wrong answer', R_WRONG_SHEET, { expr: 'angry', ui: { sheetHover: true }, cell: [1, 1], notes: ['The pointer on Study sheet.'] }),
+          shot('fs-inking', 'Being inked', R_WRONG_INKING, { cell: [2, 1],
+            notes: ['The bubble may close: he goes on writing.', 'A minute or two with Opus 5.5 at max effort, as for Tell me more (explain_model, explain_effort).'] }),
+          shot('fs-ready', 'Signed and sealed!', MSG_SHEET_READY, { expr: 'happy', cell: [3, 1],
+            notes: ['Once his bubble is free: never over a question or a verdict, it waits for them to close.', '12 s, unless the pointer rests on it.', 'Open it: the system’s PDF reader. Show in folder: Explorer (Finder on a Mac), the file selected.'] }),
+          { id: 'fs-pdf', name: 'Open it', kind: 'PDF', mode: 'none', html: () => pdfWindow(0.5), cell: [4, 1], src: ['tagnan/ui/sheetpdf.py'],
+            notes: ['Opened by the system’s PDF reader.'] },
+          shot('fs-failed', 'My quill broke', MSG_SHEET_FAILED, { cell: [1, 2],
+            notes: ['Claude did not answer, or not as the schema asks: nothing is saved.', 'Try again asks once more; it stays until closed, as “My brain stalls” does.'] }),
+          menuShot('fs-menu', 'His menu meanwhile', MENU_SHEET, { current: -1 }, { cell: [2, 2],
+            notes: ['A busy row, as Update’s: a spinner and a bar that runs on.', 'Gone once the sheet is written.'] }),
+          shot('fs-done', 'Still open when written', R_WRONG_DONE, { cell: [3, 2],
+            notes: ['The bubble that asked for it is still open: its button becomes Open the sheet, and no other bubble comes.'] }),
+        ] }],
+    ],
+  },
+  {
+    id: 'small', name: 'Minimize', blurb: 'A button beside the moon in his menu keeps him small in his corner; he takes his full size only to ask a question.',
+    desc: 'Small, but for his questions; built on 25 November 2026.',
+    rows: [
+      [{ id: 's-small-menu', name: 'In his menu', desc: 'A button beside the moon, kept as his theme is: on, he lives small in his corner; off, as before. A switch among the rows was the other way.', frames: [
+        menuShot('mini-head', 'B · a button beside the moon (retained)', MENU_MINI_HEAD, { current: -1, smallHover: true }, { cap: 'The pointer on the new button.',
+          notes: ['No new row: an icon beside the theme’s.', 'The points line is cut shorter to make room.', 'On, the button fills with ink and its arrow points out.'] }),
+        menuShot('mini-head-on', 'B · switched on', MENU_MINI_HEAD_ON, { current: -1 }, {
+          notes: ['In ink while he is small; its arrow points out: one click and he is full size again.'] }),
+        menuShot('mini-row', 'A · a switch under A break… (not retained)', MENU_MINI, { current: 10 }, { cap: 'The pointer on the new row, the switch off.',
+          notes: ['Beside A break…: both are about how present he is.', 'A click flips it and keeps the menu open, so that one sees him shrink; Enter does the same.'] }),
+        menuShot('mini-row-on', 'A · switched on (not retained)', MENU_MINI_ON, { current: -1 }, {
+          notes: ['The switch in ink: Minimize is on.', 'Nothing else in his menu changes.'] }),
+        menuShot('mini-typed', 'Typed · small', MENU_MINI, { typed: 'small', suggestions: SUGGEST_SMALL, current: 0 }, {
+          notes: ['“small”, “tiny”, “minimize”, “mini”; “full size” or “big” turn it off.'] }),
+      ] }],
+      [{ id: 's-small-size', name: 'How small', desc: 'At 35 %, his window takes an eighth of the room it takes today, and he still reads as himself: his eyes, his hat, his rank.', frames: [
+        lapFrame('mini-lap-today', '13-inch laptop · today', {}, { cap: 'Today: his window, 170 × 210, over the notes one is reading.' }),
+        lapFrame('mini-lap-small', '13-inch laptop · minimized', { scale: MINI, ghost: true }, { cap: 'Minimized: 60 × 74, nine tenths of his room given back.',
+          notes: ['He keeps his corner; the dashed box is where he stood.'] }),
+        { id: 'mini-sizes', name: 'Sizes', kind: 'Character', mode: 'follow', cls: 'desk', html: sizesHtml, src: ['tagnan/ui/qml/Main.qml', 'tagnan/ui/qml/Tagnan.qml', 'tagnan/art.py'],
+          tokens: ['text', 'muted', 'ink', 'line'], cap: 'Today and three smaller sizes, at their real size; then 35 % at every rank.',
+          notes: ['35 %, as built: his eyes and his hat still read; at 25 % he is a blot of ink.', 'Shares of a 13-inch laptop at 150 %: 1280 × 672 above the taskbar.', 'Drawn as the window draws him: his layers render at the screen’s own resolution, so nothing blurs.'] },
+      ] }],
+      [{ id: 's-small-flow', name: 'A question, then small again', desc: 'He grows when he asks, stays at full size while you answer and read his verdict, and goes back to his corner 3 s after the bubble closes.', grid: { cols: 3, gap: [120, 160] },
+        links: [['mq-rest', 'mq-grow', 'his call'], ['mq-grow', 'mq-ask', '0.35 s'], ['mq-ask', 'mq-verdict', 'an answer'], ['mq-verdict', 'mq-wait', 'Continue, or 15 s'], ['mq-wait', 'mq-shrink', '3 s']],
+        frames: [
+          cornerFrame('mq-rest', 'Small, at rest', { scale: MINI, stamp: ['15:06', 'small in his corner'] }, { cell: [1, 1],
+            notes: ['Alive at 35 %: he blinks, his eyes follow the pointer, his ink ripples.'] }),
+          cornerFrame('mq-grow', 'His call: he grows', { scale: 0.72, expr: 'ask', arrow: 'grow', stamp: ['0 → 0.35 s', 'his call, he grows'] }, { cell: [2, 1],
+            notes: ['A spring with a slight overshoot, out of his corner.', 'His call sounds as he grows; the bubble opens once he is full size.'] }),
+          cornerFrame('mq-ask', 'He asks', { expr: 'ask', bubble: Q_SINGLE, stamp: ['0.35 s', 'then the question'] }, { cell: [3, 1],
+            notes: ['The question as today: the bubble beside him, at his full size.'] }),
+          cornerFrame('mq-verdict', 'His verdict', { expr: 'happy', bubble: R_RIGHT, stamp: ['an answer', 'he stays full size'] }, { cell: [3, 2],
+            notes: ['Tell me more and its explanation keep him big as well.'] }),
+          cornerFrame('mq-wait', 'The bubble closed', { wait: true, stamp: ['+0 → 3 s', 'he waits'] }, { cell: [2, 2],
+            notes: ['Continue, the 15 s of a right answer or a click elsewhere: the bubble closes, he waits 3 s.', 'The pointer on him holds the wait.'] }),
+          cornerFrame('mq-shrink', 'Back to his corner', { scale: 0.62, arrow: 'shrink', stamp: ['+3 → 3.45 s', 'he shrinks'] }, { cell: [1, 2],
+            notes: ['Eased in and out, no overshoot.', 'Then he is as at rest, until the next question.'] }),
+        ] }],
+      [{ id: 's-small-else', name: 'Small the rest of the time', desc: 'Only a question makes him grow. Everything else opens beside the small figure, at its usual size.', frames: [
+        cornerFrame('ms-tap', 'A tap', { scale: MINI, expr: 'wink', bubble: { mode: 'quip', text: 'Hey!' } }, {
+          notes: ['He winks and splashes at 35 %; the quip at its usual size beside him.'] }),
+        cornerFrame('ms-message', 'A message', { scale: MINI, bubble: MSG.pace }, {
+          notes: ['His messages open beside the small figure; he does not grow for them.'] }),
+        cornerFrame('ms-menu', 'His menu', { scale: MINI, menu: MENU_MINI_HEAD_ON, menuUi: { current: -1 }, pointer: [1206, 626], crop: [600, 16, 680, 704] }, {
+          notes: ['A right click on the small figure opens his menu, at its usual size.', 'The button beside the moon in ink: one click and he is back to his full size.'] }),
+        docFrame('ms-rules', 'Small, except to ask', miniRulesDoc, { w: 1160, kind: 'Documentation', cls: 'pdoc', src: SRC_SMALL }),
+      ] }],
+    ],
   },
 ];
 
@@ -3289,7 +3879,7 @@ const Proto = (() => {
       qi: 0, cur: null, pausedUntil: 0, nextAt: now() + 12 * 60000, pace: 'regularly', call: 'bugle', volume: 65, model: 'claude-opus-5-5',
       start: 9, end: 19, weekends: false,
       taps: [], gone: false, cover: false, rays: false, shown: null, update: 'new', subject: '', putAway: null,
-      course: 'aif-c01',
+      course: 'aif-c01', small: false, big: false, sheetJob: null, answerId: 0,
       courses: [
         { key: 'aif-c01', label: 'AWS Certified AI Practitioner', code: 'AIF-C01', stage: 2, points: 1985, streak: 3 },
         { key: 'pottery', label: 'Pottery', code: 'Pottery', stage: 1, points: 420, streak: 0 },
@@ -3414,6 +4004,10 @@ const Proto = (() => {
     for (const [key, names] of Object.entries(THEME_WORDS)) if (folded.length > 2 && names.some(w => w.startsWith(folded))) add(`${cap(key)} mode`, 'theme:' + key);
     all = ['model', 'models', 'brain', 'claude', 'questions by'].includes(folded);
     for (const m of MODELS) { const short = m.name.split(',')[0]; if (all || short.toLowerCase().startsWith(folded)) add(`Questions by ${short}`, 'model:' + m.key, m.hint); }
+    if (folded.length > 2) {
+      if (['minimize', 'minimise', 'small', 'tiny', 'mini', 'shrink'].some(w => w.startsWith(folded))) add('Minimize', 'small:on', S.small ? 'Already on' : 'Small in his corner, full size to ask');
+      if (S.small && ['full size', 'big', 'grow', 'normal size'].some(w => w.startsWith(folded))) add('Full size', 'small:off', 'Minimize off');
+    }
     return found.slice(0, 6);
   }
 
@@ -3431,6 +4025,7 @@ const Proto = (() => {
       subject: S.subject || current().code, pace: pace.name, paceKey: pace.key, call: call.name,
       sound: S.call === 'silent' ? 'Silent' : `${call.name} · ${S.volume} %`, volume: S.volume, callKey: S.call,
       paces: PACES, calls: CALLS, model: model.name.split(',')[0], modelKey: S.model, models: MODELS, update, account: ACCOUNT, accountAt: 'foot',
+      small: S.small, smallAt: 'head', sheet: S.sheetJob && S.sheetJob.state === 'inking' ? 'a minute or two' : undefined,
     }, S.start, S.end, S.weekends);
   }
   function subjectContent() {
@@ -3488,6 +4083,9 @@ const Proto = (() => {
     const el = $('#p-fig');
     if (!el) return;
     el.hidden = S.gone;
+    const small = tiny();
+    el.classList.toggle('is-growing', !small);
+    el.style.transform = small ? `scale(${MINI})` : '';
     el.classList.toggle('evolving', S.cover);
     el.innerHTML = figure(S.shown ?? S.stage, S.cover ? 'idle' : S.expr);
     $('#p-rays').classList.toggle('on', S.rays);
@@ -3506,6 +4104,7 @@ const Proto = (() => {
     const el = $('#p-bubble');
     if (!el) return;
     keepFocus(() => {
+      placeBubble(el);
       el.innerHTML = S.bubble && !S.gone ? bubble(S.bubble, { ...S.ui, live: true }) : '';
       el.classList.toggle('bubble-in', animate && !!S.bubble);
     });
@@ -3550,6 +4149,7 @@ const Proto = (() => {
     else if (S.bubble && S.bubble.mode === 'question') t = S.bubble.need > 1 ? 'Pick two answers, then Confirm. “Later” puts it off.' : 'Pick an answer. “Later” puts it off ten minutes.';
     else if (S.cover) t = 'A promotion: watch him evolve.';
     else if (T.next && S.waiting) t = `Next question in a few seconds; ${PACES.find(p => p.key === S.pace).hint} for real. ${t}`;
+    t = featureHint(t);
     hintEl.textContent = t;
   }
   function render() { if (!open) return; build(); renderGone(); }
@@ -3563,6 +4163,7 @@ const Proto = (() => {
   function show(c, o = {}) {
     stop('hide');
     S.bubble = c;
+    if (BIG.includes(c.mode)) stop('shrink'); else if (S.big) scheduleShrink();
     S.ui = o.ui || {};
     renderBubble(true);
     if (o.hide) timer('hide', () => { if (!S.held) dismiss(); else timer('hide', dismiss, 2000); }, o.hide);
@@ -3585,7 +4186,8 @@ const Proto = (() => {
     stop('next');
     S.waiting = false;
     S.cur = d;
-    show({ ...d.q, title: S.qi === 0 ? d.q.title : pick(ASKS) }, { ui: { picked: [] } });
+    const title = S.qi === 0 ? d.q.title : pick(ASKS);
+    grow(() => show({ ...d.q, title }, { ui: { picked: [] } }));
     mood('ask');
     timer('unanswered', () => { if (S.bubble && S.bubble.mode === 'question') close(); }, 10 * 60000);
     if (onItsOwn) play(S.call);
@@ -3611,6 +4213,8 @@ const Proto = (() => {
       news: promoted ? `Promotion! Tagnan is now a ${GRADES[reached].name}: ${GRADES[reached].look}.` : right ? '' : 'This question will come back tomorrow.',
       promoted, rank: promoted ? GRADES[reached].name : '',
     };
+    S.answerId += 1;
+    c.sheet = 'ready';
     S.qi += 1;
     const course = current();
     Object.assign(course, { points: S.points, streak: S.streak });
@@ -3659,6 +4263,8 @@ const Proto = (() => {
     S.ui = {};
     renderBubble(false);
     if (S.expr === 'ask') mood('idle');
+    scheduleShrink();
+    if (S.sheetJob && S.sheetJob.state === 'waiting') { tellSheet(); return; }
     if (S.pending) { const p = S.pending; S.pending = null; p(); return; }
     if (was && was !== 'quip' && was !== 'pause' && !paused()) scheduleNext();
   }
@@ -3706,6 +4312,7 @@ const Proto = (() => {
     if (verb === 'hours') { const [a, b] = arg.split('-').map(Number); setHours(a, b, S.weekends); return; }  // the menu stays open
     if (verb === 'days') { setHours(S.start, S.end, arg === 'every-day'); return; }
     if (verb === 'update') { startUpdate(); return; }
+    if (verb === 'small') { setSmall(arg ? arg === 'on' : !S.small); return; }
     closeMenu();
     if (verb === 'ask') { if (!S.bubble || !['question', 'thinking'].includes(S.bubble.mode)) ask(false); }
     else if (verb === 'stats') show(statsContent(), { ui: { paused: paused() } });
@@ -3813,6 +4420,106 @@ const Proto = (() => {
     try { const a = new Audio(SOUNDS[key]); a.volume = S.volume / 100; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* no audio */ }
   }
 
+  // --- Minimize, the study sheet ------------------------------------------------------------------
+  const BIG = ['question', 'thinking', 'result', 'explanation'];  // the bubbles he keeps his full size for
+  const tiny = () => !!S && S.small && !S.big;
+  // The bubble beside him at either size, its tail at his middle (placement.py).
+  function placeBubble(el) {
+    if (!el) return;
+    const s = tiny() ? MINI : 1, w = 150 * s, h = 176 * s;
+    const left = FX + 150 - w, top = FY + 176 - h;
+    el.style.right = `${1440 - (left + 2)}px`;
+    el.style.bottom = `${900 - (top + h / 2 + 24)}px`;
+  }
+  // Minimized, he grows before he asks; the question comes once he has.
+  function grow(then) {
+    if (!tiny()) { then(); return; }
+    S.big = true;
+    stop('shrink');
+    renderFig();
+    timer('grown', then, 380);
+  }
+  // 3 s after the last bubble he keeps his size for, back to his corner.
+  function scheduleShrink() {
+    if (!(S.small && S.big)) return;
+    timer('shrink', () => {
+      if (S.bubble && BIG.includes(S.bubble.mode)) return;
+      S.big = false;
+      renderFig();
+      timer('replace', () => { placeBubble($('#p-bubble')); renderHint(); }, 460);
+    }, 3000);
+  }
+  function setSmall(on) {
+    S.small = on;
+    S.big = on && !!S.bubble && BIG.includes(S.bubble.mode);
+    stop('shrink');
+    renderFig();
+    timer('replace', () => placeBubble($('#p-bubble')), on ? 460 : 0);
+    renderMenu();
+    renderHint();
+  }
+  // The sheet of the question just answered: offered, being inked, or written.
+  function sheetState() {
+    const j = S.sheetJob;
+    return !j || j.id !== S.answerId ? 'ready' : j.state === 'inking' ? 'inking' : 'done';
+  }
+  function refreshSheet() {
+    if (S.bubble && S.bubble.sheet) { S.bubble = { ...S.bubble, sheet: sheetState() }; renderBubble(false); }
+  }
+  function startSheet() {
+    if (S.sheetJob && S.sheetJob.state === 'inking') return;
+    S.sheetJob = { id: S.answerId, state: 'inking' };
+    if (S.bubble && S.bubble.mode === 'message') close();  // Try again
+    refreshSheet();
+    renderMenu();
+    let n = 1;
+    const dots = () => { if (!S.bubble || S.bubble.sheet !== 'inking') return; n = n % 3 + 1; S.ui.inkDots = n; renderBubble(false); timer('inkdots', dots, 400); };
+    timer('inkdots', dots, 400);
+    timer('sheet', () => {
+      const job = S.sheetJob;
+      job.state = 'done';
+      renderMenu();
+      if (S.bubble && S.bubble.sheet === 'inking' && job.id === S.answerId) { refreshSheet(); renderHint(); return; }
+      if (!S.bubble || ['quip', 'message'].includes(S.bubble.mode)) tellSheet(); else job.state = 'waiting';
+    }, 5000);
+  }
+  function tellSheet() {
+    S.sheetJob.state = 'told';
+    show({ ...MSG_SHEET_READY }, { hide: 12000 });
+    mood('happy', 4000);
+  }
+  // The PDF, as the system's reader would open it.
+  function openPdf() {
+    const box = $('#p-pdf');
+    const k = Math.min(1, (innerHeight - 150) / 1123, (innerWidth - 110) / 794);
+    box.innerHTML = pdfWindow(Math.max(0.2, k), 'a', true);
+    box.hidden = false;
+    const b = $('[data-pdf="close"]', box);
+    if (b) b.focus({ preventScroll: true });
+    hintEl.textContent = 'The sheet as his brain and his window would make it. Esc closes it.';
+  }
+  function closePdf() {
+    const box = $('#p-pdf');
+    if (!box || box.hidden) return;
+    box.hidden = true;
+    box.innerHTML = '';
+    if (open && S) renderHint();
+  }
+  function hintFor(text) {
+    hintEl.textContent = text;
+    timer('hint', renderHint, 4500);
+  }
+  function featureHint(t) {
+    if (S.gone) return t;
+    if (S.menu) return t + (S.small ? ' The button beside the moon makes him full size again.' : ' The button beside the moon minimizes him.');
+    const b = S.bubble;
+    if (b && b.sheet === 'ready' && (b.mode === 'result' || b.mode === 'explanation')) return '“Study sheet” has Claude write a one-page PDF on this question, saved in Downloads.';
+    if (b && b.sheet === 'inking') return 'He inks your sheet: 5 s here, a minute or two for real. Close the bubble if you like.';
+    if (b && b.sheet === 'done') return '“Open the sheet” opens the PDF he has just written.';
+    if (S.small) return S.big ? 'Minimized: full size while he asks, back to his corner 3 s after the bubble closes.' : 'Minimized: he grows to ask a question. Right-click him for his menu.';
+    return t;
+  }
+
   // --- Events -------------------------------------------------------------------------------------
   function handle(a, el) {
     const [verb, ...rest] = a.split(':');
@@ -3842,7 +4549,7 @@ const Proto = (() => {
         S.ui = { dots: 1 };
         renderBubble(false);
         { let n = 1; const tick = () => { if (!S.bubble || S.bubble.mode !== 'thinking') return; n = n % 3 + 1; S.ui.dots = n; renderBubble(false); timer('dots', tick, 400); }; timer('dots', tick, 400); }
-        timer('explain', () => { if (S.bubble && S.bubble.mode === 'thinking') show({ mode: 'explanation', title: 'Listen well', text: S.cur.more }); }, 2600);
+        timer('explain', () => { if (S.bubble && S.bubble.mode === 'thinking') show({ mode: 'explanation', title: 'Listen well', text: S.cur.more, sheet: sheetState() }); }, 2600);
         break;
       case 'pause': if (!pauseWith(arg)) S.ui.preview = previewBreak(arg); break;
       case 'pause-ok': { const f = $('#break-field', stageEl); if (f && !pauseWith(f.value)) { S.ui.preview = previewBreak(f.value); renderBubble(false); } break; }
@@ -3863,6 +4570,10 @@ const Proto = (() => {
         break;
       }
       case 'theme': setMode(mode === 'dark' ? 'light' : 'dark'); break;
+      case 'sheet': startSheet(); break;
+      case 'opensheet': if (S.bubble && S.bubble.mode === 'message') close(); openPdf(); break;
+      case 'showfolder': close(); hintFor('Explorer would open Downloads with the sheet selected; Finder, on a Mac.'); break;
+      case 'small': setSmall(!S.small); break;
       case 'comeback': S.gone = false; renderGone(); renderFig(); mood('happy', 4000); scheduleNext(); break;
       default: break;
     }
@@ -3889,6 +4600,7 @@ const Proto = (() => {
   });
   stageEl.addEventListener('pointerup', () => { if (press > 0) clearTimeout(press); });
   stageEl.addEventListener('pointerover', e => {
+    if (S && S.small && S.big && (!S.bubble || !BIG.includes(S.bubble.mode)) && e.target.closest('#p-fig, #p-bubble')) scheduleShrink();
     if (!S || !S.menu) return;
     const u = S.menu.ui;
     if (e.target.closest('.m-subpanel')) {
@@ -3989,13 +4701,15 @@ const Proto = (() => {
   });
   document.addEventListener('keydown', e => {
     if (!open || e.key !== 'Escape') return;
+    if (!$('#p-pdf').hidden) { closePdf(); return; }
     if (S.menu) closeMenu();
     else if (S.bubble && S.bubble.mode !== 'question') close();
     else closeProto();
   });
   window.addEventListener('resize', () => { if (open) fit(); });
-  $('#p-restart').addEventListener('click', () => { stopAll(); S = fresh(); render(); timer('first', () => ask(true), 900); });
+  $('#p-restart').addEventListener('click', () => { closePdf(); stopAll(); S = fresh(); render(); timer('first', () => ask(true), 900); });
   $('#p-close').addEventListener('click', () => closeProto());
+  $('#p-pdf').addEventListener('click', e => { if (e.target.id === 'p-pdf' || e.target.closest('[data-pdf="close"]')) closePdf(); });
 
   function openProto() {
     open = true;
@@ -4008,6 +4722,7 @@ const Proto = (() => {
   function closeProto() {
     open = false;
     root.hidden = true;
+    closePdf();
     stopAll();
     S = null;
     canvas.focus({ preventScroll: true });

@@ -1,8 +1,10 @@
 """The guided setup, which scripts/setup hands over to once WSL (or macOS) and uv are there.
 
 It checks each thing Tagnan needs, installs what is missing with the user's consent, connects
-their Claude account, writes their settings, tries the brain for real and starts Tagnan. It can
-run again at will: what is already done is skipped.
+their Claude account, writes their settings, tries the brain for real and starts Tagnan. Without
+a Claude licence, nobody writes his questions: he asks those of the catalogues he is given
+(tagnan.catalogue), and Claude Code is neither installed nor tried. It can run again at will:
+what is already done is skipped.
 
     scripts/setup            a question at each choice (arrow keys), with a default
     scripts/setup --yes      every default, installs included
@@ -45,6 +47,11 @@ MAC_APP_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 # The oldest macOS the window's Qt runs on (PySide6 6.12's wheels are macosx_14_0).
 MIN_MACOS = (14, 0)
 CLAUDE_INSTALLER = "curl -fsSL https://claude.ai/install.sh | bash"
+# Who writes his questions: Claude, or nobody (his catalogues only).
+BRAINS = (
+    ("Claude", "Claude Code and a Claude subscription: Pro, Max, Team or Enterprise"),
+    ("Nobody: catalogues", "questions you bring him, written by any assistant; no licence"),
+)
 
 
 class SetupError(Exception):
@@ -134,6 +141,7 @@ class Setup:
         self.check = check
         self.mac = mac  # window, brain and game side by side; else the window is on Windows
         self.missing: list[str] = []
+        self.nobody = False  # nobody writes his questions: catalogues only, no Claude
 
     def offer(self, question: str) -> bool:
         """Whether to change something: never in --check, else the user's say (yes by default)."""
@@ -159,6 +167,21 @@ class Setup:
             self.term.done("WSL", os.environ.get("WSL_DISTRO_NAME", ""))
         uv = run(["uv", "--version"], capture_output=True).stdout.split()
         self.term.done("uv", uv[1] if len(uv) > 1 else "")
+
+    def brain(self) -> None:
+        """Who writes his questions: Claude, or nobody (catalogues, no licence). Asked before
+        Claude Code, which nobody needs; the config's answer is the default."""
+        try:
+            kept = configs.load(config_file()).brain.model == configs.NOBODY
+        except ValueError:
+            kept = False
+        if self.check:
+            self.nobody = kept
+            self.term.done("Questions by", BRAINS[1 if kept else 0][0])
+            return
+        self.nobody = self.term.select("Who writes his questions?", list(BRAINS), int(kept)) == 1
+        if self.nobody:
+            self.term.note("No Claude Code needed: right-click him, then Catalogues.")
 
     def claude(self) -> None:
         program = self.find_claude()
@@ -266,7 +289,8 @@ class Setup:
             except ValueError as error:
                 raise SetupError(f"{error}\nFix or delete {path}, then run this again.") from None
             self.term.done("Config", shown)
-            if self.check or self.term.confirm("Keep your current settings?"):
+            same_brain = (current.brain.model == configs.NOBODY) == self.nobody
+            if self.check or (same_brain and self.term.confirm("Keep your current settings?")):
                 self.pace()
                 return
         elif self.check:
@@ -280,15 +304,19 @@ class Setup:
             options = [(n, "") for n in names]
             exam = names[self.term.select("Which exam?", options, names.index(exam))]
         known = [m.model for m in configs.MODELS]
-        model = configs.MODELS[
-            self.term.select(
-                "Which model writes the questions?",
-                [(m.label, m.hint) for m in configs.MODELS],
-                known.index(
-                    current.brain.model if current.brain.model in known else configs.Brain.model
-                ),
-            )
-        ]
+        if self.nobody:
+            model: tuple[str, str] = (configs.NOBODY, configs.Brain.effort)
+        else:
+            chosen = configs.MODELS[
+                self.term.select(
+                    "Which model writes the questions?",
+                    [(m.label, m.hint) for m in configs.MODELS],
+                    known.index(
+                        current.brain.model if current.brain.model in known else configs.Brain.model
+                    ),
+                )
+            ]
+            model = (chosen.model, chosen.effort)
         # The hours his menu kept, if any: they are the ones he asks in.
         rhythm = current.rhythm.kept(self.window_saved().get("hours"))
         start = self.term.hour("Questions from what hour?", rhythm.start_hour)
@@ -358,6 +386,9 @@ class Setup:
     def trial(self) -> None:
         """One tiny real call, the way the window makes them."""
         self.term.heading("Trial")
+        if self.nobody:
+            self.term.note("Nobody writes his questions: no brain to try.")
+            return
         if self.check or self.missing:
             self.term.note(
                 "Waits until nothing is missing."
@@ -400,6 +431,8 @@ class Setup:
         self.term.done("Tagnan is on your desktop", "bottom right")
         self.term.quip("Here I am! En garde, the questions are coming.")
         self.term.note("Right-click him for a question now, progress, pace, sound or a break.")
+        if self.nobody:
+            self.term.note("Bring him questions: right-click him, then Catalogues.")
         self.term.note(
             "Start him later: " + (f"his icon {where}, or " if shortcut else "") + "scripts/tagnan"
         )
@@ -418,7 +451,9 @@ class Setup:
         self.term.quip("En garde! Let's set up my quarters.")
         self.term.gap()
         self.prerequisites()
-        self.claude()
+        self.brain()
+        if not self.nobody:
+            self.claude()
         if not self.mac:
             self.windows_python()
         self.window()

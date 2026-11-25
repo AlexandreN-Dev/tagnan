@@ -180,3 +180,42 @@ def test_hours_offered_are_those_of_his_menu_and_answers_go_where_he_reads_them(
     assert (rhythm.start_hour, rhythm.end_hour, rhythm.weekends) == (7, 18, False)
     saved = json.loads(window.read_text())
     assert saved == {"pace": "often", "hours": {"start": 7, "end": 18, "weekends": False}}
+
+
+def test_nobody_needs_no_claude_no_model_and_no_trial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window = tmp_path / "settings.json"
+    monkeypatch.setattr(setup, "config_file", lambda: tmp_path / "config.toml")
+    monkeypatch.setattr(setup.Setup, "window_settings", lambda self: window)
+    monkeypatch.setattr(setup, "exams", lambda: ["aif-c01"])
+    steps: list[str] = []
+    for step in ("prerequisites", "claude", "windows_python", "window", "finish"):
+        monkeypatch.setattr(setup.Setup, step, lambda self, step=step: steps.append(step))
+
+    def no_call(self: setup.Setup) -> tuple[list[str], dict[str, object]]:
+        raise AssertionError("no brain to try")
+
+    monkeypatch.setattr(setup.Setup, "brain_call", no_call)
+    # Who writes his questions: Nobody; then From, Until, weekends, the pace: no model asked.
+    term, out = terminal("2", "8", "18", "n", "")
+    assert setup.Setup(term, check=False, mac=True).all() == 0
+    assert steps == ["prerequisites", "window", "finish"]  # no Claude Code
+    loaded = config.load(tmp_path / "config.toml")
+    assert loaded.brain.model == config.NOBODY
+    assert (loaded.rhythm.start_hour, loaded.rhythm.end_hour) == (8, 18)
+    assert "Nobody writes his questions: no brain to try." in out.getvalue()
+    # Run again, nobody is the default; --check says so and asks nothing.
+    steps.clear()
+    term, out = terminal()
+    assert setup.Setup(term, check=True, mac=True).all() == 0
+    assert "Questions by" in out.getvalue()
+    assert "Nobody: catalogues" in out.getvalue()
+    assert "claude" not in steps
+    # Claude chosen again: Claude Code, the settings asked anew with a model, the trial.
+    steps.clear()
+    monkeypatch.setattr(setup.Setup, "trial", lambda self: steps.append("trial"))
+    term, _ = terminal("1", "", "", "", "n", "")
+    setup.Setup(term, check=False, mac=True).all()
+    assert steps == ["prerequisites", "claude", "window", "trial", "finish"]
+    assert config.load(tmp_path / "config.toml").brain.model == config.Brain.model

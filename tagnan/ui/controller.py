@@ -3,7 +3,7 @@
 import logging
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,7 +18,7 @@ from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan import subject as subjects
 from tagnan.game import Added, Game, Outcome
-from tagnan.model import CONVERTED, Question
+from tagnan.model import CONVERTED, TYPED, Question
 from tagnan.scheduler import Scheduler, find_pace
 from tagnan.ui import catalogues, desktop, sheetpdf
 from tagnan.ui import sounds as calls
@@ -358,6 +358,8 @@ class Controller(QObject):
                 "meta": meta,
                 "tag": "Review"
                 if review
+                else "Your question"  # typed by hand: no level of its own
+                if question.origin == TYPED
                 else f"{DIFFICULTY.get(question.difficulty, '')} question",
                 "stem": question.stem,
                 "choices": [
@@ -1173,13 +1175,15 @@ class Controller(QObject):
         except (OSError, ValueError) as error:
             self._say_catalogue("Nothing to read", f"I couldn't read {path.name}: {error}.")
             return
-        self._take_catalogue(text, pasted=False)
+        self._take_catalogue(text, pasted=False, name=path.stem)
 
-    def _take_catalogue(self, text: str, pasted: bool) -> None:
+    def _take_catalogue(self, text: str, pasted: bool, name: str = "") -> None:
         """Its questions, checked and kept in their course: one he knows, or the one it brings,
-        kept then but learned only if one says so."""
+        kept then but learned only if one says so. Questions typed by hand bring a course of
+        their own, named by their # title or the file's `name`; the same name again adds to it,
+        its chapters matched by name."""
         try:
-            found = catalogue.read(text)
+            found = catalogue.read(text, name)
         except ValueError as error:
             where = "Your clipboard" if pasted else "This file"
             if str(error) == "I find no questions in it":
@@ -1194,6 +1198,7 @@ class Controller(QObject):
             self._say_catalogue("Nothing to read", line)
             return
         new = False
+        questions: Sequence[Mapping[str, Any]] = found.questions
         if isinstance(found.course, str):
             try:
                 bp = self.game.course(found.course)
@@ -1209,9 +1214,13 @@ class Controller(QObject):
                 bp = self.game.course(found.course.key)  # one he has: his own, as it is
             except (KeyError, ValueError):
                 bp, new = found.course, True
-        added = self.game.add_questions(
-            bp, found.questions, self._clock(), found.origin, found.subject
-        )
+            else:
+                if found.typed:  # a note pasted again, longer: its new chapters join the course
+                    merged, questions = catalogue.merge(bp, found.course, found.questions)
+                    if merged != bp:
+                        self.game.keep_course(merged)
+                        bp = merged
+        added = self.game.add_questions(bp, questions, self._clock(), found.origin, found.subject)
         logger.info(
             "catalogue on %r: %d kept, %d known, %d set aside %s%s",
             bp.key,
@@ -1319,6 +1328,27 @@ class Controller(QObject):
         self.catalogue_files.copy(prompt)
         logger.info("prompt copied: %s", kind)
         self._show_catalogue_prompt(text)
+
+    @Slot()
+    def copyFormat(self) -> None:
+        """The plain-text shape he reads, in the clipboard: an example to write after."""
+        self.catalogue_files.copy(catalogue.FORMAT_EXAMPLE)
+        logger.info("plain-text format copied")
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "Your quill, sir!",
+                "text": "The format is in your clipboard: an example to follow. Write your"
+                " questions in its shape, in a note or a text file, then Paste questions or Import"
+                " a file…",
+                "buttons": [
+                    {"label": "Paste questions", "action": "paste", "primary": True},
+                    {"label": "Got it", "action": "dismiss"},
+                ],
+            }
+        )
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
 
     def _show_catalogue_prompt(self, text: str) -> None:
         self._set_mood("idle")

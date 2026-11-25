@@ -15,7 +15,7 @@ from tagnan import config as configs
 from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan.blueprint import Blueprint
-from tagnan.model import WRITTEN
+from tagnan.model import TYPED, WRITTEN
 from tagnan.scheduler import PACES
 from tagnan.ui import sounds as calls
 from tagnan.ui.controller import Controller
@@ -69,6 +69,7 @@ CATALOGUE_COMMANDS = (
     ("export", "Export my questions", ("export", "export my questions", "share")),
     ("prompt:write", "A prompt to write questions", ("prompt", "write questions", "assistant")),
     ("prompt:convert", "A prompt to convert a quiz", ("prompt", "convert", "quiz")),
+    ("format", "The plain-text format", ("format", "plain text", "text format", "write my own")),
 )
 
 
@@ -234,18 +235,18 @@ class Menu(QObject):
         """Catalogues' list: paste, import and export act at once; the prompts are copied. A
         header (no key) is not a stop."""
         store = self._controller.game.store
-        shareable = store.count(bp.key, "") + store.count(bp.key, WRITTEN)
+        shareable = sum(store.count(bp.key, origin) for origin in ("", WRITTEN, TYPED))
         return [
             {
                 "key": "paste",
                 "name": "Paste questions",
-                "hint": "your assistant's answer",
+                "hint": "an answer, or your text",
                 "icon": "paste",
             },
             {
                 "key": "import",
                 "name": "Import a file…",
-                "hint": "a catalogue, .json",
+                "hint": ".json, .md, .txt, .csv",
                 "icon": "import",
             },
             {
@@ -272,6 +273,17 @@ class Menu(QObject):
                 "name": "Convert a quiz",
                 "hint": "a PDF, a page, a test",
                 "icon": "prompt",
+            },
+            {
+                "key": "",
+                "header": "Write them yourself",
+                "note": "In a note or a text file, in this shape.",
+            },
+            {
+                "key": "format",
+                "name": "The plain-text format",
+                "hint": "an example, copied",
+                "icon": "doc",
             },
         ]
 
@@ -397,10 +409,11 @@ class Menu(QObject):
             code = c.game.blueprint.code
             subs = {
                 "paste": "from the clipboard",
-                "import": "a .json file",
+                "import": ".json, .md, .txt, .csv",
                 "export": "to share",
                 "prompt:write": f"on {code}, {catalogue.BATCH} at a time",
                 "prompt:convert": "a PDF, a page, a test",
+                "format": "an example, copied",
             }
             for key, label, words in CATALOGUE_COMMANDS:
                 if everything or any(w.startswith(folded) for w in words):
@@ -425,6 +438,8 @@ class Menu(QObject):
             c.exportQuestions()
         elif action.startswith("prompt:"):
             c.copyPrompt(action.removeprefix("prompt:"))
+        elif action == "format":
+            c.copyFormat()
 
     @Slot(str, result=bool)
     def run(self, action: str) -> bool:

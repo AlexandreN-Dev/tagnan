@@ -869,6 +869,8 @@ def test_his_menu_has_catalogues_beside_who_writes_his_questions(game: Game) -> 
         "",
         "prompt:write",
         "prompt:convert",
+        "",
+        "format",
     ]
     assert content["catalogueList"][2]["hint"] == "2 on AIF-C01, to share"
     assert content["catalogueList"][3]["header"] == "Prompts for your assistant"
@@ -892,6 +894,7 @@ def test_his_menu_has_catalogues_beside_who_writes_his_questions(game: Game) -> 
         "catalogues:export",
         "catalogues:prompt:write",
         "catalogues:prompt:convert",
+        "catalogues:format",
     ]
 
 
@@ -1005,6 +1008,66 @@ def test_without_a_brain_a_new_course_is_drawn_up_by_ones_assistant(game: Game) 
     assert controller.property("bubble")["text"].endswith(
         "Bring me questions on it: my menu, Catalogues."
     )
+
+
+def test_a_note_pasted_becomes_a_course_of_its_own_asked_as_any(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    note = (
+        "# Networking basics\n## Addressing\n"
+        "Question 1: An IPv6 address is 128 bits long.\n- [x] True\n- [ ] False\n"
+        "Question 2: How long is an IPv4 address?\nA. 16 bits\nB. 32 bits\nAnswer: B\n"
+        "## Routing\nQuestion 3: Lost its answer\nA. one\nB. two\n"
+    )
+    files.clipboard = note
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "A new course!"
+    assert bubble["text"] == (
+        "Networking basics: 1 chapter, 2 questions. 1 set aside: question 3: no Answer line."
+        " Shall we learn it now?"
+    )
+    controller.bubbleAction("learnpasted")
+    assert game.exam == "networking-basics"
+    controller.askNow()
+    asked = controller.property("bubble")
+    assert asked["tag"] == "Your question"  # typed by hand: no level of its own
+    question = controller._current
+    assert question is not None
+    wrong = next(i for i in range(len(question.choices)) if i not in question.answers)
+    controller.answer([wrong])
+    verdict = controller.property("bubble")
+    assert (verdict["chosen"], verdict["explanation"]) == ([], "")  # the right answer alone
+    controller.dismiss()
+    # The same note, longer: its new chapter joins the course, what it had is skipped.
+    files.clipboard = (
+        note
+        + "Answer: A\n## Switching\nQuestion: What does a switch learn?\n"
+        + "A. MAC addresses\nB. Routes\nAnswer: A\n"
+    )
+    controller.pasteQuestions()
+    assert controller.property("bubble")["text"] == (
+        "2 new questions on Networking basics. 2 I already had."
+    )
+    assert [d.name for d in game.blueprint.domains] == ["Addressing", "Routing", "Switching"]
+
+
+def test_the_plain_text_format_is_copied_and_a_note_imported_by_its_name(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    menu = Menu(controller)
+    menu.openAt(10, 10)
+    menu.run("catalogues:format")
+    assert files.clipboard == catalogue.FORMAT_EXAMPLE
+    assert controller.property("bubble")["title"] == "Your quill, sir!"
+    assert menu.suggest("format")[0]["action"] == "catalogues:format"
+    files.chosen = Path("Notes/Arithmetic.md")
+    files.files[files.chosen] = "Question: Two plus two?\nA. 3\nB. 4\nAnswer: B\n"
+    controller.importCatalogue()
+    assert controller.property("bubble")["text"] == (
+        "Arithmetic: 1 chapter, 1 question. Shall we learn it now?"
+    )
+    assert "arithmetic" in [c.key for c in game.courses()]
 
 
 def test_a_flagged_question_never_comes_back(game: Game) -> None:

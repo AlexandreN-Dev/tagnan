@@ -25,7 +25,7 @@ class Files:
             None,
             "Import a catalogue",
             str(sheetpdf.downloads()),
-            "Catalogues (*.json);;All files (*)",
+            "Catalogues (*.json *.md *.txt *.csv);;All files (*)",
         )
         return Path(found) if found else None
 

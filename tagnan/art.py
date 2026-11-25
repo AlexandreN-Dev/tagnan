@@ -3,16 +3,17 @@ window animates.
 
 The window draws the rippling ink, its shade and the droplets itself (QtQuick Shapes, from the
 numbers of `figure()`, the outlines of `blob_path()`/`ink_path()` and, in the inkwell, the shading
-of `inkwell_shading()`), and the Musketeer's head and arms, which move with him (`head_path()`,
-`head_shading()`, `arm_parts()`). Every other piece is an SVG layer (`layer()`, rendered by QtSvg)
-that it moves, turns or swaps: eyes, mouth, moustache, royale, cross, tabard, collar, hat, plumes,
-quill, rapier, inkwell, decorations. `still_svg()` puts them all together for the reference sheet and the tests;
+of `inkwell_shading()`), and a man of ink's head, arms and hands, which move with him
+(`head_path()`, `head_shading()`, `arm_parts()`, `hand_parts()`). Every other piece is an SVG
+layer (`layer()`, rendered by QtSvg) that it moves, turns or swaps: eyes, mouth, moustache,
+royale, tabard, collar, legs, hat, quill, plume, rapier, inkwell, decorations. `still_svg()` puts them all together for the reference sheet and the tests;
 `icon_svg()` redraws each grade to read at 16 to 48 px (shortcut, tray icon, his menu's header).
 
 Coordinates are those of the 120 x 140 reference drawing; each grade is drawn at its own scale
 around the feet (60, 132).
 """
 
+import itertools
 import math
 import random
 import re
@@ -32,15 +33,24 @@ GLASS_OUTLINE, INK_LIGHT, CREAM_SHADE, QUILL_LINE = "#A9B7CB", "#3F63B5", "#DDD3
 BAND_BLUE, RIB = "#4F7FCB", "#BDB5A4"
 # The Cadet's felt (grade 2): its shaded side and the light along its edges.
 FELT_SHADE, FELT_EDGE = "#2C2839", "#6A6290"
+# The Lieutenant's and the Captain's (grades 4 and 5): the outline of the rapier's steel, so that
+# its blade holds on light desktops; the leather of his boots, its shade, its light, its sole and
+# the light along a boot's rim; the light on the Captain's gloves; his plume's gold, shaded and lit.
+STEEL_LINE = "#737D8E"
+BOOT, BOOT_SHADE, BOOT_LIGHT, SOLE, BOOT_RIM = GRIP, "#4B2A13", "#96623A", "#2E1A0C", "#C08E5E"
+GLOVE_LIGHT = "#B98554"
+GOLD_SHADE, GOLD_LIGHT = "#B4862F", "#EBCB85"
 ANGER = "#D8333A"
 
 WIDTH, HEIGHT = 120, 140
 FEET = (60.0, 132.0)
 SCALES = (1.0, 0.84, 0.88, 0.93, 0.97, 1.0)
 EXPRESSIONS = ("idle", "ask", "happy", "angry", "wink", "annoyed", "sulk")
-# The rapier layer is drawn in the rapier's own frame: guard at (0, 0), blade towards -y.
-RAPIER_BOX = (-12.0, -50.0, 24.0, 68.0)
-RAPIER_GRIP = (0.0, 0.0)  # the point it floats and turns around: its guard
+# The rapier layer is drawn in the rapier's own frame: guard at (0, 0), blade towards -y. He holds
+# it by the middle of its grip, where it turns in his hand; its size in his hand.
+RAPIER_BOX = (-15.0, -50.0, 30.0, 68.0)
+RAPIER_GRIP = (0.0, 5.4)
+RAPIER_SCALE = 0.9
 
 
 def n(value: float) -> str:
@@ -106,15 +116,15 @@ def spline(points: list[tuple[float, float]]) -> str:
 
 
 def blob_for(stage: int) -> Blob | None:
-    """The blob of his ink (the Musketeer's: his body's; his head has its own)."""
+    """The blob of his ink (a man of ink's: his body's; his head has its own)."""
     if stage == 0:
         return None
-    return SPLASH if stage == 1 else MUSKETEER_BODY if stage == MUSKETEER else STANDING
+    return SPLASH if stage == 1 else man_body(stage) if man(stage) else STANDING
 
 
 def blob_path(stage: int, phase: float) -> str:
-    if stage == MUSKETEER:
-        return body_path(phase)
+    if man(stage):
+        return body_path(stage, phase)
     blob = blob_for(stage)
     return spline(blob_points(blob, phase)) if blob else ink_path(phase)
 
@@ -342,10 +352,10 @@ def cadet_shading(phase: float) -> dict[str, str]:
 
 
 def ink_shading(stage: int, phase: float) -> dict[str, str] | None:
-    """The shaded ink of the grades that have it: the Gascon's, the Cadet's and the Musketeer's
+    """The shaded ink of the grades that have it: the Gascon's, the Cadet's and a man of ink's
     body (his head's: head_shading)."""
-    if stage == MUSKETEER:
-        return body_shading(phase)
+    if man(stage):
+        return body_shading(stage, phase)
     return splash_shading(phase) if stage == 1 else cadet_shading(phase) if stage == 2 else None
 
 
@@ -379,15 +389,15 @@ def _edge_below(samples: list[tuple[float, float]], x: float, cy: float) -> floa
 
 
 def drip_tops(stage: int, phase: float, drag: float = 0.0) -> list[float]:
-    """Where each drip hangs from (the y of its top), the falling one last. The Gascon's, the
-    Cadet's and the Musketeer's follow his rippling edge (the Musketeer's, his body's bottom as it
-    trails a hop: `drag`); the others stay put."""
-    if stage == MUSKETEER:
-        samples = curve_samples(fluid_points(MUSKETEER_BODY, phase, drag))
-        return [_edge_below(samples, x, MUSKETEER_BODY.cy) - DRIP_DEPTH for x, _ in MUSKETEER_DRIPS]
-    if stage not in (1, 2):
-        spec = figure(stage)
-        return [y for _, y, _ in spec["staticDrips"]] + ([spec["drip"][1]] if spec["drip"] else [])
+    """Where each drip hangs from (the y of its top), the falling one last: they follow his
+    rippling edge (a man of ink's, his body's bottom as it trails a hop: `drag`). The inkwell has
+    none."""
+    if stage == 0:
+        return []
+    if man(stage):
+        body = man_body(stage)
+        samples = curve_samples(fluid_points(body, phase, drag))
+        return [_edge_below(samples, x, body.cy) - DRIP_DEPTH for x, _ in man_drips(stage)]
     blob, drips = (SPLASH, GASCON_DRIPS) if stage == 1 else (STANDING, CADET_DRIPS)
     samples = curve_samples(blob_points(blob, phase))
     return [_edge_below(samples, x, blob.cy) - DRIP_DEPTH for x, _ in drips]
@@ -408,33 +418,31 @@ def _edge_above(samples: list[tuple[float, float]], x: float, cy: float) -> floa
 # The Cadet's hat rides the rippling top of his head (grade 2): it rests on it at these two x and
 # rises, sinks and tips with it, the tip damped (the brim is stiffer than the ink under it). Both
 # are taken around their mean over the ripple's phases, the rig's steps (rig.WOBBLE_RATE a turn).
-# The Musketeer's rides his own head the same way (MUSKETEER_HAT_RESTS).
+# A man of ink's rides his own head the same way (MUSKETEER_HAT_RESTS).
 HAT_RESTS = (44.0, 76.0)
 HAT_RIDE_TIP = 0.35
 RIDE_PHASES = 22
 
 
-def _resting(stage: int, phase: float) -> tuple[float, float]:
-    blob, rests = (
-        (MUSKETEER_HEAD, MUSKETEER_HAT_RESTS) if stage == MUSKETEER else (STANDING, HAT_RESTS)
-    )
+def _resting(on_head: bool, phase: float) -> tuple[float, float]:
+    blob, rests = (MUSKETEER_HEAD, MUSKETEER_HAT_RESTS) if on_head else (STANDING, HAT_RESTS)
     samples = curve_samples(blob_points(blob, phase))
     left, right = (_edge_above(samples, x, blob.cy) for x in rests)
     return (left + right) / 2, math.degrees(math.atan2(right - left, rests[1] - rests[0]))
 
 
 @lru_cache(maxsize=2)
-def _resting_mean(stage: int) -> tuple[float, float]:
-    rows = [_resting(stage, 2 * math.pi * k / RIDE_PHASES) for k in range(RIDE_PHASES)]
+def _resting_mean(on_head: bool) -> tuple[float, float]:
+    rows = [_resting(on_head, 2 * math.pi * k / RIDE_PHASES) for k in range(RIDE_PHASES)]
     return sum(y for y, _ in rows) / len(rows), sum(a for _, a in rows) / len(rows)
 
 
 def hat_ride(stage: int, phase: float) -> tuple[float, float]:
-    """How far the hat rises or sinks (y) and tips (degrees) on his rippling head; 0, 0 but on
-    the Cadet and the Musketeer."""
-    if stage not in (2, MUSKETEER):
+    """How far the hat rises or sinks (y) and tips (degrees) on his rippling head; 0, 0 before he
+    has a hat."""
+    if stage < 2:
         return 0.0, 0.0
-    (y, angle), (my, ma) = _resting(stage, phase), _resting_mean(stage)
+    (y, angle), (my, ma) = _resting(man(stage), phase), _resting_mean(man(stage))
     return round(y - my, 3), round(HAT_RIDE_TIP * (angle - ma), 3)
 
 
@@ -491,8 +499,8 @@ class Droplet:
 
 
 def burst(stage: int) -> list[Droplet]:
-    """Eight droplets from the ink's edge (seven from the inkwell's neck, as a fountain; from the
-    Musketeer's head upwards and his body below); each has its own angle, reach, size and delay,
+    """Eight droplets from the ink's edge (seven from the inkwell's neck, as a fountain; from a
+    man of ink's head upwards and his body below); each has its own angle, reach, size and delay,
     and rises a fifth higher than it falls."""
     blob = blob_for(stage)
     rng = random.Random(3 if stage == 1 else 7)
@@ -504,8 +512,8 @@ def burst(stage: int) -> list[Droplet]:
     )
     droplets = []
     for a in angles:
-        if stage == MUSKETEER:  # from his head's edge upwards, from his body's below
-            blob = MUSKETEER_HEAD if -170 < a < -10 else MUSKETEER_BODY
+        if man(stage):  # from his head's edge upwards, from his body's below
+            blob = MUSKETEER_HEAD if -170 < a < -10 else man_body(stage)
         theta = math.radians(a + rng.uniform(-7, 7))
         reach = rng.uniform(17, 27) if fountain else rng.uniform(13, 24)
         if blob is None:
@@ -540,20 +548,21 @@ def _rotate(x: float, y: float, cx: float, cy: float, degrees: float) -> tuple[f
 
 
 def figure(stage: int) -> dict[str, Any]:
-    """Pivots, droplets, the floating rapier and the like, for the window (lists and numbers)."""
+    """Pivots, droplets, what his arms are drawn of and the like, for the window (lists and
+    numbers)."""
     blob = blob_for(stage)
     spec: dict[str, Any] = {
         "stage": stage,
         "scale": SCALES[stage],
         # The Gascon floats; the Cadet and the Musketeer float over their puddle without
-        # touching it.
-        "lift": {1: 10.0, 2: CADET_LIFT, MUSKETEER: MUSKETEER_LIFT}.get(stage, 0.0),
+        # touching it; the Lieutenant and the Captain are drawn as high, on their legs.
+        "lift": MUSKETEER_LIFT if man(stage) else {1: 10.0, 2: CADET_LIFT}.get(stage, 0.0),
         "ink": INK,
         "shade": INK_SHADE,
         "glow": GOLD_GLOW if stage >= 5 else GLOW,
-        # The inkwell's ink, the Gascon's, the Cadet's and the Musketeer's are shaded inside
-        # (inkwell_shading, ink_shading, head_shading), not by an offset copy.
-        "shadeOffset": [0.0, 0.0] if stage <= MUSKETEER else [2.6, 3.0],
+        # Every ink is shaded inside (inkwell_shading, ink_shading, head_shading), none by an
+        # offset copy any more.
+        "shadeOffset": [0.0, 0.0],
         # Their shading as QML colours; the window gets the paths from the animator.
         "inkLight": argb(*INK_LIT),
         "inkEdge": argb(*INK_EDGE),
@@ -566,19 +575,23 @@ def figure(stage: int) -> dict[str, Any]:
         # The mood's sign: left of the inkwell, the quill taking its right.
         "decor": [24.0, 58.0] if stage == 0 else [102.0, 62.0] if stage == 1 else [102.0, 46.0],
         "hasHat": stage >= 2,
-        "hasPlume": stage >= 3,
-        "hasRapier": stage >= 4,
-        "hasMoustache": stage >= 4,
-        # The Cadet's and the Musketeer's: where his falling drip lands (on his puddle, the
-        # desk's y), the ribbon's tails' pivot; the Cadet's, the line under his brim, in the
-        # hat's frame, below which his ink stays (so that it never shows through the felt).
-        "landing": {2: CADET_PUDDLE.cy, MUSKETEER: MUSKETEER_PUDDLE.cy}.get(stage, -1.0),
-        "tails": list(tails_pivot()) if stage == 2 else list(bow_pivot()) if stage == 3 else [],
+        "hasPlume": man(stage),
+        "hasRapier": stands(stage),
+        "hasMoustache": stands(stage),
+        # From the Cadet on: where his falling drip lands (on his puddle or his pool, the desk's
+        # y), the ribbon's tails' pivot; the Cadet's, the line under his brim, in the hat's
+        # frame, below which his ink stays (so that it never shows through the felt).
+        "landing": CADET_PUDDLE.cy if stage == 2 else man_pool(stage).cy if man(stage) else -1.0,
+        "tails": list(tails_pivot()) if stage == 2 else list(bow_pivot()) if man(stage) else [],
         "underHat": CADET_HAT[1] - 2.0 if stage == 2 else -1.0,
-        # The Musketeer's ink takes a man's shape: a head of its own (head_path) that leans
-        # around his neck, two arms (arm_parts), his quill swaying stiffer than a plume.
-        "man": stage == MUSKETEER,
-        "plumeSway": 0.55 if stage == MUSKETEER else 1.0,
+        # A man of ink: a head of its own (head_path) that leans around his neck, two arms
+        # (arm_parts, hand_parts), his quill swaying stiffer than a plume; then his legs, and the
+        # Captain's fingers and his golden plume, which sways more freely.
+        "man": man(stage),
+        "hasLegs": stands(stage),
+        "fingers": fingered(stage),
+        "plumeSway": 0.55 if man(stage) else 1.0,
+        "panacheSway": 0.8,
     }
     if stage == 0:
         spec.update(
@@ -618,16 +631,17 @@ def figure(stage: int) -> dict[str, Any]:
             hat=[cx, yb],
             plume=[cx, yb],
         )
-    elif stage == MUSKETEER:
-        (sx, sr), (dx, dr) = MUSKETEER_DRIPS
-        top, drip_top = drip_tops(MUSKETEER, 0.0)
-        face = _face(MUSKETEER)
+    else:
+        drips, tops = man_drips(stage), drip_tops(stage, 0.0)
+        dx, dr = drips[-1]
+        face = _face(stage)
         gap, radius = 10 * face.eye_spacing, 8.6 * 0.75 * face.eye_size
+        base, shade, light, glint = hand_skin(stage)
         spec.update(
             drops=[list(d) for d in MUSKETEER_DROPS],
-            drip=[dx, drip_top, dr],
-            fall=[dx, drip_top + 6, 2.2],
-            staticDrips=[[sx, top, sr]],
+            drip=[dx, tops[-1], dr],
+            fall=[dx, tops[-1] + 6, 2.2],
+            staticDrips=[[x, top, r] for (x, r), top in zip(drips[:-1], tops[:-1], strict=True)],
             eyes=[[60 - gap, face.eyes_y], [60 + gap, face.eyes_y]],
             eyeRadius=round(radius, 3),
             mouth=[60.0, face.mouth_y],
@@ -636,50 +650,37 @@ def figure(stage: int) -> dict[str, Any]:
             ring=[*NECK, 27.0, 42.0],  # round his head and his body
             neck=list(NECK),
             # His arms (arm_parts): the sleeve's ink and its tones (colour, width less the
-            # sleeve's, offset), the cuff and its shaded copy, the lace, the hand.
+            # sleeve's, offset), the cuff and its shaded copy, the lace (the Captain's in gold).
             armWidth=ARM_WIDTH,
             sleeveTones=[[argb(c, o), dw, *at] for c, dw, o, at in SLEEVE_TONES],
             cuffWidth=CUFF_WIDTH,
             cuffShade=list(CUFF_SHADE),
             lace=LACE,
+            laceColour=GOLD if fingered(stage) else CREAM,
             hand=HAND,
             cream=CREAM,
             creamShade=CREAM_SHADE,
+            # His hands (hand_parts): their colour, their shade, their light and the glint on
+            # their palm; how much thinner than a finger its three tones are.
+            handSkin=[base, shade, argb(light, FINGER_TONES[0][1]), argb(*glint)],
+            fingerTones=[dw for dw, _, _ in FINGER_TONES],
         )
-    else:
-        spec.update(
-            drops=[[114, 64, 4], [18, 104, 5], [110, 102, 3.5], [26, 56, 3]],
-            drip=[84, 121, 2.4],
-            fall=[84, 127, 2.2],
-            staticDrips=[],
-            eyes=[[50.0, 76.0], [70.0, 76.0]],
-            eyeRadius=6.45,
-            mouth=[60.0, 91.0],
-            moustache=[60.0, 88.5],
-            hat=[60.0, 54.0],
-            plume=list(
-                _rotate(
-                    60 - 4 * (66 / 60 if stage >= 5 else 1),
-                    54 - 9 * (66 / 60 if stage >= 5 else 1),
-                    60,
-                    54,
-                    -8,
-                )
-            ),
-            # The rapier floats beside him, as Dartt's does: guard (x, y) and angle, at rest
-            # (point down) and en garde (raised).
-            rapierDown=[100.0, 92.0, 155.0],
-            rapierUp=[101.0, 76.0, 24.0],
-            rapierScale=0.9,
-            rapierBox=list(RAPIER_BOX),
-            rapierGrip=list(RAPIER_GRIP),
-        )
+        if stands(stage):
+            spec.update(
+                moustache=list(_whiskers()),
+                # His rapier, in his left hand: its layer's box, where he holds it, its size.
+                rapierBox=list(RAPIER_BOX),
+                rapierGrip=list(RAPIER_GRIP),
+                rapierScale=RAPIER_SCALE,
+            )
+        if fingered(stage):
+            spec.update(panache=[round(v, 3) for v in cockade_pivot()])
     spec["burst"] = [
         [d.x, d.y, d.mx, d.my, d.dx, d.dy, d.r, d.delay, d.duration] for d in burst(stage)
     ]
-    # The Gascon's, the Cadet's and the Musketeer's drips hang under their ink; their drops have
-    # their shade and their point of light.
-    finished = stage in (1, 2, MUSKETEER)
+    # Out of the inkwell, his drips hang under his ink; his drops have their shade and their
+    # point of light.
+    finished = stage >= 1
     spec["dripsUnder"] = finished
     spec["dropShades"] = [drop_shade(*d) for d in spec["drops"]] if finished else []
     spec["dropLights"] = [drop_light(*d) for d in spec["drops"]] if finished else []
@@ -858,33 +859,6 @@ def _lidded(
     )
 
 
-def _plume(cx: float, yb: float, u: float, fill: str, rib: str) -> str:
-    b, t = (cx - 4 * u, yb - 9 * u), (cx - 34 * u, yb - 38 * u)
-    d = (
-        f"M{pt(*b)} C{pt(cx - 6 * u, yb - 28 * u)} {pt(cx - 18 * u, yb - 42 * u)} {pt(*t)} "
-        f"C{pt(cx - 26 * u, yb - 28 * u)} {pt(cx - 12 * u, yb - 18 * u)} {pt(*b)} Z"
-    )
-    return (
-        f'<path d="{d}" fill="{fill}"/><path d="M{pt(*b)} Q{pt(cx - 15 * u, yb - 28 * u)} {pt(*t)}" '
-        f'fill="none" stroke="{rib}" stroke-width="{n(1.1 * u)}" stroke-linecap="round"/>'
-    )
-
-
-def plumes(stage: int, cx: float = 60, yb: float = 54, tilt: float = -8) -> str:
-    if stage >= 5:
-        u = 66 / 60
-        bx, by = cx - 4 * u, yb - 9 * u
-        inner = (
-            f'<g transform="rotate(13 {pt(bx, by)})">{_plume(cx + 1.5 * u, yb, u * 1.04, CREAM, RIB)}</g>'
-            + _plume(cx, yb, u, GOLD, GOLD_DK)
-        )
-    elif stage >= 3:
-        inner = _plume(cx, yb, 1.0, CREAM, RIB)
-    else:
-        return ""
-    return f'<g transform="rotate({n(tilt)} {pt(cx, yb)})">{inner}</g>'
-
-
 # The Cadet's hat (grade 2): a recruit's, a size too big. Where its brim sits (centre x, y), its
 # size against the plain felt's, its tilt (degrees); it sits lower and tips more.
 CADET_HAT = (60.0, 56.5, 1.12, -12.0)
@@ -985,11 +959,14 @@ def _stroke(d: str, colour: str, width: float, opacity: float = 1.0, cap: str = 
     )
 
 
-def _felt_hat(cx: float, yb: float, u: float, on_band: str = "", on_brim: str = "") -> str:
+def _felt_hat(
+    cx: float, yb: float, u: float, on_band: str = "", on_brim: str = "", on_back: str = ""
+) -> str:
     """The Cadet's felt (untilted), finished as the inkwell: lit on its upper left, shaded on its
     right, the brim's thickness underneath, a dent down its crown, a cream band with its own
     shade, and the shadow the brim casts on his ink. `on_band` lies on its band (the Cadet's bow,
-    the Musketeer's blue), `on_brim` on its brim's front (the Musketeer's stitches)."""
+    the Musketeer's blue), `on_brim` on its brim's front (the Musketeer's stitches, the Captain's
+    braid), `on_back` on the back of its brim, behind the crown (the braid again)."""
     rx, ry = 30 * u, 6.5 * u
     brim = _brim(cx, yb, u)
     crown, band = _dented_crown(cx, yb, u), _band(cx, yb, u)
@@ -1003,6 +980,7 @@ def _felt_hat(cx: float, yb: float, u: float, on_band: str = "", on_brim: str = 
         f'fill="{INK_SHADE}" opacity=".9"/>',
         # The brim behind the crown, lit along its upper left edge.
         f'<ellipse cx="{n(cx)}" cy="{n(yb)}" rx="{n(rx)}" ry="{n(ry)}" fill="{FELT}"/>',
+        on_back,
         _fill(crescents(brim, (cx, yb), (1.4, 1.6)), FELT_LIGHT),
         _fill(crescents(brim, (cx, yb), (0.5, 0.6)), FELT_EDGE, 0.9),
         # The crown and its dent.
@@ -1078,14 +1056,35 @@ def tails() -> str:
     return tail(-11 * u, 14 * u, 1.6 * u, CREAM_SHADE) + tail(-6.5 * u, 16.5 * u, 1.7 * u, CREAM)
 
 
-# --- The Musketeer (grade 3): his ink takes a man's shape -------------------------------------
-# A head and a body of ink, each rippling as his ink does, two arms with their cuffs, a falling
-# collar and the musketeers' tabard, still no legs: he floats over his puddle. His body is fluid
-# below only, so that his shoulders and what he wears on them stay put. He wears the Cadet's
-# felt, his size now, the quill of his inkwell tucked under its ribbon. (The grade 3 round of
-# docs/mockup.html, proposal B, retained.)
+# --- The men of ink (grades 3 to 5): his ink takes a man's shape -------------------------------
+# The Musketeer: a head and a body of ink, each rippling as his ink does, two arms with their
+# cuffs, a falling collar and the musketeers' tabard, still no legs: he floats over his puddle.
+# His body is fluid below only, so that his shoulders and what he wears on them stay put. He
+# wears the Cadet's felt, his size now, the quill of his inkwell tucked under its ribbon.
+# The Lieutenant: the same man on his own legs, booted, in a pool of his ink, his rapier in his
+# hand, a hooked moustache. The Captain: his hands take fingers, gloved in his boots' leather; his
+# felt is braided with gold and cockaded, a golden plume behind his quill; a goatee, a laced
+# collar, golden flames round his cross. (The grade 3 and the grades 4 and 5 rounds of
+# docs/mockup.html, as retained.)
 
-MUSKETEER = 3
+MUSKETEER, LIEUTENANT, CAPTAIN = 3, 4, 5
+
+
+def man(stage: int) -> bool:
+    """Whether his ink has taken a man's shape: a head, a body, two arms."""
+    return stage >= MUSKETEER
+
+
+def stands(stage: int) -> bool:
+    """Whether he stands on his own legs: the Lieutenant and the Captain."""
+    return stage >= LIEUTENANT
+
+
+def fingered(stage: int) -> bool:
+    """Whether his hands have taken fingers: the Captain's."""
+    return stage >= CAPTAIN
+
+
 MUSKETEER_HEAD = Blob(60, 72, 23.5, 22.0, 0.03, 0.02, 0.4, 1.1, push=0.55, period=4.4)
 MUSKETEER_BODY = Blob(60, 110.5, 25, 20.5, 0.05, 0.03, 0.4, 1.1, push=0.9, period=4.4)
 # Between these two heights round his body (the sine of the angle: 0 at its middle, 1 at its
@@ -1097,6 +1096,17 @@ MUSKETEER_PUDDLE = Blob(61, 129.5, 19, 2.0, 0.05, 0.025, 0.9, 1.3, push=0.0, per
 MUSKETEER_DRIPS = ((46.0, 2.2), (77.0, 2.4))
 MUSKETEER_DROPS = ((113.0, 62.0, 3.5), (14.0, 74.0, 3.0), (110.0, 112.0, 2.6), (17.0, 104.0, 2.3))
 NECK = (60.0, 92.0)  # his head leans around it
+# On his legs (grades 4 and 5): a shorter body, fluid below as the Musketeer's, his legs coming out
+# from under its rippling hem; the desk, in the lifted figure's coordinates; his ankles' x, a leg's
+# width, how high a boot stands and its size; the pool of his own ink he stands in, where his one
+# drip, between his boots, lands.
+TORSO = Blob(60, 105.5, 24.5, 15.6, 0.05, 0.03, 0.4, 1.1, push=0.8, period=4.4)
+GROUND = FEET[1] + MUSKETEER_LIFT
+LEGS = (49.8, 70.2)
+LEG_WIDTH = 7.6
+BOOT_TOP, BOOT_SIZE = 12.6, 1.14
+POOL = Blob(60, 132.9, 23.5, 2.4, 0.05, 0.025, 0.9, 1.3, push=0.0, period=1.0, points=14)
+LEGS_DRIPS = ((60.0, 2.3),)
 # His arms: shoulders, then for each mood his right arm's (on our left) and his left arm's elbow
 # and hand. Sleeves of ink, a cream cuff, a hand round as a drop.
 SHOULDERS = ((40.5, 100.5), (79.5, 100.5))
@@ -1110,6 +1120,43 @@ ARMS = {
     "annoyed": (((35.5, 112.5), (56.0, 110.0)), ((84.5, 112.0), (64.0, 106.5))),
     "sulk": (((36.0, 109.0), (37.5, 120.0)), ((84.0, 109.0), (82.5, 120.0))),
 }
+# With a rapier in his left hand (grades 4 and 5): the Musketeer's poses, but his blade raised to
+# the question and into the sparkle of a right answer, and, annoyed, no arms crossed: he wags it.
+# Then the blade's angle in each mood (0: straight up; clockwise): at the carry, pointed at the
+# question, up in the sparkle, brandished, at his hip, wagged, dragged on the desk before him.
+SWORD_ARMS = {
+    **ARMS,
+    "ask": (((29.5, 106.0), (38.0, 114.5)), ((91.0, 99.0), (92.0, 85.0))),
+    "happy": (((28.5, 97.0), (25.0, 83.0)), ((92.0, 95.5), (95.5, 80.0))),
+    "annoyed": (((29.5, 106.0), (38.0, 114.5)), ((90.0, 109.0), (92.5, 100.5))),
+}
+BLADE = {
+    "idle": 18.0,
+    "ask": 31.0,
+    "happy": 12.0,
+    "angry": 38.0,
+    "wink": 30.0,
+    "annoyed": 8.0,
+    "sulk": -112.0,
+}
+# The Captain's free hand in each mood: open or a fist, how far it turns from his forearm
+# (degrees), its thumb's side (-1: anticlockwise of his fingers). Open, how wide its fingers fan
+# and how far they reach; hanging when he sulks, they close up.
+FREE_HAND = {
+    "idle": ("fist", 20.0, -1),
+    "ask": ("fist", 20.0, -1),
+    "happy": ("open", 0.0, 1),
+    "angry": ("fist", 20.0, -1),
+    "wink": ("open", 0.0, 1),
+    "annoyed": ("fist", 20.0, -1),
+    "sulk": ("open", 0.0, -1),
+}
+OPEN_HAND = (26.0, 7.9)
+LIMP_HAND = (10.0, 7.0)
+PALM, FINGER = 4.3, 2.7
+# A finger is a short stroke with the sleeve's three tones at its own size: light, shade, then its
+# ink again (width less the finger's, opacity, offset).
+FINGER_TONES = ((-1.3, 0.9, (-0.42, -0.45)), (-1.4, 1.0, (0.45, 0.48)), (-0.95, 1.0, (-0.1, -0.11)))
 # The tabard's blue, shaded and lit.
 BAND_SHADE, BAND_LIGHT = "#3A62A8", "#86ACE8"
 # His hat: the Cadet's own felt, where its brim sits (centre x, y), its size against the plain
@@ -1125,6 +1172,27 @@ QUILL_STANDING = ((60.0, 80.0), (60.0, 16.0))
 QUILL_HELD = 7.0
 # On his icon, the light along his head's upper left.
 MUSKETEER_ICON_LIGHT = (4.6, 2.6)
+# The Captain's golden plume, behind his quill: its spine in the hat's frame before its tilt (two
+# cubics, base to crest then crest to tip); half-widths along it (where, the lit side's, the
+# shaded side's); its edge's tufts (how many on each side, how deep the hollows between them, how
+# far they lean towards its tip). His cockade, from the bow.
+PLUME_SPINE = (
+    ((-13.0, -5.0), (-19.0, -13.0), (-27.5, -20.5), (-38.0, -22.5)),
+    ((-38.0, -22.5), (-44.5, -23.8), (-50.0, -20.0), (-49.0, -13.0)),
+)
+PLUME_WIDTHS = (
+    (0.0, 0.6, 0.6),
+    (0.07, 2.0, 1.6),
+    (0.24, 6.2, 4.0),
+    (0.45, 7.8, 5.0),
+    (0.66, 7.1, 4.7),
+    (0.84, 5.2, 3.6),
+    (0.95, 3.4, 2.5),
+    (1.0, 1.2, 1.0),
+)
+PLUME_TUFTS = (5.0, 4.0, 0.3, 0.55)
+COCKADE_AT = (0.6, -0.4)
+COCKADE = 3.9
 
 
 def fluid_weight(s: float) -> float:
@@ -1155,9 +1223,24 @@ def fluid_points(blob: Blob, phase: float, drag: float = 0.0) -> list[tuple[floa
     return points
 
 
-def body_path(phase: float, drag: float = 0.0) -> str:
-    """The Musketeer's body: its outline at that phase of the ripple, its bottom dragged."""
-    return spline(fluid_points(MUSKETEER_BODY, phase, drag))
+def man_body(stage: int) -> Blob:
+    """A man of ink's body: shorter once he stands on his legs."""
+    return TORSO if stands(stage) else MUSKETEER_BODY
+
+
+def man_drips(stage: int) -> tuple[tuple[float, float], ...]:
+    """His drips (x, radius), the falling one last: on his legs, one, between his boots."""
+    return LEGS_DRIPS if stands(stage) else MUSKETEER_DRIPS
+
+
+def man_pool(stage: int) -> Blob:
+    """The ink under him: the puddle the Musketeer floats over, the pool the others stand in."""
+    return POOL if stands(stage) else MUSKETEER_PUDDLE
+
+
+def body_path(stage: int, phase: float, drag: float = 0.0) -> str:
+    """A man of ink's body: its outline at that phase of the ripple, its bottom dragged."""
+    return spline(fluid_points(man_body(stage), phase, drag))
 
 
 def head_path(phase: float) -> str:
@@ -1172,9 +1255,9 @@ def _tones(samples: list[tuple[float, float]], centre: tuple[float, float]) -> d
     }
 
 
-def body_shading(phase: float, drag: float = 0.0) -> dict[str, str]:
+def body_shading(stage: int, phase: float, drag: float = 0.0) -> dict[str, str]:
     """His body's shaded side, lit band and rim of light, as the Cadet's, following its edge."""
-    body = MUSKETEER_BODY
+    body = man_body(stage)
     return _tones(curve_samples(fluid_points(body, phase, drag)), (body.cx, body.cy))
 
 
@@ -1233,14 +1316,201 @@ def arm_parts(
     }
 
 
-def arm(
-    shoulder: tuple[float, float], elbow: tuple[float, float], hand: tuple[float, float]
+def _turned(x: float, y: float, at: tuple[float, float], angle: float) -> tuple[float, float]:
+    """(x, y) turned by `angle` degrees and moved to `at`."""
+    a = math.radians(angle)
+    return at[0] + x * math.cos(a) - y * math.sin(a), at[1] + x * math.sin(a) + y * math.cos(a)
+
+
+def _scaled(
+    svg: str, k: float, about: tuple[float, float], to: tuple[float, float] | None = None
 ) -> str:
-    """An arm as SVG (the still figure): what arm_parts says, drawn."""
+    """svg scaled by k around `about`, which lands on `to` (itself by default)."""
+    tx, ty = to or about
+    return (
+        f'<g transform="translate({pt(tx, ty)}) scale({n(k)}) '
+        f'translate({pt(-about[0], -about[1])})">{svg}</g>'
+    )
+
+
+Segment = tuple[tuple[float, float], tuple[float, float]]
+
+
+def _strokes(segments: list[Segment], shift: tuple[float, float] = (0.0, 0.0)) -> str:
+    """Segments as one path, moved by `shift`."""
+    dx, dy = shift
+    return " ".join(f"M{pt(a[0] + dx, a[1] + dy)} L{pt(b[0] + dx, b[1] + dy)}" for a, b in segments)
+
+
+def hand_parts(
+    shape: str,
+    at: tuple[float, float],
+    angle: float = 0.0,
+    thumb: int = 1,
+    spread: float = OPEN_HAND[0],
+    reach: float = OPEN_HAND[1],
+) -> dict[str, Any]:
+    """A hand as the window draws it, around the end of its sleeve. "round": the Musketeer's and
+    the Lieutenant's, a drop. The Captain's have taken fingers, three and a thumb, each a short
+    stroke: "open", fanned by `spread` degrees towards `angle`, the thumb on one side; "fist",
+    three knuckles towards `angle`, the thumb folded across them; "grip", closed on his rapier,
+    `angle` its blade's, his palm behind the grip and his fingers over it.
+
+    What comes of it, in the order it is drawn: the strokes under the palm, the palm with its
+    shade and its glint, the strokes over it, each finger's three tones in turn (FINGER_TONES: its
+    light, its shade, its ink again, which is what parts it from the next), the thumb when it lies
+    over all, its tones."""
+    fingers: list[Segment] = []
+    digit: list[Segment] = []
+    radius, width, thumb_width = HAND, 0.0, 0.0
+    if shape == "open":
+        radius, width, thumb_width = PALM, FINGER, FINGER
+        fingers = [
+            (
+                _turned(2.4, 0, at, angle + k * spread),
+                _turned(reach - (0.5 if k else 0), 0, at, angle + k * spread),
+            )
+            for k in (-1, 0, 1)
+        ]
+        digit = [(_turned(0.2, thumb * 2.4, at, angle), _turned(2.4, thumb * 6.0, at, angle))]
+    elif shape == "fist":
+        radius, width, thumb_width = 4.3, 2.6, 2.3
+        fingers = [
+            (_turned(2.6, k * 2.5, at, angle), _turned(4.3 - abs(k) * 0.5, k * 2.5, at, angle))
+            for k in (-1, 0, 1)
+        ]
+        digit = [(_turned(1.2, thumb * 3.6, at, angle), _turned(4.4, thumb * 1.3, at, angle))]
+    elif shape == "grip":
+        radius, width, thumb_width = 4.4, 2.5, 2.3
+        fingers = [
+            (_turned(-2.9, k * 2.45, at, angle), _turned(2.9, k * 2.45, at, angle))
+            for k in (-1, 0, 1)
+        ]
+        digit = [(_turned(-3.4, -2.2, at, angle), _turned(0.6, -4.4, at, angle))]
+    shifts = [shift for _, _, shift in FINGER_TONES]
+    under = fingers + digit if shape == "open" else fingers if shape == "fist" else []
+    return {
+        "shape": shape,
+        "under": _strokes(under),
+        "palm": [at[0], at[1], radius],
+        "palmShade": drop_shade(*at, radius),
+        "palmLight": drop_light(*at, radius),
+        "over": _strokes(fingers) if shape == "grip" else "",
+        "tones": [[_strokes([finger], shift) for shift in shifts] for finger in fingers],
+        "thumb": _strokes(digit) if shape in ("fist", "grip") else "",
+        "thumbTones": [_strokes(digit, shift) for shift in shifts] if digit else [],
+        "fingerWidth": width,
+        "thumbWidth": thumb_width,
+    }
+
+
+# What a hand is made of: its colour, its shade, its light, the glint on its palm (colour,
+# opacity). Ink, or the Captain's gloves, in his boots' leather.
+INK_HAND = (INK, INK_SHADE, INK_LIGHT, DROP_LIGHT)
+GLOVE = (BOOT_LIGHT, BOOT, GLOVE_LIGHT, ("#FFFFFF", 0.3))
+
+
+def hand_skin(stage: int) -> tuple[str, str, str, tuple[str, float]]:
+    return GLOVE if fingered(stage) else INK_HAND
+
+
+def hand_svg(
+    parts: dict[str, Any], skin: tuple[str, str, str, tuple[str, float]], held: str = ""
+) -> str:
+    """A hand as SVG (the still figure): what hand_parts says, drawn. `held`: what it holds,
+    between its palm and its fingers, or under a round hand."""
+    base, shade, light, (glint, glint_opacity) = skin
+    x, y, r = parts["palm"]
+    lx, ly, lr = parts["palmLight"]
+    round_hand = parts["shape"] == "round"
+    palm = (
+        f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(r)}" fill="{base}"/>'
+        f'<path d="{parts["palmShade"]}" fill="{shade}"/>'
+        + (
+            f'<circle cx="{n(lx)}" cy="{n(ly)}" r="{n(lr)}" fill="{glint}" '
+            f'opacity="{n(glint_opacity)}"/>'
+            if lr
+            else ""
+        )
+    )
+
+    def tones(paths: list[str], width: float) -> str:
+        return "".join(
+            _stroke(d, colour, width + dw, opacity)
+            for d, colour, (dw, opacity, _) in zip(
+                paths, (light, shade, base), FINGER_TONES, strict=True
+            )
+        )
+
+    return (
+        (_stroke(parts["under"], base, parts["fingerWidth"]) if parts["under"] else "")
+        + (held if round_hand else "")
+        + palm
+        + ("" if round_hand else held)
+        + (_stroke(parts["over"], base, parts["fingerWidth"]) if parts["over"] else "")
+        + "".join(tones(finger, parts["fingerWidth"]) for finger in parts["tones"])
+        + (_stroke(parts["thumb"], base, parts["thumbWidth"]) if parts["thumb"] else "")
+        + (tones(parts["thumbTones"], parts["thumbWidth"]) if parts["thumbTones"] else "")
+    )
+
+
+def wrist(elbow: tuple[float, float], hand: tuple[float, float]) -> float:
+    """Where the forearm points at the hand, in degrees."""
+    return math.degrees(math.atan2(hand[1] - elbow[1], hand[0] - elbow[0]))
+
+
+def arm_pose(
+    stage: int, expression: str
+) -> tuple[
+    tuple[tuple[float, float], tuple[float, float]], tuple[tuple[float, float], tuple[float, float]]
+]:
+    """His right arm's elbow and hand, then his left's, in that mood: with a rapier in his hand
+    from the Lieutenant on."""
+    return (SWORD_ARMS if stands(stage) else ARMS)[expression]
+
+
+def free_hand(
+    stage: int,
+    expression: str,
+    elbow: tuple[float, float],
+    hand: tuple[float, float],
+    wave: float = 0.0,
+) -> dict[str, Any]:
+    """His right hand, free: round, or the Captain's, open or a fist as the mood has it, turned
+    with his wrist (and by `wave`, when it waves)."""
+    if not fingered(stage):
+        return hand_parts("round", hand)
+    shape, turn, thumb = FREE_HAND[expression]
+    spread, reach = LIMP_HAND if expression == "sulk" else OPEN_HAND
+    return hand_parts(shape, hand, wrist(elbow, hand) + turn + wave, thumb, spread, reach)
+
+
+def sword_hand(stage: int, hand: tuple[float, float], blade: float) -> dict[str, Any]:
+    """His left hand: on his rapier from the Lieutenant on (round, the drop over its grip; the
+    Captain's, his fingers closed on it), the blade at that angle."""
+    return hand_parts("grip" if fingered(stage) else "round", hand, blade)
+
+
+def held_rapier(stage: int, hand: tuple[float, float], blade: float) -> str:
+    """His rapier in his hand: turned to the blade's angle around his grip on it."""
+    gx, gy = RAPIER_GRIP
+    return (
+        f'<g transform="translate({pt(*hand)}) rotate({n(blade)}) scale({n(RAPIER_SCALE)}) '
+        f'translate({pt(-gx, -gy)})">{rapier(stage)}</g>'
+    )
+
+
+def arm(
+    shoulder: tuple[float, float],
+    elbow: tuple[float, float],
+    hand: tuple[float, float],
+    its_hand: str | None = None,
+    lace: str = CREAM,
+) -> str:
+    """An arm as SVG (the still figure): what arm_parts says, drawn, then its hand (a drop,
+    unless given)."""
     parts = arm_parts(shoulder, elbow, hand)
     sleeve, cuff = parts["sleeve"], parts["cuff"]
-    hx, hy = hand
-    lx, ly, lr = parts["handLight"]
     return (
         _stroke(sleeve, INK, ARM_WIDTH)
         + "".join(
@@ -1250,23 +1520,28 @@ def arm(
         + _moved(_stroke(cuff, CREAM_SHADE, CUFF_WIDTH, cap="butt"), *CUFF_SHADE)
         + _stroke(cuff, CREAM, CUFF_WIDTH, cap="butt")
         + "".join(
-            f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(LACE)}" fill="{CREAM}"/>'
+            f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(LACE)}" fill="{lace}"/>'
             for x, y in parts["lace"]
         )
-        + f'<circle cx="{n(hx)}" cy="{n(hy)}" r="{n(HAND)}" fill="{INK}"/>'
-        + f'<path d="{parts["handShade"]}" fill="{INK_SHADE}"/>'
-        + (
-            f'<circle cx="{n(lx)}" cy="{n(ly)}" r="{n(lr)}" fill="{DROP_LIGHT[0]}" '
-            f'opacity="{n(DROP_LIGHT[1])}"/>'
-            if lr
-            else ""
-        )
+        + (hand_svg(hand_parts("round", hand), INK_HAND) if its_hand is None else its_hand)
     )
 
 
-def arms(expression: str) -> str:
-    right, left = ARMS[expression]
-    return arm(SHOULDERS[0], *right) + arm(SHOULDERS[1], *left)
+def arms(stage: int, expression: str) -> str:
+    """His two arms in the mood's pose: the Musketeer's; the Lieutenant's, his rapier in his round
+    hand; the Captain's, gloved fingers and gold lace."""
+    (r_elbow, r_hand), (l_elbow, l_hand) = arm_pose(stage, expression)
+    skin = hand_skin(stage)
+    lace = GOLD if fingered(stage) else CREAM
+    right = hand_svg(free_hand(stage, expression, r_elbow, r_hand), skin)
+    if stands(stage):
+        blade = BLADE[expression]
+        left = hand_svg(sword_hand(stage, l_hand, blade), skin, held_rapier(stage, l_hand, blade))
+    else:
+        left = hand_svg(hand_parts("round", l_hand), skin)
+    return arm(SHOULDERS[0], r_elbow, r_hand, right, lace) + arm(
+        SHOULDERS[1], l_elbow, l_hand, left, lace
+    )
 
 
 def _lappet(side: int) -> str:
@@ -1450,31 +1725,337 @@ def felt_tails() -> str:
     return tail(-11 * u, 14 * u, 1.6 * u, CREAM_SHADE) + tail(-6.5 * u, 16.5 * u, 1.7 * u, CREAM)
 
 
-def _musketeer_still(expression: str, glow: bool, shadow: bool) -> str:
-    """The Musketeer at rest, in one SVG: his body, dressed, then his head, his face, his arms in
-    the mood's pose, the drops around him, his hat."""
-    spec = figure(MUSKETEER)
-    head, body = head_path(0.0), body_path(0.0)
-    parts = [layer_body(MUSKETEER, "glow")] if glow else []
+def collar_laced() -> str:
+    """The Captain's collar, edged with lace as his cuffs are: scallops along its lower edge."""
+    lace = []
+    for side in (-1, 1):
+        for i in range(5):
+            f = (i + 0.5) / 5
+            x, y = 17.0 + (4.0 - 17.0) * f, 95.2 + (102.4 - 95.2) * f
+            lace.append(
+                f'<circle cx="{n(60 + side * (x + 0.25))}" cy="{n(y + 0.55)}" r="1.25" '
+                f'fill="{CREAM_SHADE}"/>'
+            )
+            lace.append(
+                f'<circle cx="{n(60 + side * x)}" cy="{n(y + 0.2)}" r="1.25" fill="{CREAM}"/>'
+            )
+    return "".join(lace) + collar()
+
+
+TABARD_SHORT = "M48.5 96.5 L71.5 96.5 L75.4 115.6 Q60 121.4 44.6 115.6 Z"
+
+
+def flames(cx: float, cy: float, size: float) -> str:
+    """The flames of the musketeers' tabard, between the arms of its cross: gold, the Captain's."""
+    out = []
+    for k in range(4):
+        a = math.radians(45 + 90 * k)
+        ux, uy = math.cos(a), math.sin(a)
+        vx, vy = -uy, ux
+        r0, r1, w = size * 0.22, size * 0.86, size * 0.17
+
+        def q(
+            r: float, side: float, ux: float = ux, uy: float = uy, vx: float = vx, vy: float = vy
+        ) -> str:
+            return pt(cx + ux * r + vx * side, cy + uy * r + vy * side)
+
+        out.append(
+            _fill(
+                f"M{q(r0, 0)} C{q(r0 + 1.0, w)} {q(r1 * 0.66, w * 1.1)} {q(r1, 0)} "
+                f"C{q(r1 * 0.66, -w * 1.1)} {q(r0 + 1.0, -w)} {q(r0, 0)} Z",
+                GOLD,
+            )
+        )
+    return "".join(out)
+
+
+def tabard_short(gold: bool) -> str:
+    """The tabard cut for a man on his legs: shorter, its cross a little smaller. The Captain's:
+    its braid in gold, golden flames round its cross."""
+    return (
+        _fill(TABARD_SHORT, BAND_BLUE)
+        + _fill("M71.5 96.5 L75.4 115.6 Q73.6 116.5 71.7 117.1 L67.6 96.5 Z", BAND_SHADE)
+        + _stroke("M50.3 99.5 L47.3 114.6", BAND_LIGHT, 0.8, 0.8)
+        + (_stroke(TABARD_SHORT, GOLD_DK, 2.0) if gold else "")
+        + _stroke(TABARD_SHORT, GOLD if gold else CREAM, 1.3)
+        + (flames(60.0, 108.4, 6.5) if gold else "")
+        + tabard_cross(60.0, 108.4, 6.5, BAND_SHADE)
+    )
+
+
+def man_tabard(stage: int) -> str:
+    return tabard_short(fingered(stage)) if stands(stage) else tabard()
+
+
+def man_collar(stage: int) -> str:
+    return collar_laced() if fingered(stage) else collar()
+
+
+def leg(cx: float) -> str:
+    """A leg of ink, from under his body down into its boot: lit on its left, shaded on its
+    right."""
+    top, bottom, w = 112.0, GROUND - (BOOT_TOP - 3) * BOOT_SIZE, LEG_WIDTH
+    d = f"M{pt(cx, top)} L{pt(cx, bottom)}"
+    return (
+        _stroke(d, INK, w, cap="butt")
+        + _moved(_stroke(d, INK_SHADE, w - 4.4, cap="butt"), 2.2, 0)
+        + _moved(_stroke(d, INK_LIGHT, 1.0, 0.9, cap="butt"), -w / 2 + 1.0, 0)
+    )
+
+
+def boot(cx: float, side: int, gold: bool) -> str:
+    """A musketeer's boot, its toe turned out (side -1: to our left): a flared top turned down
+    over the shaft, the cream lace of his boot hose at its rim, a strap and its buckle on the
+    instep (steel, the Captain's gold), a sole and a heel. Lit on the upper left, shaded on the
+    right, as all he wears."""
+    metal, dark = (GOLD, GOLD_DK) if gold else (STEEL, STEEL_DK)
+    k = BOOT_SIZE
+
+    def p(x: float, y: float) -> str:
+        return pt(cx + side * x * k, GROUND + y * k)
+
+    def q(x: float, y: float) -> str:  # not mirrored: what the light decides
+        return pt(cx + x * k, GROUND + y * k)
+
+    top = -BOOT_TOP
+    foot = (
+        f"M{p(-3.7, -9.6)} L{p(3.7, -9.6)} L{p(3.5, -5.0)} C{p(5.6, -4.9)} {p(9.4, -4.2)} "
+        f"{p(9.6, -1.6)} L{p(9.6, 0)} L{p(-4.7, 0)} L{p(-4.7, -3.2)} "
+        f"C{p(-4.7, -4.4)} {p(-3.9, -5.0)} {p(-3.7, -6.2)} Z"
+    )
+    cuff = (
+        f"M{p(-6.5, top)} C{p(-3, top + 1.5)} {p(3, top + 1.5)} {p(6.5, top)} "
+        f"L{p(4.5, -8.2)} C{p(2, -7.4)} {p(-2, -7.4)} {p(-4.5, -8.2)} Z"
+    )
+    rim = f"M{p(-6.5, top)} C{p(-3, top + 1.5)} {p(3, top + 1.5)} {p(6.5, top)}"
+    opening = (
+        f"M{p(-6.5, top)} C{p(-3, top - 1.5)} {p(3, top - 1.5)} {p(6.5, top)} "
+        f"C{p(3, top + 1.5)} {p(-3, top + 1.5)} {p(-6.5, top)} Z"
+    )
+    lace = "".join(
+        f'<circle cx="{n(cx + x * k)}" cy="{n(GROUND + (top + 1.05 - 0.16 * x * x / 6.5) * k)}" '
+        f'r="{n(1.15 * k)}" fill="{CREAM}"/>'
+        for x in (-5.0, -2.5, 0.0, 2.5, 5.0)
+    )
+    bx, by = cx + side * 3.2 * k, GROUND - 4.2 * k
+    return (
+        _fill(foot, BOOT)
+        + _fill(f"M{q(1.3, -9.6)} L{q(3.7, -9.6)} L{q(3.6, -4.6)} L{q(1.6, -4.6)} Z", BOOT_SHADE)
+        + _stroke(f"M{q(-2.9, -9.4)} L{q(-2.8, -5.6)}", BOOT_LIGHT, 0.9 * k, 0.9)
+        + _stroke(f"M{p(5.0, -4.2)} Q{p(8.0, -3.9)} {p(8.7, -2.2)}", BOOT_LIGHT, 0.8 * k, 0.85)
+        + _stroke(f"M{p(1.6, -5.4)} L{p(4.6, -3.0)}", BOOT_SHADE, 2.0 * k, cap="butt")
+        + f'<rect x="{n(bx - 1.2 * k)}" y="{n(by - 1.2 * k)}" width="{n(2.4 * k)}" '
+        f'height="{n(2.4 * k)}" rx="{n(0.5 * k)}" fill="{metal}"/>'
+        f'<rect x="{n(bx - 0.5 * k)}" y="{n(by - 0.5 * k)}" width="{n(k)}" height="{n(k)}" '
+        f'fill="{dark}"/>'
+        + _fill(f"M{p(-4.7, -1.1)} L{p(9.6, -1.1)} L{p(9.6, 0)} L{p(-4.7, 0)} Z", SOLE)
+        + _fill(f"M{p(-4.7, -2.0)} L{p(-1.6, -2.0)} L{p(-1.6, 0)} L{p(-4.7, 0)} Z", SOLE)
+        + _fill(opening, BOOT_SHADE)
+        + _fill(cuff, BOOT_LIGHT)
+        + _fill(f"M{q(2.4, top + 1.0)} L{q(6.5, top)} L{q(4.5, -8.2)} L{q(1.8, -7.6)} Z", BOOT)
+        + _stroke(rim, BOOT_RIM, 0.7 * k, 0.9)
+        + lace
+    )
+
+
+def legs(stage: int) -> str:
+    """His two legs of ink and their boots: what he stands on, under his body's rippling hem."""
+    gold = fingered(stage)
+    return "".join(leg(x) for x in LEGS) + boot(LEGS[0], -1, gold) + boot(LEGS[1], 1, gold)
+
+
+def _spine(count: int = 96) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Points along the golden plume's spine with their unit tangents, evenly spread by length."""
+    raw: list[tuple[float, float]] = []
+    for p0, c1, c2, p1 in PLUME_SPINE:
+        raw += _cubic(p0, c1, c2, p1, 60)
+    raw.append(PLUME_SPINE[-1][-1])
+    lengths = [0.0]
+    for a, b in itertools.pairwise(raw):
+        lengths.append(lengths[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    total, out, j = lengths[-1], [], 0
+    for i in range(count + 1):
+        target = total * i / count
+        while j < len(raw) - 2 and lengths[j + 1] < target:
+            j += 1
+        span = lengths[j + 1] - lengths[j] or 1.0
+        f = (target - lengths[j]) / span
+        x = raw[j][0] + (raw[j + 1][0] - raw[j][0]) * f
+        y = raw[j][1] + (raw[j + 1][1] - raw[j][1]) * f
+        tx, ty = raw[j + 1][0] - raw[j][0], raw[j + 1][1] - raw[j][1]
+        k = math.hypot(tx, ty) or 1.0
+        out.append(((x, y), (tx / k, ty / k)))
+    return out
+
+
+def _plume_width(s: float, side: int) -> float:
+    for (s0, a0, b0), (s1, a1, b1) in itertools.pairwise(PLUME_WIDTHS):
+        if s0 <= s <= s1:
+            f = (s - s0) / (s1 - s0)
+            f = f * f * (3 - 2 * f)  # eased, so that the edge has no corners
+            lo, hi = (a0, a1) if side > 0 else (b0, b1)
+            return lo + (hi - lo) * f
+    return 0.0
+
+
+def golden_plume(flat: bool = False) -> str:
+    """The Captain's plume, an ostrich's in gold, behind his quill: full and tufted, its tip
+    curling down; its vane lit above its rib and shaded under it, its barbs, a thin outline.
+    `flat`: for the icon, no tufts, barbs nor outline."""
+    cx, yb = MUSKETEER_FELT[:2]
+    rows = _spine()
+    count = len(rows) - 1
+    lit: list[tuple[float, float]] = []
+    shaded: list[tuple[float, float]] = []
+    centre: list[tuple[float, float]] = []
+    for i, ((x, y), (tx, ty)) in enumerate(rows):
+        s = i / count
+        nx, ny = -ty, tx  # towards the outside of the curve: up, where the light falls
+        wo, wi = _plume_width(s, 1), _plume_width(s, -1)
+        if not flat:
+            tufts_lit, tufts_shaded, depth, _ = PLUME_TUFTS
+            wo *= 1 - depth * (1 - abs(math.sin(math.pi * tufts_lit * s)) ** 0.5)
+            wi *= 1 - depth * (1 - abs(math.sin(math.pi * tufts_shaded * s + 0.9)) ** 0.5)
+        px, py = cx + x, yb + y
+        centre.append((px, py))
+        lean = 0.0 if flat else PLUME_TUFTS[3] * (1 - s) ** 0.3
+        lit.append((px + (nx + tx * lean) * wo, py + (ny + ty * lean) * wo))
+        shaded.append((px - (nx - tx * lean) * wi, py - (ny - ty * lean) * wi))
+    parts = [
+        _fill(polygon(lit + centre[::-1]), GOLD),
+        _fill(polygon(shaded + centre[::-1]), GOLD_SHADE),
+    ]
+    if not flat:
+        barbs_lit, barbs_shaded = [], []
+        for k in range(1, 9):
+            i = round(count * (0.1 + 0.095 * k))
+            j = min(count, i + round(count * 0.06))
+            if j >= count - 2:
+                break
+            (x, y) = centre[i]
+            ex, ey = lit[j]
+            barbs_lit.append(f"M{pt(x, y)} L{pt(x + (ex - x) * 0.82, y + (ey - y) * 0.82)}")
+            ex, ey = shaded[j]
+            barbs_shaded.append(f"M{pt(x, y)} L{pt(x + (ex - x) * 0.8, y + (ey - y) * 0.8)}")
+        parts.append(_stroke(" ".join(barbs_lit), GOLD_SHADE, 0.5, 0.9))
+        parts.append(_stroke(" ".join(barbs_shaded), GOLD_DK, 0.5, 0.6))
+        parts.append(_stroke(polygon(lit + shaded[::-1]), GOLD_DK, 0.7))
+    rib = centre[round(count * (0.5 if flat else 0.0)) : round(count * 0.93)]
+    parts.append(_stroke("M" + " L".join(pt(*c) for c in rib), GOLD_LIGHT, 0.9))
+    return _tilted("".join(parts))
+
+
+def cockade(at: tuple[float, float], r: float = COCKADE) -> str:
+    """The cockade that pins the Captain's quill and plume: a pleated rosette of gold, a cream
+    heart, a steel stud."""
+    x, y = at
+
+    def round_(a: float, k: float) -> tuple[float, float]:
+        return x + r * k * math.cos(math.radians(a)), y + r * k * math.sin(math.radians(a))
+
+    def disc(cx: float, cy: float, radius: float, colour: str) -> str:
+        return f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(radius)}" fill="{colour}"/>'
+
+    return (
+        disc(x + 0.4, y + 0.5, r * 1.08, GOLD_DK)
+        + "".join(disc(*round_(a, 0.72), r * 0.42, GOLD) for a in range(0, 360, 45))
+        + disc(x, y, r * 0.74, GOLD)
+        + "".join(
+            _stroke(f"M{pt(*round_(a, 0.5))} L{pt(*round_(a, 1.02))}", GOLD_DK, 0.45, 0.8)
+            for a in range(22, 360, 45)
+        )
+        + disc(x, y, r * 0.5, CREAM)
+        + disc(x + 0.25, y + 0.3, r * 0.24, STEEL_DK)
+        + disc(x, y, r * 0.2, STEEL)
+    )
+
+
+def captain_felt() -> str:
+    """The same felt, a captain's now: gold braid round its brim, where the Musketeer's stitches
+    ran."""
+    cx, yb, u, _ = MUSKETEER_FELT
+    rx, ry = 30 * u, 6.5 * u
+    front = f"M{pt(cx - rx, yb)} A{n(rx)} {n(ry)} 0 0 0 {pt(cx + rx, yb)}"
+    back = f"M{pt(cx - rx, yb)} A{n(rx)} {n(ry)} 0 0 1 {pt(cx + rx, yb)}"
+    braid = (
+        _stroke(front, GOLD_DK, 2.0)
+        + _stroke(front, GOLD, 1.25)
+        + _stroke(front, GOLD_LIGHT, 0.4, 0.8)
+    )
+    return _tilted(_felt_hat(cx, yb, u, _stripe(), braid, _stroke(back, GOLD, 0.9, 0.9)))
+
+
+def captain_knot() -> str:
+    """What holds his quill and his plume: the ribbon's end, its bow, and a cockade where the
+    Musketeer's steel button was."""
+    u = MUSKETEER_FELT[2]
+    bx, by = _on_felt(*CADET_BOW)
+    a, c, b = _qsub(_on_felt(-16.65, -3.7), _on_felt(0, -0.9), _on_felt(16.65, -3.7), 0.0, 0.25)
+    return _tilted(
+        _fill(polygon(_ribbon_left()), CREAM)
+        + _stroke(f"M{pt(*a)} Q{pt(*c)} {pt(*b)}", BAND_BLUE, 1.5 * u, cap="butt")
+        + _bow(bx, by, u)
+        + cockade((bx + COCKADE_AT[0], by + COCKADE_AT[1]))
+    )
+
+
+def cockade_pivot() -> tuple[float, float]:
+    """Where the cockade pins the golden plume, the hat's tilt applied: it sways around it."""
+    cx, yb, _, tilt = MUSKETEER_FELT
+    x, y = _on_felt(CADET_BOW[0] + COCKADE_AT[0], CADET_BOW[1] + COCKADE_AT[1])
+    return _rotate(x, y, cx, yb, tilt)
+
+
+def man_felt(stage: int) -> str:
+    return captain_felt() if fingered(stage) else felt_hat()
+
+
+def man_knot(stage: int) -> str:
+    return captain_knot() if fingered(stage) else felt_front()
+
+
+def _whiskers() -> tuple[float, float]:
+    """Where a man of ink's moustache sits on his smaller face: it turns around that point."""
+    face = _face(MUSKETEER)
+    return 60.0, face.mouth_y - 2.5 * face.mouth_size
+
+
+def man_moustache() -> str:
+    """The hooked moustache, at his face's size."""
+    at = _whiskers()
+    return _scaled(moustache(*at), _face(MUSKETEER).mouth_size, at)
+
+
+def man_royale(expression: str) -> str:
+    """The Captain's goatee, at his face's size: it follows his mouth in each mood."""
+    face = _face(MUSKETEER)
+    return _scaled(royale(expression), face.mouth_size, (60.0, 91.0), to=(60.0, face.mouth_y))
+
+
+def _man_still(stage: int, expression: str, glow: bool, shadow: bool) -> str:
+    """A man of ink at rest, in one SVG: his legs once he stands on them, his body, dressed, then
+    his head, his face, his arms in the mood's pose, the drops around him, his hat."""
+    spec = figure(stage)
+    head, body = head_path(0.0), body_path(stage, 0.0)
+    parts = [layer_body(stage, "glow")] if glow else []
+    parts.append(layer_body(stage, "legs"))
     parts += [
         f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>'
         for x, y, r in spec["staticDrips"] + [spec["drip"]]
     ]
     parts.append(f'<path d="{body}" fill="{INK}"/>')
-    parts.append(_tones_svg(body_shading(0.0)))
-    parts += [tabard(), collar()]
-    ride_y, ride_tip = hat_ride(MUSKETEER, 0.0)
+    parts.append(_tones_svg(body_shading(stage, 0.0)))
+    parts += [man_tabard(stage), man_collar(stage)]
+    ride_y, ride_tip = hat_ride(stage, 0.0)
     riding = f"translate(0 {n(ride_y)}) rotate({n(ride_tip)} {pt(*MUSKETEER_FELT[:2])})"
     parts.append(f'<g transform="{riding}">{felt_tails()}</g>')
     parts.append(f'<path d="{head}" fill="{INK}"/>')
     parts.append(_tones_svg(head_shading(0.0)))
-    face = _face(MUSKETEER)
     parts += [
-        eye(60, face.eyes_y, face.eye_size, expression, -1),
-        eye(60, face.eyes_y, face.eye_size, expression, 1),
-        mouth(60, face.mouth_y, face.mouth_size, expression),
-        arms(expression),
+        layer_body(stage, name, expression)
+        for name in ("eye-left", "eye-right", "mouth", "moustache", "royale")
     ]
+    parts.append(arms(stage, expression))
     for i, (x, y, r) in enumerate(spec["drops"]):
         lx, ly, lr = spec["dropLights"][i]
         parts.append(f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(r)}" fill="{INK}"/>')
@@ -1484,7 +2065,8 @@ def _musketeer_still(expression: str, glow: bool, shadow: bool) -> str:
                 f'<circle cx="{n(lx)}" cy="{n(ly)}" r="{n(lr)}" fill="{DROP_LIGHT[0]}" '
                 f'opacity="{n(DROP_LIGHT[1])}"/>'
             )
-    parts.append(f'<g transform="{riding}">{felt_hat()}{felt_quill()}{felt_front()}</g>')
+    crowned = "".join(layer_body(stage, name) for name in ("hat", "panache", "plume", "bow"))
+    parts.append(f'<g transform="{riding}">{crowned}</g>')
     scaled = f"translate(60 132) scale({n(spec['scale'])}) translate(-60 -132)"
     under = (
         f'<ellipse cx="60" cy="133.5" rx="{n(spec["shadowRx"])}" ry="3.6" fill="#000" opacity=".16"/>'
@@ -1492,131 +2074,159 @@ def _musketeer_still(expression: str, glow: bool, shadow: bool) -> str:
         else ""
     )
     return _svg(
-        f'{under}<g transform="{scaled}">{layer_body(MUSKETEER, "ground")}'
+        f'{under}<g transform="{scaled}">{layer_body(stage, "ground")}'
         f'<g transform="translate(0 {n(-spec["lift"])})">{"".join(parts)}</g></g>'
-        f"{layer_body(MUSKETEER, 'decor', expression)}"
+        f"{layer_body(stage, 'decor', expression)}"
     )
 
 
-def _musketeer_icon() -> str:
-    """His icon, redrawn to read at 16 to 48 px as the other grades': rimmed, flat ink lit on his
-    head's upper left, the tabard and its cross, the collar, a bigger face, his arms, the felt
-    flat with its blue and its quill."""
+def _man_icon(stage: int) -> str:
+    """A man of ink's icon, redrawn to read at 16 to 48 px as the other grades': rimmed, flat ink
+    lit on his head's upper left, the tabard and its cross, the collar, a bigger face, his arms,
+    the felt flat with its blue and its quill. The Lieutenant's adds his moustache, his legs and
+    his rapier at his side, bold enough for 16 px; the Captain's, his golden plume, his braided
+    brim, his goatee and his gloves."""
+    gold, rim, w = fingered(stage), ICON_RIM, ICON_RIM_WIDTH
     cx, yb, u, _ = MUSKETEER_FELT
     a, c, b = _qsub(_on_felt(-19, -4.9), _on_felt(0, -1.6), _on_felt(19, -4.9), 0.0, 1.0)
     blue = _stroke(f"M{pt(*a)} Q{pt(*c)} {pt(*b)}", BAND_BLUE, 2.0 * u, cap="butt")
-    bx, by = _on_felt(*CADET_BOW)
-    tops = (
-        _tilted(_icon_felt(cx, yb, u, blue))
-        + felt_quill(flat=True)
-        + _tilted(f'<circle cx="{n(bx)}" cy="{n(by)}" r="{n(3.2 * u)}" fill="{CREAM}"/>')
+    rx, ry = 30 * u, 6.5 * u
+    braid = (
+        _stroke(f"M{pt(cx - rx, yb)} A{n(rx)} {n(ry)} 0 0 0 {pt(cx + rx, yb)}", GOLD, 2.2)
+        if gold
+        else ""
     )
-    head, body = head_path(0.0), body_path(0.0)
+    bx, by = _on_felt(*CADET_BOW)
+    knot = (
+        f'<circle cx="{n(bx)}" cy="{n(by)}" r="{n((3.6 if gold else 3.2) * u)}" '
+        f'fill="{GOLD if gold else CREAM}"/>'
+    )
+    tops = (
+        _tilted(_icon_felt(cx, yb, u, blue) + braid)
+        + (golden_plume(flat=True) if gold else "")
+        + felt_quill(flat=True)
+        + _tilted(knot)
+    )
+    head, body = head_path(0.0), body_path(stage, 0.0)
     arms_rim, arms_flat = [], []
-    for shoulder, (elbow, hand) in zip(SHOULDERS, ARMS["idle"], strict=True):
+    hand_radius = HAND + 0.3 if stands(stage) else HAND
+    for shoulder, (elbow, hand) in zip(SHOULDERS, arm_pose(stage, "idle"), strict=True):
         d = f"M{pt(*shoulder)} Q{pt(*elbow)} {pt(*hand)}"
         a, c, b = _qsub(shoulder, elbow, hand, 0.6, 0.86)
-        hand_at = f'cx="{n(hand[0])}" cy="{n(hand[1])}"'
-        arms_rim.append(_stroke(d, ICON_RIM, ARM_WIDTH + ICON_RIM_WIDTH))
-        arms_rim.append(f'<circle {hand_at} r="{n(HAND + ICON_RIM_WIDTH / 2)}" fill="{ICON_RIM}"/>')
+        at = f'cx="{n(hand[0])}" cy="{n(hand[1])}"'
+        arms_rim.append(_stroke(d, rim, ARM_WIDTH + w))
+        arms_rim.append(f'<circle {at} r="{n(HAND + w / 2)}" fill="{rim}"/>')
         arms_flat.append(_stroke(d, INK, ARM_WIDTH))
         arms_flat.append(_stroke(f"M{pt(*a)} Q{pt(*c)} {pt(*b)}", CREAM, CUFF_WIDTH, cap="butt"))
-        arms_flat.append(f'<circle {hand_at} r="{n(HAND)}" fill="{INK}"/>')
-    inset, width = MUSKETEER_ICON_LIGHT
-    face = _face(MUSKETEER)
+        arms_flat.append(
+            f'<circle {at} r="{n(hand_radius)}" fill="{BOOT_LIGHT if gold else INK}"/>'
+        )
+    rapier_rim = rapier_flat = legs_rim = legs_flat = ""
+    if stands(stage):
+        # His rapier at his side: a blade, a guard, a pommel.
+        hand, blade = arm_pose(stage, "idle")[1][1], BLADE["idle"]
+        metal = GOLD if gold else STEEL
+        px, py = _turned(0, 6.8, hand, blade)
+        blade_d = f"M{pt(*_turned(0, -4.5, hand, blade))} L{pt(*_turned(0, -40.5, hand, blade))}"
+        guard_d = (
+            f"M{pt(*_turned(-6.5, -5.4, hand, blade))} L{pt(*_turned(6.5, -5.4, hand, blade))}"
+        )
+        rapier_rim = (
+            _stroke(blade_d, rim, 3.2 + w)
+            + _stroke(guard_d, rim, 3.0 + w)
+            + f'<circle cx="{n(px)}" cy="{n(py)}" r="{n(2.6 + w / 2)}" fill="{rim}"/>'
+        )
+        rapier_flat = (
+            _stroke(blade_d, STEEL, 3.2)
+            + _stroke(guard_d, metal, 3.0)
+            + f'<circle cx="{n(px)}" cy="{n(py)}" r="2.6" fill="{metal}"/>'
+        )
+        # His legs and his boots, flat.
+        k = BOOT_SIZE
+        for x, side in zip(LEGS, (-1, 1), strict=True):
+
+            def p(dx: float, dy: float, x: float = x, side: int = side) -> str:
+                return pt(x + side * dx * k, GROUND + dy * k)
+
+            shoe = (
+                f"M{p(-4.4, -12.6)} L{p(4.4, -12.6)} L{p(3.7, -5.0)} C{p(5.6, -4.9)} "
+                f"{p(9.4, -4.2)} {p(9.6, -1.6)} L{p(9.6, 0)} L{p(-4.7, 0)} L{p(-4.7, -3.2)} Z"
+            )
+            top = f"M{p(-6.3, -12.8)} L{p(6.3, -12.8)} L{p(4.6, -8.4)} L{p(-4.6, -8.4)} Z"
+            thigh = f"M{pt(x, 112.0)} L{pt(x, GROUND - 9 * k)}"
+            legs_rim += _stroke(thigh, rim, LEG_WIDTH + w, cap="butt")
+            legs_rim += _rimmed(_fill(shoe, BOOT) + _fill(top, BOOT))
+            legs_flat += _stroke(thigh, INK, LEG_WIDTH, cap="butt")
+            legs_flat += _fill(shoe, BOOT) + _fill(top, BOOT_LIGHT)
+    face = _face(stage)
     features = (
         eye(60, face.eyes_y, 1.08, "idle", -1, 0.94)
         + eye(60, face.eyes_y, 1.08, "idle", 1, 0.94)
         + mouth(60, face.mouth_y + 0.5, 1.02, "idle", 0.85, False)
     )
-    silhouette = _fill(body, INK) + _fill(head, INK)
+    if stands(stage):
+        features += _scaled(moustache(60, face.mouth_y - 2.2), 0.9, (60, face.mouth_y - 2.2))
+    if gold:
+        features += _scaled(royale("idle"), 0.95, (60, 91.0), to=(60, face.mouth_y - 0.6))
+    shape, cross_at = (
+        (TABARD_SHORT, (60.0, 108.9, 7.4)) if stands(stage) else (TABARD, (60.0, 111.4, 8.6))
+    )
+    inset, width = MUSKETEER_ICON_LIGHT
     drawing = (
-        _rimmed(silhouette)
+        _rimmed(_fill(body, INK) + _fill(head, INK))
+        + legs_rim
         + "".join(arms_rim)
+        + rapier_rim
         + _rimmed(tops)
+        + legs_flat
         + _fill(body, INK)
-        + _fill(TABARD, BAND_BLUE)
-        + tabard_cross(60.0, 111.4, 8.6, BAND_BLUE)
+        + _fill(shape, BAND_BLUE)
+        + (_stroke(shape, GOLD, 1.8) if gold else "")
+        + tabard_cross(*cross_at, BAND_BLUE)
         + _fill(_lappet(-1), CREAM)
         + _fill(_lappet(1), CREAM)
         + _fill(head, INK)
         + _stroke(_light_arc(MUSKETEER_HEAD, inset), INK_LIGHT, width)
         + features
         + "".join(arms_flat)
+        + rapier_flat
         + tops
     )
-    scaled = f"translate(60 132) scale({n(SCALES[MUSKETEER])}) translate(-60 -132)"
-    return _svg(f'<g transform="{scaled}">{drawing}</g>', ICON_BOXES[MUSKETEER])
-
-
-def hat(stage: int, cx: float = 60, yb: float = 54, tilt: float = -8) -> str:
-    """The felt, without its plumes: the Cadet's a size too big, plain from the Lieutenant on (the
-    Musketeer's is the Cadet's, his size: felt_hat), the captain's from grade 5."""
-    if stage == 2:
-        return cadet_hat()
-    if stage >= 5:
-        u = 66 / 60
-        body = (
-            f'<ellipse cx="{n(cx)}" cy="{n(yb)}" rx="{n(31 * u)}" ry="{n(7 * u)}" fill="{FELT}" '
-            f'stroke="{GOLD}" stroke-width="{n(1.2 * u)}"/>'
-            f'<path d="M{pt(cx - 17 * u, yb)} C{pt(cx - 18.5 * u, yb - 16 * u)} {pt(cx - 11 * u, yb - 27 * u)} '
-            f"{pt(cx - 4 * u, yb - 27 * u)} C{pt(cx - 1 * u, yb - 27 * u)} {pt(cx + 1 * u, yb - 23 * u)} "
-            f"{pt(cx + 4 * u, yb - 24 * u)} C{pt(cx + 12 * u, yb - 26 * u)} {pt(cx + 18.5 * u, yb - 16 * u)} "
-            f'{pt(cx + 17 * u, yb)} Z" fill="{FELT}"/>'
-            f'<path d="M{pt(cx - 17.4 * u, yb - 1.2 * u)} Q{pt(cx, yb + 1.8 * u)} {pt(cx + 17.4 * u, yb - 1.2 * u)} '
-            f'L{pt(cx + 17.9 * u, yb - 7 * u)} Q{pt(cx, yb - 3.8 * u)} {pt(cx - 17.9 * u, yb - 7 * u)} Z" '
-            f'fill="{GOLD}"/>'
-            f'<path d="M{pt(cx - 31 * u, yb)} A{n(31 * u)} {n(7 * u)} 0 0 0 {pt(cx + 31 * u, yb)} Z" fill="{FELT}"/>'
-            f'<path d="M{pt(cx - 31 * u, yb)} A{n(31 * u)} {n(7 * u)} 0 0 0 {pt(cx + 31 * u, yb)}" '
-            f'fill="none" stroke="{GOLD}" stroke-width="{n(1.2 * u)}"/>'
-            f'<path d="M{pt(cx - 31 * u, yb)} C{pt(cx - 33 * u, yb - 9 * u)} {pt(cx - 27 * u, yb - 17 * u)} '
-            f"{pt(cx - 16 * u, yb - 14 * u)} L{pt(cx - 16 * u, yb - 2 * u)} C{pt(cx - 22 * u, yb - 1 * u)} "
-            f'{pt(cx - 28 * u, yb - 0.5 * u)} {pt(cx - 31 * u, yb)} Z" fill="{FELT_LIGHT}" '
-            f'stroke="{GOLD}" stroke-width="{n(1 * u)}" stroke-linejoin="round"/>'
-            f'<circle cx="{n(cx - 15.5 * u)}" cy="{n(yb - 7 * u)}" r="{n(4 * u)}" fill="{GOLD}"/>'
-            f'<circle cx="{n(cx - 15.5 * u)}" cy="{n(yb - 7 * u)}" r="{n(2.4 * u)}" fill="{CREAM}"/>'
-            f'<circle cx="{n(cx - 15.5 * u)}" cy="{n(yb - 7 * u)}" r="{n(1 * u)}" fill="{INK}"/>'
-        )
-    else:
-        band = BAND_BLUE if stage >= 3 else CREAM
-        body = (
-            f'<ellipse cx="{n(cx)}" cy="{n(yb)}" rx="30" ry="6.5" fill="{FELT}"/>'
-            f'<path d="M{pt(cx - 16, yb)} C{pt(cx - 17.5, yb - 15)} {pt(cx - 10, yb - 24)} {pt(cx, yb - 24)} '
-            f'C{pt(cx + 10, yb - 24)} {pt(cx + 17.5, yb - 15)} {pt(cx + 16, yb)} Z" fill="{FELT}"/>'
-            f'<path d="M{pt(cx - 16.4, yb - 1.2)} Q{pt(cx, yb + 1.6)} {pt(cx + 16.4, yb - 1.2)} '
-            f'L{pt(cx + 16.9, yb - 6.2)} Q{pt(cx, yb - 3.4)} {pt(cx - 16.9, yb - 6.2)} Z" fill="{band}"/>'
-            f'<path d="M{pt(cx - 30, yb)} A30 6.5 0 0 0 {pt(cx + 30, yb)} Z" fill="{FELT}"/>'
-        )
-    return f'<g transform="rotate({n(tilt)} {pt(cx, yb)})">{body}</g>'
+    scaled = f"translate(60 132) scale({n(SCALES[stage])}) translate(-60 -132)"
+    return _svg(f'<g transform="{scaled}">{drawing}</g>', ICON_BOXES[stage])
 
 
 def rapier(stage: int) -> str:
-    """In the rapier's own frame: guard at (0, 0), blade up, grip and pommel down."""
-    if stage >= 5:
-        return (
-            f'<path d="M-1.6 -2 L-0.6 -44 L0 -47.5 L0.6 -44 L1.6 -2 Z" fill="{STEEL}"/>'
-            f'<path d="M0 -5 L0 -40" stroke="{STEEL_DK}" stroke-width="0.6"/>'
-            f'<path d="M-1.6 -2 L1.6 -2 L1.6 0.2 L-1.6 0.2 Z" fill="{STEEL_DK}"/>'
-            f'<path d="M-7.5 -0.5 C-11 4 -9 10.5 -2.5 11.8" fill="none" stroke="{GOLD}" stroke-width="1.3" '
-            'stroke-linecap="round"/>'
-            f'<path d="M-7.5 -0.5 Q0 10 7.5 -0.5 Q0 3 -7.5 -0.5 Z" fill="{GOLD}"/>'
-            f'<path d="M-5 0.6 Q0 6.6 5 0.6" fill="none" stroke="{GOLD_DK}" stroke-width="0.7"/>'
-            f'<g fill="{GOLD_DK}"><circle cx="-3" cy="2.4" r="0.55"/><circle cx="0" cy="3.6" r="0.55"/>'
-            '<circle cx="3" cy="2.4" r="0.55"/></g>'
-            f'<path d="M-8.5 -1 L8.5 -1" stroke="{GOLD}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'<path d="M-8.5 -1 Q-11 -2.6 -10 -5.6 M8.5 -1 Q11 -2.6 10 -5.6" fill="none" stroke="{GOLD}" '
-            'stroke-width="1.4" stroke-linecap="round"/>'
-            f'<rect x="-1.7" y="0.5" width="3.4" height="9.2" rx="1" fill="{GRIP}"/>'
-            f'<path d="M-1.7 2.4 L1.7 3.4 M-1.7 4.4 L1.7 5.4 M-1.7 6.4 L1.7 7.4" stroke="{GOLD}" '
-            'stroke-width="0.55" opacity=".9"/>'
-            f'<circle cx="0" cy="11.8" r="2.7" fill="{GOLD}"/><circle cx="0" cy="11.8" r="1" fill="{GOLD_DK}"/>'
-            f'<circle cx="0" cy="14.9" r="0.9" fill="{GOLD}"/>'
-        )
+    """In the rapier's own frame: guard at (0, 0), blade up, grip and pommel down. A tapered blade
+    lit on its left and shaded on its right, outlined as the quill is so that its steel holds on
+    light desktops; a cross-guard with curled quillons, a knuckle-bow, a leather grip, a pommel.
+    The Lieutenant's hilt is steel, the Captain's gold."""
+    gold = fingered(stage)
+    metal, dark = (GOLD, GOLD_DK) if gold else (STEEL, STEEL_DK)
+    rim = GOLD_DK if gold else STEEL_LINE
+    blade = "M-1.7 -1.5 L-0.7 -43.6 L0 -47.5 L0.7 -43.6 L1.7 -1.5 Z"
+    bow = "M-8.6 -1 C-12.6 3.6 -10.2 10.8 -1.6 12.4"
+    guard = "M-8.8 -1 L8.8 -1"
+    curls = "M-8.8 -1 Q-11.4 -2.4 -10.6 -5.4 M8.8 -1 Q11.4 0.4 10.6 3.4"
     return (
-        f'<path d="M0 -1 L0 -44" stroke="{STEEL}" stroke-width="3" stroke-linecap="round"/>'
-        f'<path d="M-6 0 L6 0" stroke="{GOLD}" stroke-width="4" stroke-linecap="round"/>'
-        f'<path d="M0 1 L0 10" stroke="{GRIP}" stroke-width="4" stroke-linecap="round"/>'
-        f'<circle cx="0" cy="12" r="3.2" fill="{GOLD}"/>'
+        _stroke(blade, STEEL_LINE, 1.1)
+        + _fill(blade, STEEL)
+        + _fill("M0.2 -1.5 L0.2 -46.4 L0.7 -43.6 L1.7 -1.5 Z", STEEL_DK)
+        + _stroke("M-0.8 -5 L-0.3 -40", "#FFFFFF", 0.5, 0.8)
+        + _stroke(bow, rim, 2.5)
+        + _stroke(guard, rim, 3.6)
+        + _stroke(curls, rim, 2.6)
+        + _stroke(bow, metal, 1.5)
+        + _stroke(guard, metal, 2.6)
+        + _stroke(curls, metal, 1.6)
+        + _stroke("M-7.6 -1.6 L4 -1.6", "#FFFFFF", 0.5, 0.65)
+        + f'<rect x="-2.3" y="-3.6" width="4.6" height="2.4" rx="0.8" fill="{dark}"/>'
+        + f'<rect x="-1.8" y="0.4" width="3.6" height="10" rx="1" fill="{GRIP}"/>'
+        + f'<circle cx="0" cy="12.6" r="3.5" fill="{rim}"/>'
+        f'<circle cx="0" cy="12.6" r="2.9" fill="{metal}"/>'
+        f'<path d="M2.05 10.55 A2.9 2.9 0 0 1 -2.05 14.65 A3.3 3.3 0 0 0 2.05 10.55 Z" '
+        f'fill="{dark}"/>'
+        f'<circle cx="-0.9" cy="11.6" r="0.75" fill="#FFFFFF" opacity=".75"/>'
     )
 
 
@@ -1626,27 +2236,6 @@ FLEUR = (
     '<path d="M0.8 -1.2 C2.2 -3.6 4.2 -3.2 4 -1.6 C3.8 -0.4 2.2 -0.2 0.8 -0.6 Z"/>'
     '<path d="M-2.4 -1.1 H2.4 V-0.3 H-2.4 Z"/><path d="M-0.9 -0.3 L0.9 -0.3 L0.5 1.4 L-0.5 1.4 Z"/>'
 )
-
-
-def cross(stage: int) -> str:
-    """The musketeers' cross, fleur-de-lis at the ends; smaller under the captain's royale."""
-    cx, cy, size = (60.0, 115.0, 11.0) if stage <= 4 else (60.0, 120.5, 9.5)
-    parts = []
-    for dx, dy, rot in ((0, -1, 0), (1, 0, 90), (0, 1, 180), (-1, 0, 270)):
-        px, py = -dy, dx
-        w1, w2 = size * 0.16, size * 0.3
-        corners = [
-            (cx + px * w1, cy + py * w1),
-            (cx + dx * size * 0.72 + px * w2, cy + dy * size * 0.72 + py * w2),
-            (cx + dx * size * 0.72 - px * w2, cy + dy * size * 0.72 - py * w2),
-            (cx - px * w1, cy - py * w1),
-        ]
-        parts.append(f'<path d="M{" L".join(pt(*c) for c in corners)} Z" fill="{CREAM}"/>')
-        parts.append(
-            f'<g transform="translate({pt(cx + dx * size * 0.7, cy + dy * size * 0.7)}) rotate({rot}) '
-            f'scale({n(size * 0.075)})" fill="{CREAM}">{FLEUR}</g>'
-        )
-    return "".join(parts)
 
 
 def moustache(cx: float = 60, y: float = 88.5) -> str:
@@ -1801,16 +2390,16 @@ ICON_QUILL = ((62.0, 84.0), (80.0, 46.0))
 ICON_RIM = "#1B2B52"
 
 
-# From the Gascon on, his tray icon and his menu's header show him redrawn the same way: the dark rim around his
-# whole silhouette (ink, drip, hat, plumes), flat ink with one light on his upper left, a bigger
-# face with the inkwell's toothless grin, a single drip; no drops, ground or rapier. Each grade's
-# box is square and tight around him.
+# From the Gascon on, his tray icon and his menu's header show him redrawn the same way: the dark
+# rim around his whole silhouette (ink, drip, hat, quill, legs, rapier), flat ink with one light
+# on his upper left, a bigger face with the inkwell's toothless grin, a single drip; no drops nor
+# ground. Each grade's box is square and tight around him, found by rendering him.
 ICON_BOXES = {
     1: (24.8, 53.6, 72.0, 72.0),
     2: (10.8, 35.8, 98.4, 98.4),
     3: (3.0, 22.5, 110.5, 110.5),
-    4: (-1.7, 18.5, 117.0, 117.0),
-    5: (-10.7, 3.7, 132.0, 132.0),
+    4: (1.5, 18.0, 123.0, 123.0),
+    5: (-9.0, 14.5, 126.5, 126.5),
 }
 ICON_FACE = {1: (86.0, 101.0), 2: (77.0, 93.0)}  # eyes' and mouth's y, the Gascon's and the hatted
 ICON_RIM_WIDTH = 7.0
@@ -1852,29 +2441,24 @@ def icon_svg(stage: int = 0) -> str:
     his figure redrawn the same way. His tray icon and his menu's header."""
     if stage == 0:
         return _inkwell_icon()
-    if stage == MUSKETEER:
-        return _musketeer_icon()
+    if man(stage):
+        return _man_icon(stage)
     spec = figure(stage)
-    eyes_y, mouth_y = ICON_FACE[min(stage, 2)]
+    eyes_y, mouth_y = ICON_FACE[stage]
     x, y, r = spec["staticDrips"][0] if stage == 1 else spec["drip"]
     drip = teardrop(x, y, r * 1.1) if stage == 1 else teardrop(x, y - 1, r * 1.3)
     silhouette = f'<path d="{drip}" fill="{INK}"/><path d="{blob_path(stage, 0)}" fill="{INK}"/>'
-    top = plumes(stage) + (_icon_hat() if stage == 2 else hat(stage) if stage >= 2 else "")
+    top = _icon_hat() if stage == 2 else ""
     face = (
         eye(60, eyes_y, 1.32, "idle", -1, 1.12)
         + eye(60, eyes_y, 1.32, "idle", 1, 1.12)
         + mouth(60, mouth_y, 1.25, "idle", 0.85, False)
     )
-    if stage >= 4:
-        face += moustache(60, mouth_y - 5)
-    if stage >= 5:
-        face += royale("idle")
     scaled = f"translate(60 132) scale({n(spec['scale'])}) translate(-60 -132)"
     lift = spec["lift"] if stage == 1 else 0.0  # the Cadet's is over his puddle, not drawn here
     return _svg(
         f'<g transform="{scaled}"><g transform="translate(0 {n(-lift)})">'
-        f"{_rimmed(silhouette + top)}{silhouette}{_icon_light(stage)}{face}"
-        f"{cross(stage) if stage >= 3 else ''}{top}</g></g>",
+        f"{_rimmed(silhouette + top)}{silhouette}{_icon_light(stage)}{face}{top}</g></g>",
         ICON_BOXES[stage],
     )
 
@@ -1934,8 +2518,8 @@ def glow(stage: int) -> str:
     (gold for the captain). The window fades it in and out; it does not ripple with the edge,
     which no one could tell under so soft a blur."""
     colour = GOLD_GLOW if stage >= 5 else GLOW
-    # The Musketeer's: his body and his head.
-    outline = f"{body_path(0)} {head_path(0)}" if stage == MUSKETEER else blob_path(stage, 0)
+    # A man of ink's: his body and his head.
+    outline = f"{body_path(stage, 0)} {head_path(0)}" if man(stage) else blob_path(stage, 0)
     return (
         '<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%">'
         '<feGaussianBlur stdDeviation="6.6"/></filter></defs>'
@@ -2171,7 +2755,8 @@ def cap() -> str:
 def ground(stage: int) -> str:
     """What lies on the desk and never moves: the cap and a blot (grade 0); the knocked-over
     inkwell and its quill, a puddle of spilt ink and the cap (grade 1); his puddle, the inkwell
-    split and sunk with its quill, and the cap (grade 2); his puddle alone (grade 3)."""
+    split and sunk with its quill, and the cap (grade 2); his puddle alone (grade 3); the pool
+    he stands in (grades 4 and 5)."""
     if stage == 0:
         return (
             f'<ellipse cx="11" cy="129.6" rx="5.5" ry="2.1" fill="{INK}"/><circle cx="19.1" cy="127.6" r="1.3" fill="{INK}"/>'
@@ -2181,9 +2766,7 @@ def ground(stage: int) -> str:
         return _puddle(PUDDLE) + fallen_inkwell() + cap()
     if stage == 2:
         return _puddle(CADET_PUDDLE) + sunk_inkwell() + cap()
-    if stage == MUSKETEER:
-        return _puddle(MUSKETEER_PUDDLE)
-    return ""
+    return _puddle(man_pool(stage))
 
 
 # --- Layers -----------------------------------------------------------------------------------
@@ -2191,6 +2774,7 @@ def ground(stage: int) -> str:
 LAYERS = (
     "glow",
     "ground",
+    "legs",
     "tails",
     "glass",
     "quill",
@@ -2201,8 +2785,9 @@ LAYERS = (
     "collar",
     "moustache",
     "royale",
-    "plume",
     "hat",
+    "panache",
+    "plume",
     "bow",
     "rapier",
     "front",
@@ -2214,21 +2799,23 @@ BY_EXPRESSION = frozenset({"eye-left", "eye-right", "mouth", "royale", "decor"})
 def layer_names(stage: int) -> tuple[str, ...]:
     present = {
         "glow": True,
-        "ground": stage <= MUSKETEER,
-        "tails": stage in (2, MUSKETEER),
+        "ground": True,
+        "legs": stands(stage),
+        "tails": stage >= 2,
         "glass": stage == 0,
         "quill": stage == 0,
         "eye-left": True,
         "eye-right": True,
         "mouth": True,
-        "cross": stage >= 3,
-        "collar": stage == MUSKETEER,
-        "moustache": stage >= 4,
-        "royale": stage >= 5,
-        "plume": stage >= 3,
+        "cross": man(stage),
+        "collar": man(stage),
+        "moustache": stands(stage),
+        "royale": fingered(stage),
         "hat": stage >= 2,
-        "bow": stage == MUSKETEER,
-        "rapier": stage >= 4,
+        "panache": fingered(stage),
+        "plume": man(stage),
+        "bow": man(stage),
+        "rapier": stands(stage),
         "front": stage == 2,
         "decor": True,
     }
@@ -2255,7 +2842,7 @@ def _face(stage: int) -> Face:
         return Face(107.5, 1.134, 1.1, 118.5, 0.68, mouth_depth=0.795, teeth=False)
     if stage == 1:
         return Face(86, 1.0, 1.0, 100, 1.0)
-    if stage == MUSKETEER:  # a smaller face on his own head
+    if man(stage):  # a smaller face on his own head
         return Face(71, 0.82, 0.82, 80.5, 0.82)
     return Face(76, 1.0, 1.0, 91, 1.0)
 
@@ -2270,8 +2857,10 @@ def layer_body(stage: int, name: str, expression: str = "idle") -> str:
             return glow(stage)
         case "ground":
             return ground(stage)
+        case "legs":
+            return legs(stage)
         case "tails":
-            return felt_tails() if stage == MUSKETEER else tails()
+            return felt_tails() if man(stage) else tails()
         case "front":
             return front(stage)
         case "glass":
@@ -2285,20 +2874,22 @@ def layer_body(stage: int, name: str, expression: str = "idle") -> str:
             return mouth(
                 60, face.mouth_y, face.mouth_size, expression, face.mouth_depth, face.teeth
             )
-        case "cross":  # the Musketeer's is sewn on his tabard
-            return tabard() if stage == MUSKETEER else cross(stage)
+        case "cross":  # sewn on his tabard
+            return man_tabard(stage)
         case "collar":
-            return collar()
+            return man_collar(stage)
         case "moustache":
-            return moustache()
+            return man_moustache()
         case "royale":
-            return royale(expression)
-        case "plume":  # the Musketeer's: his inkwell's quill, under his ribbon
-            return felt_quill() if stage == MUSKETEER else plumes(stage)
+            return man_royale(expression)
         case "hat":
-            return felt_hat() if stage == MUSKETEER else hat(stage)
+            return man_felt(stage) if man(stage) else cadet_hat()
+        case "panache":  # the Captain's golden plume, behind his quill
+            return golden_plume()
+        case "plume":  # his inkwell's quill, under his ribbon
+            return felt_quill()
         case "bow":
-            return felt_front()
+            return man_knot(stage)
         case "rapier":
             return rapier(stage)
         case "decor":
@@ -2321,66 +2912,40 @@ def still_svg(stage: int, expression: str = "idle", glow: bool = True, shadow: b
     """The whole figure at rest, in one SVG: reference sheet, tests, and, without
     his shadow, the silhouette he evolves in.
 
-    The pose follows the expression as the window's does at rest: rapier en garde when asking
-    or cheering, point down otherwise; the Musketeer's arms are in the mood's pose.
+    The pose follows the expression as the window's does at rest: a man of ink's arms are in the
+    mood's pose, his rapier with them.
     """
-    if stage == MUSKETEER:
-        return _musketeer_still(expression, glow, shadow)
+    if man(stage):
+        return _man_still(stage, expression, glow, shadow)
     spec = figure(stage)
     k, lift = spec["scale"], spec["lift"]
     outline = blob_path(stage, 0)
-    dx, dy = spec["shadeOffset"]
     parts = [layer_body(stage, "glow")] if glow else []
-    drips = [
-        f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>'
-        for x, y, r in spec["staticDrips"] + ([spec["drip"]] if spec["drip"] else [])
-    ]
     # The Cadet's hat as it sits at rest on his rippling head; its ribbon's tails behind him.
     ride_y, ride_tip = hat_ride(stage, 0.0)
     riding = f"translate(0 {n(ride_y)}) rotate({n(ride_tip)} {pt(*CADET_HAT[:2])})"
     if stage == 2:
         parts.append(f'<g transform="{riding}">{tails()}</g>')
-    if spec["dripsUnder"]:
-        parts += drips
-    if dx or dy:
-        parts.append(
-            f'<path d="{outline}" fill="{INK_SHADE}" transform="translate({pt(dx, dy)})"/>'
-        )
+    parts += [
+        f'<path d="{teardrop(x, y, r)}" fill="{INK}"/>'
+        for x, y, r in spec["staticDrips"] + ([spec["drip"]] if spec["drip"] else [])
+    ]
     parts.append(f'<path d="{outline}" fill="{INK}"/>')
-    if stage == 0:
-        parts.append(inkwell_shading_svg())
-    if stage in (1, 2):
-        parts.append(splash_shading_svg(stage=stage))
-    if not spec["dripsUnder"]:
-        parts += drips
+    parts.append(inkwell_shading_svg() if stage == 0 else splash_shading_svg(stage=stage))
     for i, (x, y, r) in enumerate(spec["drops"]):
+        lx, ly, lr = spec["dropLights"][i]
         parts.append(f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(r)}" fill="{INK}"/>')
-        if spec["dropShades"]:
-            lx, ly, lr = spec["dropLights"][i]
-            parts.append(f'<path d="{spec["dropShades"][i]}" fill="{INK_SHADE}"/>')
-            if lr:
-                parts.append(
-                    f'<circle cx="{n(lx)}" cy="{n(ly)}" r="{n(lr)}" fill="{DROP_LIGHT[0]}" '
-                    f'opacity="{n(DROP_LIGHT[1])}"/>'
-                )
-    if stage == 0:
-        # The face is in the ink, behind the quill and the glass.
-        names: tuple[str, ...] = ("eye-left", "eye-right", "mouth", "quill", "glass")
-    else:
-        names = ("cross", "eye-left", "eye-right", "mouth", "moustache", "royale")
+        parts.append(f'<path d="{spec["dropShades"][i]}" fill="{INK_SHADE}"/>')
+        if lr:
+            parts.append(
+                f'<circle cx="{n(lx)}" cy="{n(ly)}" r="{n(lr)}" fill="{DROP_LIGHT[0]}" '
+                f'opacity="{n(DROP_LIGHT[1])}"/>'
+            )
+    # The inkwell's face is in the ink, behind the quill and the glass.
+    names = ("eye-left", "eye-right", "mouth", "quill", "glass")
     parts += [layer_body(stage, name, expression) for name in names]
     if stage == 2:
-        parts.append(f'<g transform="{riding}">{hat(stage)}</g>')
-    elif spec["hasHat"]:
-        parts.append(plumes(stage) + hat(stage))
-    if spec["hasRapier"]:
-        guard = expression in ("ask", "happy")
-        x, y, theta = spec["rapierUp"] if guard else spec["rapierDown"]
-        gx, gy = RAPIER_GRIP
-        parts.append(
-            f'<g transform="translate({pt(x, y)}) rotate({n(theta)}) scale({n(spec["rapierScale"])}) '
-            f'translate({pt(-gx, -gy)})">{rapier(stage)}</g>'
-        )
+        parts.append(f'<g transform="{riding}">{cadet_hat()}</g>')
     scaled = f"translate(60 132) scale({n(k)}) translate(-60 -132)"
     under = (
         f'<ellipse cx="60" cy="133.5" rx="{n(spec["shadowRx"])}" ry="3.6" fill="#000" opacity=".16"/>'

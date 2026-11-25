@@ -119,7 +119,7 @@ def test_animator_hands_the_outline_to_qml() -> None:
     assert animator.property("inkPath") != first
     assert animator.property("inkPath").startswith("M")
     shading = ("inkShade", "inkLight", "inkEdge")
-    assert not any(animator.property(name) for name in shading)  # the inkwell and the Gascon only
+    assert all(animator.property(name).startswith("M") for name in shading)  # every ink is shaded
     animator.setProperty("stage", 0)
     assert "L95 122" in animator.property("inkPath")  # the inkwell's ink
     assert all(animator.property(name).startswith("M") for name in shading)
@@ -151,7 +151,7 @@ def test_the_musketeer_moves_his_head_his_arms_and_his_ink() -> None:
     lean = sum(p.head_lean for p in poses[-30:]) / 30
     assert lean == pytest.approx(rig_module.HEAD_LEAN["ask"], abs=1.5)  # his head tilts
     assert poses[-1].arms[7] < shoulder_y  # a hand raised to ask
-    rig.set_stage(4)
+    rig.set_stage(2)
     other = rig.step(0.033)
     assert (other.arms, other.head_y, other.head_lean, other.trail) == ((), 0.0, 0.0, 0.0)
 
@@ -180,7 +180,7 @@ def test_animator_hands_the_musketeer_to_qml() -> None:
         outlines.add(animator.property("inkPath"))
     assert len(tops) > 3  # his drips ride his trailing bottom
     assert len(outlines) > 3
-    animator.setProperty("stage", 5)
+    animator.setProperty("stage", 2)
     assert animator.property("arms") == []
     assert animator.property("headPath") == ""
 

@@ -31,19 +31,19 @@ def trailing(trail: float) -> float:
 
 @lru_cache(maxsize=1024)
 def outline(stage: int, phase: float, drag: float = 0.0) -> str:
-    return art.body_path(phase, drag) if stage == art.MUSKETEER else art.blob_path(stage, phase)
+    return art.body_path(stage, phase, drag) if art.man(stage) else art.blob_path(stage, phase)
 
 
 @lru_cache(maxsize=1024)
 def shading(stage: int, phase: float, drag: float = 0.0) -> tuple[str, str, str]:
     """The ink's shaded side, lit band and lit edge: the inkwell's (its meniscus, a line to
-    stroke) at grade 0, the Gascon's, the Cadet's and the Musketeer's body's (a rim of light, a
-    crescent to fill) at grades 1 to 3; none at the others."""
+    stroke) at grade 0; from the Gascon on, a rim of light, a crescent to fill (a man of ink's:
+    his body's)."""
     if stage == 0:
         paths = art.inkwell_shading(phase)
         return paths["shade"], paths["light"], paths["meniscus"]
     shaded = (
-        art.body_shading(phase, drag) if stage == art.MUSKETEER else art.ink_shading(stage, phase)
+        art.body_shading(stage, phase, drag) if art.man(stage) else art.ink_shading(stage, phase)
     )
     if shaded:
         return shaded["shade"], shaded["light"], shaded["rim"]
@@ -216,7 +216,7 @@ class Animator(QObject):
         self._shading = shading(stage, phase, drag)
         self._drip_tops = drip_tops(stage, phase, drag)
         self._hat_ride = hat_ride(stage, phase)
-        self._head = head(phase) if stage == art.MUSKETEER else ("", "", "", "")
+        self._head = head(phase) if art.man(stage) else ("", "", "", "")
 
     def _move_arms(self) -> bool:
         """The Musketeer's arms where the pose has them (in the mood's pose, without motion);

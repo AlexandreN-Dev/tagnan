@@ -3,7 +3,8 @@ white): the brain's words (tagnan.studysheet), his colours and faces, his figure
 it (QPdfWriter, QtSvg): no other dependency. Saved in Downloads, never over another file.
 
 The page is laid out in CSS pixels (794 x 1123, A4 at 96 dpi), as the mockup's; lines are set
-one by one, at the mockup's line heights.
+one by one, at the mockup's line heights. Words that take more room than the mockup's are set
+smaller, between the same margins: the page holds what tagnan.studysheet lets through.
 """
 
 import logging
@@ -38,6 +39,7 @@ SIDE = 56.0  # the page's side margins
 BODY_W = W - 2 * SIDE
 FOOT_H = 58.0
 GAP = 24.0  # between the blocks of the body
+SMALLEST = 0.4  # the body at its smallest: the fullest sheet, in long words, takes about 0.65
 
 PAPER, INK, MUTED, LINE, CARD = "#FFFFFF", "#1B2232", "#5B6478", "#E6EAF0", "#F3F6FB"
 GOLD, CORAL, CORAL_SOFT, MINT = "#F2C14E", "#EF6351", "#FFE8E3", "#16A374"
@@ -85,6 +87,12 @@ class Page:
         self.device = device
         self.stage = stage
         self.draw = True
+        self.column(1.0)
+
+    def column(self, scale: float) -> None:
+        """The body's column for a body drawn at `scale`, in the body's own units: the page
+        between its margins, so the wider the smaller its words are set."""
+        self.left, self.width = SIDE / scale, BODY_W / scale
 
     def metrics(self, f: QFont) -> QFontMetricsF:
         return QFontMetricsF(f, self.device)
@@ -185,17 +193,35 @@ class Page:
 
 
 def heading(page: Page, text: str, y: float) -> float:
-    t = page.set(text.upper(), spaced(font(13, 700), 1.56), BODY_W, 13)
-    page.write(t, SIDE, y, MUTED)
-    return y + 13 + 14
+    t = page.set(text.upper(), spaced(font(13, 700), 1.56), page.width, 13)
+    page.write(t, page.left, y, MUTED)
+    return y + t.height + 14
+
+
+def headline(page: Page, text: str) -> Text:
+    """The title: on one line from 56 px down to 40, else on two from 40 down to 32, else on
+    as many as it takes."""
+    for lines, sizes in ((1, range(56, 39, -1)), (2, range(40, 31, -1))):
+        for size in sizes:
+            t = page.set(text, spaced(font(size, 700), -0.02 * size), 600, size * 1.04)
+            if len(t.lines) <= lines:
+                return t
+    return t
+
+
+def tagline(page: Page, text: str) -> Text:
+    """The whole idea: on three lines at most if it can be, from 20 px down to 16."""
+    for size in range(20, 15, -1):
+        t = page.set(text, font(size), 470, size * 1.4)
+        if len(t.lines) <= 3:
+            break
+    return t
 
 
 def hero(page: Page, sheet: dict[str, Any], meta: dict[str, Any]) -> float:
     """The band at the top: where it comes from, the title, the whole idea in one line."""
-    tagline = page.set(sheet["tagline"], font(20), 470, 28)
-    title = page.fit([sheet["title"]], 56, 40, 600, 1.04, weight=700)[0]
-    title.font = spaced(title.font, -0.02 * title.font.pointSizeF() / 0.75)
-    height = 48 + 24 + 18 + title.height + 16 + tagline.height + 40
+    title, tag = headline(page, sheet["title"]), tagline(page, sheet["tagline"])
+    height = 48 + 24 + 18 + title.height + 16 + tag.height + 40
     if page.draw:
         p = page.p
         band = QLinearGradient(0, 0, W, height)
@@ -219,14 +245,14 @@ def hero(page: Page, sheet: dict[str, Any], meta: dict[str, Any]) -> float:
         page.write(chip, x + 11, 54, "#FFFFFF")
         x += chip.width + 22 + 8
     page.write(title, SIDE, 90, "#FFFFFF")
-    page.write(tagline, SIDE, 90 + title.height + 16, TAGLINE)
+    page.write(tag, SIDE, 90 + title.height + 16, TAGLINE)
     return height
 
 
 def versus(page: Page, v: dict[str, Any], y: float) -> float:
     """Two sides compared, row by row, a label between them."""
     sides = ("left", "right")
-    side_w, mid_w = (BODY_W - 112) / 2, 112.0
+    side_w, mid_w = (page.width - 112) / 2, 112.0
     rows = v["rows"]
     # A table reads evenly: one size for its answers, one for its two names.
     cells = page.fit(
@@ -242,8 +268,8 @@ def versus(page: Page, v: dict[str, Any], y: float) -> float:
     row_h = max(50.0, *(t.height + 14 for t in cells))
     height = 18 + head_h + len(rows) * row_h + 8
     for k, x, fill, hue, name, what in (
-        ("left", SIDE, SIDE_L, CORAL, names[0], whats[0]),
-        ("right", SIDE + side_w + mid_w, SIDE_R, MINT, names[1], whats[1]),
+        ("left", page.left, SIDE_L, CORAL, names[0], whats[0]),
+        ("right", page.left + side_w + mid_w, SIDE_R, MINT, names[1], whats[1]),
     ):
         page.box(QRectF(x, y, side_w, height), 22, fill)
         tile = y + 18 + (head_h - 52) / 2
@@ -268,7 +294,7 @@ def versus(page: Page, v: dict[str, Any], y: float) -> float:
             )
             t = texts[k][i]
             page.write(t, x + 56, row_y + (row_h - t.height) / 2, INK)
-    mid_x = SIDE + side_w
+    mid_x = page.left + side_w
     page.circle(mid_x + mid_w / 2, y + 18 + head_h / 2, 25, INK)
     vs = page.set("vs", font(16, 800), mid_w, 16)
     page.write(vs, mid_x, y + 18 + head_h / 2 - 8, "#FFFFFF", "center", mid_w)
@@ -289,17 +315,18 @@ def steps(page: Page, s: dict[str, Any], y: float) -> float:
     """How it works: numbered circles in a row, dashes between them."""
     y = heading(page, s["title"], y)
     count = len(s["list"])
-    col = (BODY_W - 12 * (count - 1)) / count
+    col = (page.width - 12 * (count - 1)) / count
     names = page.fit([x["name"] for x in s["list"]], 18, 14, col, 1.1, weight=700)
     whats = [page.set(x["what"], font(14), col, 18.9) for x in s["list"]]
     if page.draw:
         pen = QPen(QColor("#C9D2E2"), 3, Qt.PenStyle.CustomDashLine)
         pen.setDashPattern([3, 7 / 3])
         page.p.setPen(pen)
-        first, last = SIDE + col / 2, SIDE + col * (count - 1) + 12 * (count - 1) + col / 2
+        first = page.left + col / 2
+        last = first + (col + 12) * (count - 1)
         page.p.drawLine(QPointF(first, y + 32), QPointF(last, y + 32))
     for i, step in enumerate(s["list"]):
-        cx = SIDE + i * (col + 12) + col / 2
+        cx = page.left + i * (col + 12) + col / 2
         page.circle(cx, y + 32, 38, PAPER)
         page.circle(cx, y + 32, 32, HUES[i % len(HUES)])
         page.icon(studysheet.ICONS[step["icon"]], QRectF(cx - 14, y + 18, 28, 28))
@@ -317,12 +344,12 @@ def terms(page: Page, items: list[dict[str, str]], y: float) -> float:
     """Words to know, a card each."""
     y = heading(page, "Words to know", y)
     count = len(items)
-    card = (BODY_W - 14 * (count - 1)) / count
+    card = (page.width - 14 * (count - 1)) / count
     names = [page.set(t["name"], font(16, 700), card - 54, 19.2) for t in items]
     whats = [page.set(t["what"], font(14), card - 36, 19.6) for t in items]
     height = 16 + max(n.height + 7 + w.height for n, w in zip(names, whats, strict=True)) + 18
     for i in range(count):
-        x = SIDE + i * (card + 14)
+        x = page.left + i * (card + 14)
         page.box(QRectF(x, y, card, height), 18, CARD)
         page.box(QRectF(x + 18, y + 16 + (19.2 - 10) / 2, 10, 10), 3, HUES[i % len(HUES)])
         page.write(names[i], x + 36, y + 16, INK)
@@ -332,10 +359,11 @@ def terms(page: Page, items: list[dict[str, str]], y: float) -> float:
 
 def ending(page: Page, sheet: dict[str, Any], y: float) -> float:
     """The trap, askew, and a way to remember it, said by Tagnan."""
-    trap_w = (BODY_W - 22) * 0.9 / 2.2
-    say_x = SIDE + trap_w + 22
+    left = page.left
+    trap_w = (page.width - 22) * 0.9 / 2.2
+    say_x = left + trap_w + 22
     figure_w, figure_h = 108.0, 108.0 * 176 / 150
-    say_w = BODY_W - trap_w - 22 - 6 - figure_w
+    say_w = page.width - trap_w - 22 - 6 - figure_w
     key = spaced(font(12.5, 800), 1.5)
     trap = page.set(sheet["trap"], font(16, 600), trap_w - 45, 22.4)
     trap_h = 16 + 18 + 10 + trap.height + 18 + 5
@@ -347,18 +375,18 @@ def ending(page: Page, sheet: dict[str, Any], y: float) -> float:
         top = bottom - trap_h
         if page.draw:
             page.p.save()
-            page.p.translate(SIDE + trap_w / 2, top + trap_h / 2)
+            page.p.translate(left + trap_w / 2, top + trap_h / 2)
             page.p.rotate(-1.5)
-            page.p.translate(-(SIDE + trap_w / 2), -(top + trap_h / 2))
+            page.p.translate(-(left + trap_w / 2), -(top + trap_h / 2))
         page.box(
-            QRectF(SIDE + 1.25, top + 1.25, trap_w - 2.5, trap_h - 2.5),
+            QRectF(left + 1.25, top + 1.25, trap_w - 2.5, trap_h - 2.5),
             20,
             CORAL_SOFT,
             QPen(QColor(CORAL), 2.5),
         )
-        page.icon(studysheet.MARKS["trap"], QRectF(SIDE + 22, top + 18, 18, 18), CORAL, 2.4)
-        page.write(page.set("THE TRAP", key, trap_w, 18), SIDE + 48, top + 18, CORAL)
-        page.write(trap, SIDE + 22, top + 18 + 18 + 10, TRAP_INK)
+        page.icon(studysheet.MARKS["trap"], QRectF(left + 22, top + 18, 18, 18), CORAL, 2.4)
+        page.write(page.set("THE TRAP", key, trap_w, 18), left + 48, top + 18, CORAL)
+        page.write(trap, left + 22, top + 18 + 18 + 10, TRAP_INK)
         if page.draw:
             page.p.restore()
     if sheet["remember"]:
@@ -372,11 +400,33 @@ def ending(page: Page, sheet: dict[str, Any], y: float) -> float:
             page.p.restore()
         page.write(page.set("REMEMBER", key, say_w, 12.5), say_x + 20, top + 16, MINT)
         page.write(said, say_x + 20, top + 16 + 12.5 + 9, SAY_INK)
-    page.svg(
-        art.still_svg(page.stage, "happy", glow=False),
-        QRectF(SIDE + BODY_W - figure_w, bottom - figure_h, figure_w, figure_h),
-    )
+    if page.draw:  # his figure is not drawn to be measured
+        page.svg(
+            art.still_svg(page.stage, "happy", glow=False),
+            QRectF(left + page.width - figure_w, bottom - figure_h, figure_w, figure_h),
+        )
     return bottom
+
+
+def fitting(page: Page, sheet: dict[str, Any], room: float) -> float:
+    """The scale at which the body holds in `room`: 1 when it does as it is, else the largest
+    found, its column as wide as ever. Smaller words take fewer lines, so it shrinks less than
+    it is too long."""
+
+    def holds(scale: float) -> bool:
+        page.column(scale)
+        return body(page, sheet, 0.0) * scale <= room
+
+    if holds(1.0):
+        return 1.0
+    small, large = SMALLEST, 1.0
+    while large - small > 0.004:
+        middle = (small + large) / 2
+        if holds(middle):
+            small = middle
+        else:
+            large = middle
+    return small
 
 
 def blocks(sheet: dict[str, Any]) -> int:
@@ -418,23 +468,23 @@ def footer(page: Page, meta: dict[str, Any]) -> None:
 def draw(
     painter: QPainter, device: QPaintDevice, sheet: dict[str, Any], meta: dict[str, Any]
 ) -> None:
-    """The whole page, in CSS pixels. A body too long for the page shrinks, never below 75 %;
-    a short one spreads its blocks over the room left."""
+    """The whole page, in CSS pixels. A body too long for the page is set smaller, between the
+    page's own margins; a short one spreads its blocks over the room left."""
     page = Page(painter, device, int(meta.get("stage", 0)))
     page.draw = False
     top = hero(page, sheet, meta) + 32
-    needed = body(page, sheet, top) - top
     room = H - FOOT_H - 24 - top
-    scale = max(0.75, min(1.0, room / needed)) if needed > 0 else 1.0
-    gap = GAP + max(0.0, min(40.0, (room - needed) / (blocks(sheet) + 1)))
+    scale = fitting(page, sheet, room)
+    page.column(scale)
+    needed = body(page, sheet, 0.0)
+    gap = GAP + max(0.0, min(40.0, (room / scale - needed) / (blocks(sheet) + 1)))
     page.draw = True
     painter.fillRect(QRectF(0, 0, W, H), QColor(PAPER))
     hero(page, sheet, meta)
     painter.save()
-    painter.translate(W / 2, top)
+    painter.translate(0, top)
     painter.scale(scale, scale)
-    painter.translate(-W / 2, -top)
-    body(page, sheet, top + gap - GAP, gap)
+    body(page, sheet, gap - GAP, gap)
     painter.restore()
     footer(page, meta)
 

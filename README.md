@@ -76,7 +76,7 @@ When a new version is out, "Update & Restart" in his menu shows a gold "New": on
 | Inkwell | 0 | ink in his inkwell, a dipped goose quill | at the start |
 | Gascon | 250 | he climbs out of the inkwell | 2 days |
 | Cadet | 900 | a felt hat | 1 week |
-| Musketeer | 2,000 | the cross and the white plume | 2 and a half weeks |
+| Musketeer | 2,000 | a man's shape, the musketeers' tabard, his quill in his hat | 2 and a half weeks |
 | Lieutenant | 3,600 | the rapier and the hooked moustache | 4 weeks |
 | Captain | 6,000 | the cockaded hat, the royale and the gold | 7 weeks |
 
@@ -100,7 +100,7 @@ Windows                                          WSL (Ubuntu)
 - **The sounds** (`assets/sounds/`) are synthesized by `scripts/make-sounds`: standard library, no sound bank, the same loudness for all (−16 LUFS). The window plays them with `winsound` (on a Mac, `afplay`), without Qt Multimedia.
 - **The course outline** (a blueprint) gives the domains, their weights, the notions of each task, and how to write good questions on the subject. `exam/aif-c01.toml` comes with Tagnan, from the official exam guide; the course one asks for in his menu is drawn up once by the brain (`scripts/brain plan`) and kept in the database. Every request to the brain carries the whole outline, so the brain stays stateless. The course learned at first is the config's `exam = "…"`.
 - **His updates** (`tagnan/update.py`, `scripts/update`) come from GitHub: a fast-forward of this clone, never over changes of your own. The window asks through wsl.exe, as it asks the brain (`tagnan/ui/updater.py`), then quits, and `scripts/update restart` starts him again once he is gone, making his window's environment again first when its pinned versions changed.
-- **Tagnan** (`tagnan/art.py`) is drawn flat and cut into layers: the window draws the rippling ink and the drops, and animates the SVG layers (eyes, mouth, hat, plumes, rapier…) with a rig (`tagnan/ui/animation/`): springs, blinks, eyes that follow the mouse, random gestures, taps.
+- **Tagnan** (`tagnan/art.py`) is drawn flat and cut into layers: the window draws the rippling ink and the drops (the Musketeer's head and arms too, from `art.py`'s shapes), and animates the SVG layers (eyes, mouth, hat, plumes, rapier…) with a rig (`tagnan/ui/animation/`): springs, blinks, eyes that follow the mouse, random gestures, taps; the Musketeer's head leans with his mood, his arms take each mood's pose and his ink trails his hops.
 
 ## Usage limits
 

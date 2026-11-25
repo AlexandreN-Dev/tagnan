@@ -20,7 +20,7 @@ GRADES = (
     Grade("Inkwell", 0, "ink in an inkwell, with a quill dipped in it"),
     Grade("Gascon", 250, "he escapes from the inkwell"),
     Grade("Cadet", 900, "a felt hat"),
-    Grade("Musketeer", 2000, "the musketeers' cross and a white plume"),
+    Grade("Musketeer", 2000, "a man's shape, the musketeers' tabard and his quill in his hat"),
     Grade("Lieutenant", 3600, "the rapier and a hooked moustache"),
     Grade("Captain", 6000, "the cockaded hat, the goatee and the gold"),
 )

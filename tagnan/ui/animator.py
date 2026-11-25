@@ -13,31 +13,48 @@ from tagnan.ui.animation.rig import REST_POSE, Pose, Rig
 
 FRAME_MS = 33  # about 30 frames per second
 POINTER_JITTER_PX = 2
+# The Musketeer's body is redrawn when the trail of its bottom moves this much (the caches hold
+# every outline of a hop), his arms when one of their joints moves a tenth of a unit.
+TRAIL_STEP = 0.25
+ARM_DIGITS = 1
 
 
 def ripple(wobble: float) -> float:
-    """The ripple's phase, brought back within one turn: the rig steps it 15 times a turn, so the
+    """The ripple's phase, brought back within one turn: the rig steps it 22 times a turn, so the
     caches below hold every outline after the first second."""
     return round(wobble % (2 * math.pi), 4)
 
 
-@lru_cache(maxsize=512)
-def outline(stage: int, phase: float) -> str:
-    return art.blob_path(stage, phase)
+def trailing(trail: float) -> float:
+    return round(trail / TRAIL_STEP) * TRAIL_STEP + 0.0  # never -0.0
 
 
-@lru_cache(maxsize=512)
-def shading(stage: int, phase: float) -> tuple[str, str, str]:
+@lru_cache(maxsize=1024)
+def outline(stage: int, phase: float, drag: float = 0.0) -> str:
+    return art.body_path(phase, drag) if stage == art.MUSKETEER else art.blob_path(stage, phase)
+
+
+@lru_cache(maxsize=1024)
+def shading(stage: int, phase: float, drag: float = 0.0) -> tuple[str, str, str]:
     """The ink's shaded side, lit band and lit edge: the inkwell's (its meniscus, a line to
-    stroke) at grade 0, the Gascon's and the Cadet's (a rim of light, a crescent to fill) at
-    grades 1 and 2; none at the others."""
+    stroke) at grade 0, the Gascon's, the Cadet's and the Musketeer's body's (a rim of light, a
+    crescent to fill) at grades 1 to 3; none at the others."""
     if stage == 0:
         paths = art.inkwell_shading(phase)
         return paths["shade"], paths["light"], paths["meniscus"]
-    shaded = art.ink_shading(stage, phase)
+    shaded = (
+        art.body_shading(phase, drag) if stage == art.MUSKETEER else art.ink_shading(stage, phase)
+    )
     if shaded:
         return shaded["shade"], shaded["light"], shaded["rim"]
     return "", "", ""
+
+
+@lru_cache(maxsize=64)
+def head(phase: float) -> tuple[str, str, str, str]:
+    """The Musketeer's head: its outline, its shaded side, lit band and rim of light."""
+    shaded = art.head_shading(phase)
+    return art.head_path(phase), shaded["shade"], shaded["light"], shaded["rim"]
 
 
 @lru_cache(maxsize=512)
@@ -45,9 +62,23 @@ def hat_ride(stage: int, phase: float) -> tuple[float, float]:
     return art.hat_ride(stage, phase)
 
 
-@lru_cache(maxsize=512)
-def drip_tops(stage: int, phase: float) -> list[float]:
-    return art.drip_tops(stage, phase)
+@lru_cache(maxsize=1024)
+def drip_tops(stage: int, phase: float, drag: float = 0.0) -> list[float]:
+    return art.drip_tops(stage, phase, drag)
+
+
+def arm_parts(joints: tuple[float, ...]) -> list[dict[str, Any]]:
+    """The Musketeer's two arms as the window draws them (tagnan.art.arm_parts), from his elbows'
+    and hands' positions."""
+    return [
+        art.arm_parts(shoulder, (joints[i], joints[i + 1]), (joints[i + 2], joints[i + 3]))
+        for shoulder, i in zip(art.SHOULDERS, (0, 4), strict=True)
+    ]
+
+
+def rest_joints(expression: str) -> tuple[float, ...]:
+    """His elbows and hands in the mood's pose, his right arm's then his left's."""
+    return tuple(v for elbow, hand in art.ARMS[expression] for v in (*elbow, *hand))
 
 
 def _pose_property(name: str, kind: type, notify: Signal) -> Any:
@@ -60,6 +91,7 @@ def _pose_property(name: str, kind: type, notify: Signal) -> Any:
 class Animator(QObject):
     poseChanged = Signal()
     outlineChanged = Signal()
+    armsChanged = Signal()
     stageChanged = Signal()
     moodChanged = Signal()
     tapped = Signal(str)  # the tap's mood: wink, annoyed or sulk
@@ -69,10 +101,11 @@ class Animator(QObject):
         self._rig = rig or Rig()
         self._rig.set_stage(stage)
         self._pose: Pose = REST_POSE
-        self._outline = outline(stage, 0.0)
-        self._shading = shading(stage, 0.0)
-        self._drip_tops = drip_tops(stage, 0.0)
-        self._hat_ride = hat_ride(stage, 0.0)
+        self._drawn = (0.0, 0.0)  # the ripple's phase and the trail his ink is drawn at
+        self._redraw()
+        self._joints: tuple[float, ...] = ()
+        self._arms: list[dict[str, Any]] = []
+        self._move_arms()
         self._eyes: QPointF | None = None
         self._cursor: QPointF | None = None
         self._last = time.monotonic()
@@ -119,12 +152,11 @@ class Animator(QObject):
     def _set_stage(self, stage: int) -> None:
         if stage != self._rig.stage:
             self._rig.set_stage(stage)
-            self._outline = outline(stage, ripple(self._pose.wobble))
-            self._shading = shading(stage, ripple(self._pose.wobble))
-            self._drip_tops = drip_tops(stage, ripple(self._pose.wobble))
-            self._hat_ride = hat_ride(stage, ripple(self._pose.wobble))
+            self._redraw()
+            self._move_arms()
             self.stageChanged.emit()
             self.outlineChanged.emit()
+            self.armsChanged.emit()
 
     stage = Property(int, _get_stage, _set_stage, notify=stageChanged)
 
@@ -167,16 +199,38 @@ class Animator(QObject):
         self._apply(self._rig.step(dt))
 
     def _apply(self, pose: Pose) -> None:
-        wobble_changed = pose.wobble != self._pose.wobble
         self._pose = pose
         self.poseChanged.emit()
-        if wobble_changed:
-            phase = ripple(pose.wobble)
-            self._outline = outline(self._rig.stage, phase)
-            self._shading = shading(self._rig.stage, phase)
-            self._drip_tops = drip_tops(self._rig.stage, phase)
-            self._hat_ride = hat_ride(self._rig.stage, phase)
+        drawn = (ripple(pose.wobble), trailing(pose.trail))
+        if drawn != self._drawn:
+            self._drawn = drawn
+            self._redraw()
             self.outlineChanged.emit()
+        if self._move_arms():
+            self.armsChanged.emit()
+
+    def _redraw(self) -> None:
+        """His ink at the ripple's phase (and, the Musketeer's body, the trail) of the pose."""
+        stage, (phase, drag) = self._rig.stage, self._drawn
+        self._outline = outline(stage, phase, drag)
+        self._shading = shading(stage, phase, drag)
+        self._drip_tops = drip_tops(stage, phase, drag)
+        self._hat_ride = hat_ride(stage, phase)
+        self._head = head(phase) if stage == art.MUSKETEER else ("", "", "", "")
+
+    def _move_arms(self) -> bool:
+        """The Musketeer's arms where the pose has them (in the mood's pose, without motion);
+        whether they moved."""
+        if self._rig.stage != art.MUSKETEER:
+            joints: tuple[float, ...] = ()
+        else:
+            moving = self._pose.arms or rest_joints(self._pose.expression)
+            joints = tuple(round(v, ARM_DIGITS) for v in moving)
+        if joints == self._joints:
+            return False
+        self._joints = joints
+        self._arms = arm_parts(joints) if joints else []
+        return True
 
     @Property(str, notify=outlineChanged)
     def inkPath(self) -> str:
@@ -198,6 +252,29 @@ class Animator(QObject):
     def dripTops(self) -> list[float]:
         """Where each drip hangs from, the falling one last (tagnan.art.drip_tops)."""
         return self._drip_tops
+
+    @Property(str, notify=outlineChanged)
+    def headPath(self) -> str:
+        """The Musketeer's head (tagnan.art.head_path), and its shading below."""
+        return self._head[0]
+
+    @Property(str, notify=outlineChanged)
+    def headShade(self) -> str:
+        return self._head[1]
+
+    @Property(str, notify=outlineChanged)
+    def headLight(self) -> str:
+        return self._head[2]
+
+    @Property(str, notify=outlineChanged)
+    def headEdge(self) -> str:
+        return self._head[3]
+
+    @Property(list, notify=armsChanged)
+    def arms(self) -> list[dict[str, Any]]:
+        """The Musketeer's arms, his right then his left (tagnan.art.arm_parts); none at the
+        other grades."""
+        return self._arms
 
     @Property(float, notify=outlineChanged)
     def hatRideY(self) -> float:
@@ -232,3 +309,5 @@ class Animator(QObject):
     decor = _pose_property("decor", float, poseChanged)
     glow = _pose_property("glow", float, poseChanged)
     shadow = _pose_property("shadow", float, poseChanged)
+    headY = _pose_property("head_y", float, poseChanged)
+    headLean = _pose_property("head_lean", float, poseChanged)

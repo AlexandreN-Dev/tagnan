@@ -635,11 +635,16 @@ def figure(stage: int) -> dict[str, Any]:
             plume=[round(v, 3) for v in quill_pivot()],
             ring=[*NECK, 27.0, 42.0],  # round his head and his body
             neck=list(NECK),
-            shoulders=[list(s) for s in SHOULDERS],
+            # His arms (arm_parts): the sleeve's ink and its tones (colour, width less the
+            # sleeve's, offset), the cuff and its shaded copy, the lace, the hand.
             armWidth=ARM_WIDTH,
+            sleeveTones=[[argb(c, o), dw, *at] for c, dw, o, at in SLEEVE_TONES],
+            cuffWidth=CUFF_WIDTH,
+            cuffShade=list(CUFF_SHADE),
+            lace=LACE,
+            hand=HAND,
             cream=CREAM,
             creamShade=CREAM_SHADE,
-            sleeveLight=argb(INK_LIGHT, SLEEVE_TONES[0][2]),
         )
     else:
         spec.update(
@@ -1204,7 +1209,9 @@ SLEEVE_TONES = (
     (INK_SHADE, -3.0, 1.0, (1.05, 1.1)),
     (INK, -2.0, 1.0, (-0.22, -0.24)),
 )
+CUFF_WIDTH = ARM_WIDTH + 1.6
 CUFF_SHADE = (0.5, 0.55)  # the cuff's shaded copy, under it
+LACE = 1.45  # the radius of its lace's scallops
 
 
 def arm_parts(
@@ -1240,10 +1247,11 @@ def arm(
             _moved(_stroke(sleeve, colour, ARM_WIDTH + dw, opacity), *at)
             for colour, dw, opacity, at in SLEEVE_TONES
         )
-        + _moved(_stroke(cuff, CREAM_SHADE, ARM_WIDTH + 1.6, cap="butt"), *CUFF_SHADE)
-        + _stroke(cuff, CREAM, ARM_WIDTH + 1.6, cap="butt")
+        + _moved(_stroke(cuff, CREAM_SHADE, CUFF_WIDTH, cap="butt"), *CUFF_SHADE)
+        + _stroke(cuff, CREAM, CUFF_WIDTH, cap="butt")
         + "".join(
-            f'<circle cx="{n(x)}" cy="{n(y)}" r="1.45" fill="{CREAM}"/>' for x, y in parts["lace"]
+            f'<circle cx="{n(x)}" cy="{n(y)}" r="{n(LACE)}" fill="{CREAM}"/>'
+            for x, y in parts["lace"]
         )
         + f'<circle cx="{n(hx)}" cy="{n(hy)}" r="{n(HAND)}" fill="{INK}"/>'
         + f'<path d="{parts["handShade"]}" fill="{INK_SHADE}"/>'
@@ -1512,9 +1520,7 @@ def _musketeer_icon() -> str:
         arms_rim.append(_stroke(d, ICON_RIM, ARM_WIDTH + ICON_RIM_WIDTH))
         arms_rim.append(f'<circle {hand_at} r="{n(HAND + ICON_RIM_WIDTH / 2)}" fill="{ICON_RIM}"/>')
         arms_flat.append(_stroke(d, INK, ARM_WIDTH))
-        arms_flat.append(
-            _stroke(f"M{pt(*a)} Q{pt(*c)} {pt(*b)}", CREAM, ARM_WIDTH + 1.6, cap="butt")
-        )
+        arms_flat.append(_stroke(f"M{pt(*a)} Q{pt(*c)} {pt(*b)}", CREAM, CUFF_WIDTH, cap="butt"))
         arms_flat.append(f'<circle {hand_at} r="{n(HAND)}" fill="{INK}"/>')
     inset, width = MUSKETEER_ICON_LIGHT
     face = _face(MUSKETEER)

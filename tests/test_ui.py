@@ -12,12 +12,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from tagnan import studysheet
+from tagnan import art, studysheet
 from tagnan.brain_client import BrainClient, BrainError
 from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
 from tagnan.progress import Progress
 from tagnan.scheduler import Rhythm, Scheduler, find_pace
+from tagnan.ui.animation import rig as rig_module
 from tagnan.ui.animation.rig import BURST_LENGTH, Rig
 from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
@@ -128,6 +129,70 @@ def test_animator_hands_the_outline_to_qml() -> None:
     animator.advance(0.2)
     assert len(tops) == 2
     assert animator.property("dripTops") != tops  # his drips ride his rippling edge
+
+
+def test_the_musketeer_moves_his_head_his_arms_and_his_ink() -> None:
+    rig, still = Rig(random.Random(8)), Rig(random.Random(8))
+    for each in (rig, still):
+        each.set_stage(3)
+    rest = run(rig, 1.0)[-1]
+    run(still, 1.0)
+    (_, shoulder_y), _ = art.SHOULDERS
+    assert len(rest.arms) == 8
+    assert all(hand_y > shoulder_y for hand_y in rest.arms[3::4])  # his hands down at rest
+    rig.set_mood("happy")
+    poses, calm = run(rig, 1.2), run(still, 1.2)
+    assert max(abs(p.trail) for p in poses) > 0.5  # the bottom of his body trails his bounds
+    lag = max(abs(p.head_y - q.head_y) for p, q in zip(poses, calm, strict=True))
+    assert lag > 0.4  # his head lags them
+    assert all(hand_y < shoulder_y - 8 for hand_y in poses[-1].arms[3::4])  # both hands up
+    rig.set_mood("ask")
+    poses = run(rig, 2.0)
+    lean = sum(p.head_lean for p in poses[-30:]) / 30
+    assert lean == pytest.approx(rig_module.HEAD_LEAN["ask"], abs=1.5)  # his head tilts
+    assert poses[-1].arms[7] < shoulder_y  # a hand raised to ask
+    rig.set_stage(4)
+    other = rig.step(0.033)
+    assert (other.arms, other.head_y, other.head_lean, other.trail) == ((), 0.0, 0.0, 0.0)
+
+
+def test_the_musketeer_gestures_stay_near_each_pose() -> None:
+    for mood in art.EXPRESSIONS:
+        for now in (0.0, 0.3, 1.7, 2.9):
+            for move in rig_module.gesture(mood, now):
+                assert all(abs(v) <= 3.4 for v in move)
+
+
+def test_animator_hands_the_musketeer_to_qml() -> None:
+    animator = Animator(Rig(random.Random(9)), stage=3)
+    assert animator.property("headPath").startswith("M")
+    assert all(animator.property(n).startswith("M") for n in ("headShade", "headLight", "headEdge"))
+    right, left = animator.property("arms")
+    assert right["sleeve"].startswith("M40.5 100.5")  # from his shoulders
+    assert left["sleeve"].startswith("M79.5 100.5")
+    assert len(right["lace"]) == 3
+    animator.advance(0.3)
+    animator.setProperty("mood", "happy")
+    tops, outlines = set(), set()
+    for _ in range(20):
+        animator.advance(0.033)
+        tops.add(tuple(animator.property("dripTops")))
+        outlines.add(animator.property("inkPath"))
+    assert len(tops) > 3  # his drips ride his trailing bottom
+    assert len(outlines) > 3
+    animator.setProperty("stage", 5)
+    assert animator.property("arms") == []
+    assert animator.property("headPath") == ""
+
+
+def test_the_musketeer_still_takes_each_mood_pose_in_reduced_motion() -> None:
+    animator = Animator(Rig(random.Random(10), reduced_motion=True), stage=3)
+    animator.setProperty("mood", "happy")
+    animator.advance(0.1)
+    right, left = animator.property("arms")
+    (_, hand), (_, other) = art.ARMS["happy"]
+    assert right["hand"] == pytest.approx(list(hand))
+    assert left["hand"] == pytest.approx(list(other))
 
 
 # --- The game in the window -------------------------------------------------------------------

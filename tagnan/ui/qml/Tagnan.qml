@@ -148,6 +148,134 @@ Item {
             PathSvg { path: d }
         }
     }
+    // A stroked line: round ends unless told otherwise.
+    component Stroke: Shape {
+        property string d
+        property color colour
+        property real thickness
+        property int cap: ShapePath.RoundCap
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            fillColor: "transparent"
+            strokeColor: colour
+            strokeWidth: thickness
+            capStyle: cap
+            joinStyle: ShapePath.RoundJoin
+            PathSvg { path: d }
+        }
+    }
+    // One of the Musketeer's arms, his right (side 0) or his left (tagnan.art.arm_parts): a
+    // sleeve of ink lit on its upper left and shaded on its lower right, a cream cuff and its
+    // lace, a hand round as a drop.
+    component Arm: Item {
+        id: arm
+        property int side
+        readonly property var parts: root.animator.arms.length > side ? root.animator.arms[side] : null
+        readonly property var tones: root.spec.man
+            ? root.spec.sleeveTones
+            : [["transparent", 0, 0, 0], ["transparent", 0, 0, 0], ["transparent", 0, 0, 0]]
+        readonly property string sleeve: parts ? parts.sleeve : ""
+        readonly property string cuff: parts ? parts.cuff : ""
+        visible: parts !== null
+        width: 120
+        height: 140
+        Stroke { d: arm.sleeve; colour: root.spec.ink; thickness: root.spec.armWidth || 0 }
+        Repeater {
+            model: 3
+            Stroke {
+                required property int index
+                d: arm.sleeve
+                colour: arm.tones[index][0]
+                thickness: (root.spec.armWidth || 0) + arm.tones[index][1]
+                transform: Translate { x: arm.tones[index][2]; y: arm.tones[index][3] }
+            }
+        }
+        Stroke {
+            d: arm.cuff
+            colour: root.spec.creamShade || "transparent"
+            thickness: root.spec.cuffWidth || 0
+            cap: ShapePath.FlatCap
+            transform: Translate {
+                x: root.spec.man ? root.spec.cuffShade[0] : 0
+                y: root.spec.man ? root.spec.cuffShade[1] : 0
+            }
+        }
+        Stroke { d: arm.cuff; colour: root.spec.cream || "transparent"; thickness: root.spec.cuffWidth || 0; cap: ShapePath.FlatCap }
+        Shape {
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: root.spec.cream || "transparent"
+                strokeColor: "transparent"
+                PathSvg {
+                    path: arm.parts
+                        ? arm.parts.lace.map(p => root.ellipse(p[0], p[1], root.spec.lace, root.spec.lace)).join(" ")
+                        : ""
+                }
+            }
+            ShapePath {
+                fillColor: root.spec.ink
+                strokeColor: "transparent"
+                PathSvg {
+                    path: arm.parts ? root.ellipse(arm.parts.hand[0], arm.parts.hand[1], root.spec.hand, root.spec.hand) : ""
+                }
+            }
+            ShapePath {
+                fillColor: root.spec.shade
+                strokeColor: "transparent"
+                PathSvg { path: arm.parts ? arm.parts.handShade : "" }
+            }
+            ShapePath {
+                fillColor: root.spec.dropLight
+                strokeColor: "transparent"
+                PathSvg {
+                    readonly property var light: arm.parts ? arm.parts.handLight : [0, 0, 0]
+                    path: light[2] > 0 ? root.ellipse(light[0], light[1], light[2], light[2]) : ""
+                }
+            }
+        }
+    }
+    // The Musketeer's ribbon tails and the Cadet's: they ride with his hat and swing.
+    component Tails: Layer {
+        name: "tails"
+        transform: [
+            Rotation {
+                origin.x: root.spec.tails.length ? root.spec.tails[0] : 0
+                origin.y: root.spec.tails.length ? root.spec.tails[1] : 0
+                angle: 0.7 * root.animator.plume
+            },
+            Rotation {
+                origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
+                origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
+                angle: root.hatAngle
+            },
+            Translate { y: root.animator.hatRideY }
+        ]
+    }
+    // A shaded ink's three tones: shaded side, lit band, rim of light (tagnan.art.crescents).
+    component Tones: Shape {
+        property string shade
+        property string light
+        property string edge
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            fillColor: root.spec.shade
+            strokeColor: "transparent"
+            PathSvg { path: shade }
+        }
+        ShapePath {
+            fillColor: root.spec.inkLight
+            strokeColor: "transparent"
+            PathSvg { path: light }
+        }
+        ShapePath {
+            fillColor: root.spec.inkEdge
+            strokeColor: "transparent"
+            PathSvg { path: edge }
+        }
+    }
     Item {
         id: box
         width: 120
@@ -177,7 +305,7 @@ Item {
 
             // What lies on the desk never moves: the cap, a blot, the knocked-over inkwell, the
             // split one.
-            Layer { name: "ground"; visible: root.stage <= 2 }
+            Layer { name: "ground"; visible: root.stage <= 3 }
             // Where the Cadet's drip lands, a ring widens on his puddle.
             Shape {
                 anchors.fill: parent
@@ -244,24 +372,8 @@ Item {
                     }
                 }
 
-                // The Cadet's ribbon tails, behind his head: they ride with his hat and swing.
-                Layer {
-                    name: "tails"
-                    visible: root.spec.tails.length > 0
-                    transform: [
-                        Rotation {
-                            origin.x: root.spec.tails.length ? root.spec.tails[0] : 0
-                            origin.y: root.spec.tails.length ? root.spec.tails[1] : 0
-                            angle: 0.7 * root.animator.plume
-                        },
-                        Rotation {
-                            origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
-                            origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
-                            angle: root.hatAngle
-                        },
-                        Translate { y: root.animator.hatRideY }
-                    ]
-                }
+                // The Cadet's ribbon tails, behind his head and his body.
+                Tails { visible: root.stage === 2 }
 
                 // The Cadet's ink stays under his brim, wherever his hat sits, so that it never
                 // shows through the felt: clipped in the hat's frame (spec.underHat), then brought
@@ -311,8 +423,9 @@ Item {
                             // its meniscus; all three follow the slosh (tagnan.art.inkwell_shading).
                             // Grade 1: the Gascon's, shaded on the lower right, lit on the upper left, with
                             // a rim of light; all three follow the ripple (tagnan.art.splash_shading).
+                            // Grades 2 and 3: the Cadet's, the Musketeer's body's, the same.
                             Shape {
-                                visible: root.stage <= 2
+                                visible: root.stage <= 3
                                 anchors.fill: parent
                                 preferredRendererType: Shape.CurveRenderer
                                 ShapePath {
@@ -376,125 +489,165 @@ Item {
                     }
                 }
 
-                // A tap splashes droplets off his edge, and a ring widens in the ink.
-                Shape {
-                    id: ring
-                    readonly property real t: root.animator.burst
-                    readonly property real u: Math.min(1, Math.max(0, t / 0.75))
-                    anchors.fill: parent
-                    visible: t >= 0 && t < 0.75 && root.spec.ring.length > 0
-                    opacity: 0.55 * (1 - u)
-                    preferredRendererType: Shape.CurveRenderer
-                    transform: Scale {
-                        origin.x: root.spec.ring.length ? root.spec.ring[0] : 0
-                        origin.y: root.spec.ring.length ? root.spec.ring[1] : 0
-                        xScale: 0.72 + 0.58 * ring.u
-                        yScale: 0.72 + 0.58 * ring.u
-                    }
-                    ShapePath {
-                        fillColor: "transparent"
-                        strokeColor: root.spec.ink
-                        strokeWidth: 1.6
-                        PathSvg {
-                            path: root.spec.ring.length ? root.ellipse(root.spec.ring[0], root.spec.ring[1], root.spec.ring[2], root.spec.ring[3]) : ""
-                        }
-                    }
-                }
-                Repeater {
-                    model: root.spec.burst
-                    Shape {
-                        required property var modelData
-                        readonly property var at: root.droplet(modelData, root.animator.burst)
-                        anchors.fill: parent
-                        visible: at.o > 0
-                        opacity: at.o
-                        preferredRendererType: Shape.CurveRenderer
-                        transform: [
-                            Scale { origin.x: modelData[0]; origin.y: modelData[1]; xScale: at.s; yScale: at.s },
-                            Translate { x: at.x; y: at.y }
-                        ]
-                        ShapePath {
-                            fillColor: root.spec.ink
-                            strokeColor: "transparent"
-                            PathSvg { path: root.ellipse(modelData[0], modelData[1], modelData[6], modelData[6]) }
-                        }
-                    }
-                }
-
-                Layer { name: "cross"; visible: root.stage >= 3 }
-
-                // Eyes: looking moves both; blinking and the idle wink squash each.
+                // A tap splashes droplets off his edge, and a ring widens in the ink: under the
+                // face and the hat, over the whole Musketeer, his head and arms.
                 Item {
+                    z: root.spec.man ? 1 : 0
                     width: 120
                     height: 140
-                    transform: Translate { x: root.animator.gazeX; y: root.animator.gazeY }
-                    Layer {
-                        name: "eye-left"
-                        byExpression: true
+                    Shape {
+                        id: ring
+                        readonly property real t: root.animator.burst
+                        readonly property real u: Math.min(1, Math.max(0, t / 0.75))
+                        anchors.fill: parent
+                        visible: t >= 0 && t < 0.75 && root.spec.ring.length > 0
+                        opacity: 0.55 * (1 - u)
+                        preferredRendererType: Shape.CurveRenderer
                         transform: Scale {
-                            origin.x: root.spec.eyes[0][0]
-                            origin.y: root.spec.eyes[0][1]
-                            yScale: Math.max(0.08, root.animator.eyeOpen * (1 - 0.9 * root.animator.wink))
+                            origin.x: root.spec.ring.length ? root.spec.ring[0] : 0
+                            origin.y: root.spec.ring.length ? root.spec.ring[1] : 0
+                            xScale: 0.72 + 0.58 * ring.u
+                            yScale: 0.72 + 0.58 * ring.u
+                        }
+                        ShapePath {
+                            fillColor: "transparent"
+                            strokeColor: root.spec.ink
+                            strokeWidth: 1.6
+                            PathSvg {
+                                path: root.spec.ring.length ? root.ellipse(root.spec.ring[0], root.spec.ring[1], root.spec.ring[2], root.spec.ring[3]) : ""
+                            }
                         }
                     }
-                    Layer {
-                        name: "eye-right"
-                        byExpression: true
-                        transform: Scale {
-                            origin.x: root.spec.eyes[1][0]
-                            origin.y: root.spec.eyes[1][1]
-                            yScale: Math.max(0.08, root.animator.eyeOpen)
+                    Repeater {
+                        model: root.spec.burst
+                        Shape {
+                            required property var modelData
+                            readonly property var at: root.droplet(modelData, root.animator.burst)
+                            anchors.fill: parent
+                            visible: at.o > 0
+                            opacity: at.o
+                            preferredRendererType: Shape.CurveRenderer
+                            transform: [
+                                Scale { origin.x: modelData[0]; origin.y: modelData[1]; xScale: at.s; yScale: at.s },
+                                Translate { x: at.x; y: at.y }
+                            ]
+                            ShapePath {
+                                fillColor: root.spec.ink
+                                strokeColor: "transparent"
+                                PathSvg { path: root.ellipse(modelData[0], modelData[1], modelData[6], modelData[6]) }
+                            }
                         }
                     }
                 }
-                Layer { name: "mouth"; byExpression: true }
-                Layer {
-                    name: "moustache"
-                    visible: root.spec.hasMoustache
-                    transform: Rotation {
-                        origin.x: root.spec.hasMoustache ? root.spec.moustache[0] : 0
-                        origin.y: root.spec.hasMoustache ? root.spec.moustache[1] : 0
-                        angle: root.animator.moustache
-                    }
-                }
-                Layer { name: "royale"; byExpression: true; visible: root.stage >= 5 }
 
-                // Grade 0: the face is in the ink, behind the quill and the glass.
-                Layer {
-                    name: "quill"
-                    visible: root.stage === 0
-                    transform: Rotation {
-                        origin.x: root.stage === 0 ? root.spec.quill[0] : 0
-                        origin.y: root.stage === 0 ? root.spec.quill[1] : 0
-                        angle: root.animator.quill
-                    }
-                }
-                Layer { name: "glass"; visible: root.stage === 0 }
+                // The cross; the Musketeer's, on his tabard, and his collar.
+                Layer { name: "cross"; visible: root.stage >= 3 }
+                Layer { name: "collar"; visible: root.spec.man }
 
-                // The hat, its plumes swaying on top.
+                // His face and his hat. The Musketeer's head is his own ink, between his ribbon's
+                // tails and his face: it leans around his neck with his mood and lags his hops
+                // (tagnan.art.head_path); the other grades' face rides his body.
                 Item {
-                    visible: root.spec.hasHat
                     width: 120
                     height: 140
                     transform: [
                         Rotation {
-                            origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
-                            origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
-                            angle: root.hatAngle
+                            origin.x: root.spec.man ? root.spec.neck[0] : 0
+                            origin.y: root.spec.man ? root.spec.neck[1] : 0
+                            angle: root.animator.headLean
                         },
-                        Translate { y: root.animator.hatRideY }
+                        Translate { y: root.animator.headY }
                     ]
-                    Layer {
-                        name: "plume"
-                        visible: root.spec.hasPlume
-                        transform: Rotation {
-                            origin.x: root.spec.hasHat ? root.spec.plume[0] : 0
-                            origin.y: root.spec.hasHat ? root.spec.plume[1] : 0
-                            angle: root.animator.plume
+
+                    Tails { visible: root.spec.man }
+                    Ink { visible: root.spec.man; d: root.animator.headPath }
+                    Tones {
+                        visible: root.spec.man
+                        shade: root.animator.headShade
+                        light: root.animator.headLight
+                        edge: root.animator.headEdge
+                    }
+
+                    // Eyes: looking moves both; blinking and the idle wink squash each.
+                    Item {
+                        width: 120
+                        height: 140
+                        transform: Translate { x: root.animator.gazeX; y: root.animator.gazeY }
+                        Layer {
+                            name: "eye-left"
+                            byExpression: true
+                            transform: Scale {
+                                origin.x: root.spec.eyes[0][0]
+                                origin.y: root.spec.eyes[0][1]
+                                yScale: Math.max(0.08, root.animator.eyeOpen * (1 - 0.9 * root.animator.wink))
+                            }
+                        }
+                        Layer {
+                            name: "eye-right"
+                            byExpression: true
+                            transform: Scale {
+                                origin.x: root.spec.eyes[1][0]
+                                origin.y: root.spec.eyes[1][1]
+                                yScale: Math.max(0.08, root.animator.eyeOpen)
+                            }
                         }
                     }
-                    Layer { name: "hat"; visible: root.spec.hasHat }
+                    Layer { name: "mouth"; byExpression: true }
+                    Layer {
+                        name: "moustache"
+                        visible: root.spec.hasMoustache
+                        transform: Rotation {
+                            origin.x: root.spec.hasMoustache ? root.spec.moustache[0] : 0
+                            origin.y: root.spec.hasMoustache ? root.spec.moustache[1] : 0
+                            angle: root.animator.moustache
+                        }
+                    }
+                    Layer { name: "royale"; byExpression: true; visible: root.stage >= 5 }
+
+                    // Grade 0: the face is in the ink, behind the quill and the glass.
+                    Layer {
+                        name: "quill"
+                        visible: root.stage === 0
+                        transform: Rotation {
+                            origin.x: root.stage === 0 ? root.spec.quill[0] : 0
+                            origin.y: root.stage === 0 ? root.spec.quill[1] : 0
+                            angle: root.animator.quill
+                        }
+                    }
+                    Layer { name: "glass"; visible: root.stage === 0 }
+
+                    // The hat, its plumes swaying on top; the Musketeer's quill sways stiffer, under
+                    // the ribbon and the bow that hold it.
+                    Item {
+                        visible: root.spec.hasHat
+                        width: 120
+                        height: 140
+                        transform: [
+                            Rotation {
+                                origin.x: root.spec.hasHat ? root.spec.hat[0] : 0
+                                origin.y: root.spec.hasHat ? root.spec.hat[1] : 0
+                                angle: root.hatAngle
+                            },
+                            Translate { y: root.animator.hatRideY }
+                        ]
+                        Layer {
+                            name: "plume"
+                            visible: root.spec.hasPlume
+                            z: root.spec.man ? 1 : 0
+                            transform: Rotation {
+                                origin.x: root.spec.hasHat ? root.spec.plume[0] : 0
+                                origin.y: root.spec.hasHat ? root.spec.plume[1] : 0
+                                angle: root.spec.plumeSway * root.animator.plume
+                            }
+                        }
+                        Layer { name: "hat"; visible: root.spec.hasHat }
+                        Layer { name: "bow"; visible: root.spec.man; z: 2 }
+                    }
                 }
+
+                // The Musketeer's arms, in his mood's pose.
+                Arm { side: 0 }
+                Arm { side: 1 }
 
                 // The rapier, floating beside him: point down at rest, raised en garde, swaying.
                 Item {

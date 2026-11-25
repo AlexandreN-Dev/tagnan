@@ -261,7 +261,9 @@ def main() -> int:
     if args.grade is not None:
         from dataclasses import replace
 
-        store.save_progress(game.exam, replace(game.progress, grade=args.grade))
+        # With the points the grade needs, or rules.settle takes it back at once.
+        points = max(game.progress.points, rules.GRADES[args.grade].threshold)
+        store.save_progress(game.exam, replace(game.progress, grade=args.grade, points=points))
     scheduler = Scheduler(cfg.rhythm, rng, time.time())
     client = (
         BrainClient.through_wsl(args.distro, args.repo)

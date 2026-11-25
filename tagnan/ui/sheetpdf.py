@@ -128,14 +128,21 @@ class Page:
         return Text(lines, f, line_height, widest)
 
     def fit(
-        self, text: str, px: float, smallest: float, width: float, ratio: float, **face: Any
-    ) -> Text:
-        """On one line if it can be, from px down to `smallest`; wrapped otherwise."""
+        self,
+        texts: Sequence[str],
+        px: float,
+        smallest: float,
+        width: float,
+        ratio: float,
+        **face: Any,
+    ) -> list[Text]:
+        """Words that go together, at one size: each on one line if they all can be, from px
+        down to `smallest`; wrapped at the smallest otherwise."""
         size = px
         while True:
-            t = self.set(text, font(size, **face), width, size * ratio)
-            if len(t.lines) == 1 or size - 1 < smallest:
-                return t
+            fitted = [self.set(text, font(size, **face), width, size * ratio) for text in texts]
+            if all(len(t.lines) == 1 for t in fitted) or size - 1 < smallest:
+                return fitted
             size -= 1
 
     def write(
@@ -186,7 +193,7 @@ def heading(page: Page, text: str, y: float) -> float:
 def hero(page: Page, sheet: dict[str, Any], meta: dict[str, Any]) -> float:
     """The band at the top: where it comes from, the title, the whole idea in one line."""
     tagline = page.set(sheet["tagline"], font(20), 470, 28)
-    title = page.fit(sheet["title"], 56, 40, 600, 1.04, weight=700)
+    title = page.fit([sheet["title"]], 56, 40, 600, 1.04, weight=700)[0]
     title.font = spaced(title.font, -0.02 * title.font.pointSizeF() / 0.75)
     height = 48 + 24 + 18 + title.height + 16 + tagline.height + 40
     if page.draw:
@@ -218,28 +225,35 @@ def hero(page: Page, sheet: dict[str, Any], meta: dict[str, Any]) -> float:
 
 def versus(page: Page, v: dict[str, Any], y: float) -> float:
     """Two sides compared, row by row, a label between them."""
+    sides = ("left", "right")
     side_w, mid_w = (BODY_W - 112) / 2, 112.0
     rows = v["rows"]
-    texts = {
-        k: [page.fit(r[k]["text"], 16.5, 13, side_w - 76, 1.2, weight=600) for r in rows]
-        for k in ("left", "right")
-    }
-    row_h = max(50.0, *(t.height + 14 for k in texts for t in texts[k]))
-    height = 18 + 64 + len(rows) * row_h + 8
-    for k, x, fill, hue in (
-        ("left", SIDE, SIDE_L, CORAL),
-        ("right", SIDE + side_w + mid_w, SIDE_R, MINT),
+    # A table reads evenly: one size for its answers, one for its two names.
+    cells = page.fit(
+        [r[k]["text"] for r in rows for k in sides], 16.5, 14.5, side_w - 76, 1.2, weight=600
+    )
+    texts = {"left": cells[0::2], "right": cells[1::2]}
+    names = page.fit([v[k]["name"] for k in sides], 24, 16, side_w - 106, 1.1, weight=700)
+    whats = [
+        page.set(v[k]["what"], font(15, italic=True, display=True), side_w - 106, 18) for k in sides
+    ]
+    # A side's head grows when its name and what it is take more than two lines.
+    head_h = max(64.0, *(n.height + 3 + w.height + 10 for n, w in zip(names, whats, strict=True)))
+    row_h = max(50.0, *(t.height + 14 for t in cells))
+    height = 18 + head_h + len(rows) * row_h + 8
+    for k, x, fill, hue, name, what in (
+        ("left", SIDE, SIDE_L, CORAL, names[0], whats[0]),
+        ("right", SIDE + side_w + mid_w, SIDE_R, MINT, names[1], whats[1]),
     ):
         page.box(QRectF(x, y, side_w, height), 22, fill)
-        page.box(QRectF(x + 20, y + 24, 52, 52), 16, hue)
-        page.icon(studysheet.ICONS[v[k]["icon"]], QRectF(x + 32, y + 36, 28, 28))
-        name = page.fit(v[k]["name"], 24, 16, side_w - 106, 1.1, weight=700)
-        what = page.set(v[k]["what"], font(15, italic=True, display=True), side_w - 106, 18)
-        top = y + 18 + (64 - name.height - 3 - what.height) / 2
+        tile = y + 18 + (head_h - 52) / 2
+        page.box(QRectF(x + 20, tile, 52, 52), 16, hue)
+        page.icon(studysheet.ICONS[v[k]["icon"]], QRectF(x + 32, tile + 12, 28, 28))
+        top = y + 18 + (head_h - name.height - 3 - what.height) / 2
         page.write(name, x + 86, top, INK)
         page.write(what, x + 86, top + name.height + 3, MUTED)
         for i, row in enumerate(rows):
-            row_y = y + 18 + 64 + i * row_h
+            row_y = y + 18 + head_h + i * row_h
             if page.draw:
                 pen = QPen(QColor(27, 34, 50, 41), 1, Qt.PenStyle.CustomDashLine)
                 pen.setDashPattern([3, 3])
@@ -255,15 +269,15 @@ def versus(page: Page, v: dict[str, Any], y: float) -> float:
             t = texts[k][i]
             page.write(t, x + 56, row_y + (row_h - t.height) / 2, INK)
     mid_x = SIDE + side_w
-    page.circle(mid_x + mid_w / 2, y + 18 + 32, 25, INK)
+    page.circle(mid_x + mid_w / 2, y + 18 + head_h / 2, 25, INK)
     vs = page.set("vs", font(16, 800), mid_w, 16)
-    page.write(vs, mid_x, y + 18 + 24, "#FFFFFF", "center", mid_w)
+    page.write(vs, mid_x, y + 18 + head_h / 2 - 8, "#FFFFFF", "center", mid_w)
     for i, row in enumerate(rows):
         label = page.set(row["label"].upper(), spaced(font(11, 700), 0.88), mid_w - 8, 12.65)
         page.write(
             label,
             mid_x + 4,
-            y + 18 + 64 + i * row_h + (row_h - label.height) / 2,
+            y + 18 + head_h + i * row_h + (row_h - label.height) / 2,
             MUTED,
             "center",
             mid_w - 8,
@@ -276,7 +290,7 @@ def steps(page: Page, s: dict[str, Any], y: float) -> float:
     y = heading(page, s["title"], y)
     count = len(s["list"])
     col = (BODY_W - 12 * (count - 1)) / count
-    names = [page.fit(x["name"], 18, 14, col, 1.1, weight=700) for x in s["list"]]
+    names = page.fit([x["name"] for x in s["list"]], 18, 14, col, 1.1, weight=700)
     whats = [page.set(x["what"], font(14), col, 18.9) for x in s["list"]]
     if page.draw:
         pen = QPen(QColor("#C9D2E2"), 3, Qt.PenStyle.CustomDashLine)

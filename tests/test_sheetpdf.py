@@ -110,3 +110,25 @@ def test_a_word_too_long_for_a_line_is_cut() -> None:
     assert len(text.lines) > 2
     assert "".join(text.lines) == f"a{long}"
     assert text.width <= 120
+
+
+def test_words_that_go_together_are_set_at_one_size() -> None:
+    page = setting()
+    long = "Measures bias, explains predictions, cites its passages"
+    together = page.fit(["Not its job", long], 16.5, 14.5, 209, 1.2, weight=600)
+    # The long one cannot hold on a line: both are set at the smallest size, the short one too.
+    assert {t.font.pointSizeF() for t in together} == {14.5 * 0.75}
+    assert len(together[0].lines) == 1
+    assert len(together[1].lines) > 1
+    short = page.fit(["Not its job", "Not filtered"], 16.5, 14.5, 209, 1.2, weight=600)
+    assert {t.font.pointSizeF() for t in short} == {16.5 * 0.75}
+
+
+def test_a_side_gets_a_taller_head_for_words_on_two_lines() -> None:
+    page = setting()
+    page.draw = False
+    versus = studysheet.clean(sheet_data())["versus"]
+    as_drawn = sheetpdf.versus(page, versus, 0.0)
+    assert as_drawn == 18 + 64 + 3 * 50 + 8  # the mockup's card
+    versus["left"]["what"] = "retrieves your documents first, answers afterwards"
+    assert sheetpdf.versus(page, versus, 0.0) > as_drawn

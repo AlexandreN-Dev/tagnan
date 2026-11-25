@@ -11,16 +11,16 @@ from typing import Any
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QCursor
 
-from tagnan import art
+from tagnan import art, catalogue
 from tagnan import blueprint as blueprints
 from tagnan import config as configs
 from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan import subject as subjects
-from tagnan.game import Game, Outcome
-from tagnan.model import Question
+from tagnan.game import Added, Game, Outcome
+from tagnan.model import CONVERTED, Question
 from tagnan.scheduler import Scheduler, find_pace
-from tagnan.ui import desktop, sheetpdf
+from tagnan.ui import catalogues, desktop, sheetpdf
 from tagnan.ui import sounds as calls
 from tagnan.ui.animator import Animator
 from tagnan.ui.sounds import Sounds
@@ -59,6 +59,7 @@ BUSY_MODES = ("question", "thinking", "result", "explanation", "pause")
 UPDATED_KEY = "updated"  # in his settings, from tagnan/ui/updater.py: what an update changed
 UPDATED_SECONDS = 30
 SHEET_NEWS_SECONDS = 12  # "Signed and sealed!": his study sheet is in Downloads
+CATALOGUE_NEWS_SECONDS = 15  # what became of questions pasted or imported, a prompt copied
 VERDICT_MODES = ("result", "thinking", "explanation")  # where a question's study sheet is offered
 # Minimized (his menu's button beside the moon), he takes his full size for these bubbles only:
 # he grows before the question shows, and goes back to his corner this long after the last.
@@ -66,6 +67,11 @@ FULL_SIZE_MODES = ("question", *VERDICT_MODES)
 GROW_MS = 380  # Main.qml grows him in 350 ms
 SHRINK_SECONDS = 3
 THEMES = ("dark", "light")  # chosen in his menu; none: the system's
+
+
+def counted(count: int, word: str) -> str:
+    """ "1 question", "18 new questions"."""
+    return f"{count} {word}{'' if count == 1 else 's'}"
 
 
 def sheet_written(path: Path) -> dict[str, Any]:
@@ -104,6 +110,7 @@ class Controller(QObject):
         sounds: Sounds | None = None,
         model: str = configs.Brain.model,
         sheet_files: sheetpdf.Files | None = None,
+        catalogue_files: catalogues.Files | None = None,
     ) -> None:
         super().__init__()
         self.game = game
@@ -115,6 +122,7 @@ class Controller(QObject):
         self.settings = settings or desktop.Settings(None)
         self.sounds = sounds or Sounds()
         self.sheet_files = sheet_files or sheetpdf.Files()
+        self.catalogue_files = catalogue_files or catalogues.Files()
         # The hours and the pace chosen in his menu win over the config file's.
         hours = scheduler.rhythm.kept(self.settings.get("hours"))
         if hours != scheduler.rhythm:
@@ -155,6 +163,10 @@ class Controller(QObject):
         self._sheet_news: dict[str, Any] | None = None
         self._last_sheet: Path | None = None
         self._failed_sheet: int | None = None
+        # Catalogues: a course whose questions were pasted, until one learns it or not; the
+        # last export, to show in its folder.
+        self._pasted_course: blueprints.Blueprint | None = None
+        self._last_export: Path | None = None
         animator.set_stage(self._stage)
         animator.tapped.connect(self._on_tapped)
         worker.batchReady.connect(self._on_batch)
@@ -1004,13 +1016,27 @@ class Controller(QObject):
 
     @Slot(str)
     def bubbleAction(self, action: str) -> None:
-        """A button of one of his words: opensheet, showfolder, retrysheet, dismiss."""
+        """A button of one of his words: opensheet, showfolder, retrysheet; ask, paste, import,
+        prompt:write or prompt:convert, learnpasted, showexport; dismiss."""
         last = self._last_sheet
         self._close()
         if action == "opensheet" and last is not None:
             self.sheet_files.open(last)
         elif action == "showfolder" and last is not None:
             self.sheet_files.show(last)
+        elif action == "ask":
+            self.askNow()
+        elif action == "paste":
+            self.pasteQuestions()
+        elif action == "import":
+            self.importCatalogue()
+        elif action.startswith("prompt:"):
+            self.copyPrompt(action.removeprefix("prompt:"))
+        elif action == "learnpasted" and self._pasted_course is not None:
+            course, self._pasted_course = self._pasted_course, None
+            self._change_course(course)
+        elif action == "showexport" and self._last_export is not None:
+            self.catalogue_files.show(self._last_export)
         elif action == "retrysheet":
             question_id = self._failed_sheet
             if (
@@ -1020,6 +1046,235 @@ class Controller(QObject):
             ):
                 self._sheet_queue.append(question_id)
                 self._next_sheet()
+
+    # --- Catalogues --------------------------------------------------------------------------
+
+    @Slot()
+    def pasteQuestions(self) -> None:
+        """Questions from the clipboard: one's assistant's answer, as copied."""
+        self._take_catalogue(self.catalogue_files.text(), pasted=True)
+
+    @Slot()
+    def importCatalogue(self) -> None:
+        """Questions from a file, chosen in the system's Open dialog: a catalogue a colleague
+        exported, or an assistant's answer saved."""
+        path = self.catalogue_files.choose()
+        if path is None:
+            return
+        try:
+            text = self.catalogue_files.read(path)
+        except (OSError, ValueError) as error:
+            self._say_catalogue("Nothing to read", f"I couldn't read {path.name}: {error}.")
+            return
+        self._take_catalogue(text, pasted=False)
+
+    def _take_catalogue(self, text: str, pasted: bool) -> None:
+        """Its questions, checked and kept in their course: one he knows, or the one it brings,
+        kept then but learned only if one says so."""
+        try:
+            found = catalogue.read(text)
+        except ValueError as error:
+            where = "Your clipboard" if pasted else "This file"
+            if str(error) == "I find no questions in it":
+                line = f"{where} holds no questions I can read."
+                if pasted:
+                    line += (
+                        " Copy your assistant's whole answer: the Copy button of its code block"
+                        " takes it all."
+                    )
+            else:
+                line = f"{where} holds no questions I can use: {error}."
+            self._say_catalogue("Nothing to read", line)
+            return
+        new = False
+        if isinstance(found.course, str):
+            try:
+                bp = self.game.course(found.course)
+            except (KeyError, ValueError):
+                self._say_catalogue(
+                    "A course I don't know",
+                    f"These questions are for {found.course}, a course I don't have: a catalogue"
+                    " that brings its course along will do.",
+                )
+                return
+        else:
+            try:
+                bp = self.game.course(found.course.key)  # one he has: his own, as it is
+            except (KeyError, ValueError):
+                bp, new = found.course, True
+        added = self.game.add_questions(
+            bp, found.questions, self._clock(), found.origin, found.subject
+        )
+        logger.info(
+            "catalogue on %r: %d kept, %d known, %d set aside %s%s",
+            bp.key,
+            len(added.ids),
+            added.known,
+            len(added.rejected),
+            added.rejected[:3],
+            ", cut" if found.cut else "",
+        )
+        current = bp.key == self.game.exam
+        if added.ids:
+            if new:
+                self.game.keep_course(bp)
+            if current and self._first_run:
+                self._first_run = False
+                self.scheduler.next_at = self._clock() + FIRST_QUESTION_DELAY
+            self._set_mood("happy", MOOD_SECONDS["happy"])
+        self._pasted_course = bp if added.ids and not current else None
+        self.prefsChanged.emit()  # his menu: the course's questions to share
+        self.statusChanged.emit()
+        self._show(self._catalogue_news(bp, found, added, new))
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+
+    def _catalogue_news(
+        self, bp: blueprints.Blueprint, found: catalogue.Catalogue, added: Added, new: bool
+    ) -> dict[str, Any]:
+        """What became of a catalogue's questions, said plainly."""
+        kept, known, aside = len(added.ids), added.known, added.rejected
+        current = bp.key == self.game.exam
+        lines = []
+        if new and kept:
+            title = "A new course!"
+            lines.append(
+                f"{bp.name}: {counted(len(bp.domains), 'chapter')}, {counted(kept, 'question')}."
+            )
+        elif kept:
+            title = "Cut short!" if found.cut else "Fresh ink, mostly" if aside else "Fresh ink!"
+            said = f"{counted(kept, 'new question')} on {bp.name}"
+            if found.origin == CONVERTED:
+                said += ", converted from your quiz: they stay with you, never exported"
+            lines.append(said + ".")
+        elif aside:
+            title = "Set aside"
+            lines.append(f"None of these questions holds up for {bp.name}.")
+        else:
+            title = "Nothing new"
+            lines.append(f"I already had {'it' if known == 1 else f'all {known}'}, in {bp.name}.")
+        if known and kept:
+            lines.append(f"{known} I already had.")
+        if aside:
+            reasons = "; ".join(f"question {n}: {catalogue.reason(why)}" for n, why in aside[:3])
+            more = f"; and {len(aside) - 3} more" if len(aside) > 3 else ""
+            lines.append(f"{len(aside)} set aside: {reasons}{more}.")
+        if found.left_out:
+            left = "; ".join(
+                f"question {n}, {why}" if why else f"question {n}" for n, why in found.left_out[:3]
+            )
+            lines.append(f"Your assistant left {len(found.left_out)} out: {left}.")
+        if found.cut and kept:
+            lines.append(
+                "Your assistant's answer breaks off: I kept the whole questions before the"
+                " break. For the rest, tell it “next”, then paste its answer again."
+            )
+        if kept and not current:
+            lines.append(
+                "Shall we learn it now?"
+                if new
+                else f"They wait in {bp.name}: shall we learn it now?"
+            )
+            buttons = [
+                {"label": "Learn it now", "action": "learnpasted", "primary": True},
+                {"label": "Later", "action": "dismiss"},
+            ]
+        elif kept:
+            buttons = [
+                {"label": "A question now", "action": "ask", "primary": True},
+                {"label": "Got it", "action": "dismiss"},
+            ]
+        else:
+            buttons = [{"label": "Got it", "action": "dismiss", "primary": True}]
+        return {"mode": "message", "title": title, "text": " ".join(lines), "buttons": buttons}
+
+    @Slot(str)
+    def copyPrompt(self, kind: str) -> None:
+        """A prompt for one's own assistant, in the clipboard: to write questions on what he
+        asks about now ("write"), or to convert a quiz one has ("convert")."""
+        bp = self.game.blueprint
+        if kind == "convert":
+            prompt = catalogue.convert_prompt(bp)
+            text = (
+                "The prompt is in your clipboard. Paste it into your assistant, then your quiz:"
+                " its text, or the file if it takes files. Twenty questions at a time: “next”"
+                " for the rest."
+            )
+            if bp.exam:
+                text += "\nOnly a quiz you may use: never real exam questions."
+        else:
+            prompt = catalogue.write_prompt(bp, self.game.batch_request(catalogue.BATCH))
+            text = (
+                "The prompt is in your clipboard. Paste it into ChatGPT, Gemini or Copilot, then"
+                " copy its whole answer and bring it to me: Paste questions."
+            )
+        self.catalogue_files.copy(prompt)
+        logger.info("prompt copied: %s", kind)
+        self._show_catalogue_prompt(text)
+
+    def _show_catalogue_prompt(self, text: str) -> None:
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "Over to your assistant!",
+                "text": text,
+                "buttons": [
+                    {"label": "Paste questions", "action": "paste", "primary": True},
+                    {"label": "Got it", "action": "dismiss"},
+                ],
+            }
+        )
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+
+    @Slot()
+    def exportQuestions(self) -> None:
+        """The course learned now and the questions one may share, as a catalogue in Downloads:
+        a colleague imports both. Those converted from a quiz stay with one."""
+        bp = self.game.blueprint
+        shared = self.game.store.shareable(bp.key)
+        converted = self.game.store.count(bp.key, CONVERTED)
+        stay = (
+            ""
+            if not converted
+            else " The one converted from your quiz stays with you."
+            if converted == 1
+            else f" The {converted} converted from your quizzes stay with you."
+        )
+        if not shared:
+            self._say_catalogue(
+                "Nothing to share yet", f"I hold no questions of my own on {bp.name} yet.{stay}"
+            )
+            return
+        try:
+            path = self.catalogue_files.write(
+                catalogue.export(bp, shared), catalogue.file_name(bp, len(shared))
+            )
+        except OSError as error:
+            logger.warning("catalogue not written: %s", error)
+            self._say_catalogue("My quill broke", f"I couldn't write the catalogue: {error}.")
+            return
+        logger.info("catalogue exported: %s", path)
+        self._last_export = path
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "Signed and sealed!",
+                "text": f"{counted(len(shared), 'question')} on {bp.name}, in Downloads, ready"
+                f" to share.{stay}",
+                "file": path.name,
+                "buttons": [
+                    {"label": "Show in folder", "action": "showexport", "primary": True},
+                    {"label": "Got it", "action": "dismiss"},
+                ],
+            }
+        )
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+
+    def _say_catalogue(self, title: str, text: str) -> None:
+        self._set_mood("idle")
+        self._show({"mode": "message", "title": title, "text": text})
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
 
     # --- Brain ------------------------------------------------------------------------------
 

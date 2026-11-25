@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
-from tagnan import art, studysheet
+from tagnan import art, catalogue, studysheet
 from tagnan.brain_client import BrainClient, BrainError
 from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
@@ -23,6 +23,7 @@ from tagnan.ui.animation import rig as rig_module
 from tagnan.ui.animation.rig import BURST_LENGTH, Rig
 from tagnan.ui.animation.taps import Mood, TapTracker
 from tagnan.ui.animator import Animator
+from tagnan.ui.catalogues import Files as CatalogueFiles
 from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
 from tagnan.ui.menu import Menu, menu_position
@@ -322,6 +323,38 @@ class FakeFiles(Files):
         self.shown.append(path)
 
 
+class FakeCatalogues(CatalogueFiles):
+    """A clipboard, files to choose and Downloads of their own."""
+
+    def __init__(self) -> None:
+        self.clipboard = ""
+        self.chosen: Path | None = None
+        self.files: dict[Path, str] = {}
+        self.written: list[tuple[str, dict[str, Any]]] = []
+        self.shown: list[Path] = []
+
+    def text(self) -> str:
+        return self.clipboard
+
+    def copy(self, text: str) -> None:
+        self.clipboard = text
+
+    def choose(self) -> Path | None:
+        return self.chosen
+
+    def read(self, path: Path) -> str:
+        if path not in self.files:
+            raise OSError("No such file")
+        return self.files[path]
+
+    def write(self, data: dict[str, Any], name: str) -> Path:
+        self.written.append((name, data))
+        return Path("Downloads") / name
+
+    def show(self, path: Path) -> None:
+        self.shown.append(path)
+
+
 class Clock:
     def __init__(self) -> None:
         self.now = NOW
@@ -350,6 +383,7 @@ def make(
     speaker: Speaker | None = None,
     model: str = "claude-opus-5-5",
     files: FakeFiles | None = None,
+    catalogues: FakeCatalogues | None = None,
 ) -> tuple[Controller, FakeWorker, Animator]:
     clock = clock or Clock()
     worker = FakeWorker()
@@ -368,6 +402,7 @@ def make(
         sounds=Sounds(speaker or Speaker()),
         model=model,
         sheet_files=files or FakeFiles(),
+        catalogue_files=catalogues or FakeCatalogues(),
     )
     return controller, worker, animator
 
@@ -628,6 +663,236 @@ def test_his_menu_minimizes_him_by_a_button_or_words(game: Game) -> None:
     assert any(s["action"] == "small:off" for s in menu.suggest("full size"))
     assert menu.run("small") is True  # the button: on, then off
     assert controller.property("small") is False
+
+
+# --- Catalogues -------------------------------------------------------------------------------
+
+
+def catalogue_text(*questions: dict[str, Any], **head: Any) -> str:
+    """An assistant's answer, as one copies it: his object in a code block, words around it."""
+    data = {
+        "tagnan": 1,
+        "course": "aif-c01",
+        "origin": "written",
+        **head,
+        "questions": list(questions),
+    }
+    return f"Here you are:\n```json\n{json.dumps(data, indent=1)}\n```\nGood luck!"
+
+
+def numbered(count: int, start: int = 0) -> list[dict[str, Any]]:
+    return [
+        question_data(topic=f"notion {i}", stem=f"Question number {i}: which one?")
+        for i in range(start, start + count)
+    ]
+
+
+def test_questions_pasted_from_an_assistant_are_kept_and_asked(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, animator = make(game, catalogues=files)
+    files.clipboard = catalogue_text(*numbered(18))
+    controller.pasteQuestions()
+    assert game.fresh_count() == 18
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Fresh ink!"
+    assert bubble["text"] == "18 new questions on AWS Certified AI Practitioner."
+    assert [b["label"] for b in bubble["buttons"]] == ["A question now", "Got it"]
+    assert animator.property("mood") == "happy"
+    controller.bubbleAction("ask")
+    assert controller.property("bubble")["mode"] == "question"
+    # Pasted again, with two new ones: only those are kept.
+    controller.later()
+    files.clipboard = catalogue_text(*numbered(20))
+    controller.pasteQuestions()
+    assert game.fresh_count() == 20
+    assert controller.property("bubble")["text"] == (
+        "2 new questions on AWS Certified AI Practitioner. 18 I already had."
+    )
+    controller.pasteQuestions()
+    assert controller.property("bubble")["title"] == "Nothing new"
+    assert controller.property("bubble")["text"] == (
+        "I already had all 20, in AWS Certified AI Practitioner."
+    )
+
+
+def test_what_cannot_be_kept_is_said_plainly(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    files.clipboard = "Sure! On which subject would you like twenty questions?"
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Nothing to read"
+    assert bubble["text"].startswith("Your clipboard holds no questions I can read. Copy your")
+    # Some set aside, with their reasons; the others kept.
+    bad = [question_data(stem="Same?", choices=["a", "a", "b", "c"]), question_data(domain=9)]
+    files.clipboard = catalogue_text(*numbered(3), *bad)
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Fresh ink, mostly"
+    assert bubble["text"] == (
+        "3 new questions on AWS Certified AI Practitioner. 2 set aside: question 4: two of its"
+        " choices are the same; question 5: its domain is not one of the course's."
+    )
+    # An answer cut off keeps its whole questions.
+    whole = catalogue_text(*numbered(10, start=10))
+    files.clipboard = whole[: whole.index("Question number 19")]
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Cut short!"
+    assert bubble["text"].startswith("9 new questions on AWS Certified AI Practitioner.")
+    assert "tell it “next”, then paste its answer again" in bubble["text"]
+    # Questions for a course he does not know, and none to bring it along.
+    files.clipboard = catalogue_text(question_data(), course="saa-c03")
+    controller.pasteQuestions()
+    assert controller.property("bubble")["title"] == "A course I don't know"
+    assert game.fresh_count() == 12
+
+
+def test_a_quiz_converted_stays_with_one_and_what_was_left_out_is_said(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    controller.copyPrompt("convert")
+    assert files.clipboard.startswith("I use Tagnan, a quiz game, to prepare for the AWS")
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Over to your assistant!"
+    assert bubble["text"].endswith("Only a quiz you may use: never real exam questions.")
+    files.clipboard = catalogue_text(
+        *numbered(19),
+        origin="converted",
+        left_out=[{"number": 7, "why": "the quiz gives no answer"}],
+    )
+    controller.bubbleAction("paste")
+    assert controller.property("bubble")["text"] == (
+        "19 new questions on AWS Certified AI Practitioner, converted from your quiz: they stay"
+        " with you, never exported. Your assistant left 1 out: question 7, the quiz gives no"
+        " answer."
+    )
+    assert game.store.count(game.exam, "converted") == 19
+
+
+def test_the_prompt_to_write_carries_the_course_and_his_level(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    controller.copyPrompt("write")
+    assert "Write 20 practice questions for the AIF-C01 exam" in files.clipboard
+    assert "easy single-answer questions" in files.clipboard  # an Inkwell: easy ones
+    assert controller.property("bubble")["buttons"][0] == {
+        "label": "Paste questions",
+        "action": "paste",
+        "primary": True,
+    }
+
+
+def test_a_course_brought_by_a_catalogue_is_learned_if_one_says_so(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    files.clipboard = catalogue_text(pottery_question(), course=pottery_data())
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "A new course!"
+    assert bubble["text"] == "Pottery: 2 chapters, 1 question. Shall we learn it now?"
+    assert [b["label"] for b in bubble["buttons"]] == ["Learn it now", "Later"]
+    assert game.exam == "aif-c01"  # not yet
+    assert "pottery" in [c.key for c in game.courses()]
+    controller.bubbleAction("learnpasted")
+    assert game.exam == "pottery"
+    assert controller.property("bubble")["text"].startswith("From now on, we learn Pottery.")
+    # Questions for a course he has, learned or not, wait in it.
+    files.clipboard = catalogue_text(*numbered(2))
+    controller.pasteQuestions()
+    assert controller.property("bubble")["text"] == (
+        "2 new questions on AWS Certified AI Practitioner. They wait in AWS Certified AI"
+        " Practitioner: shall we learn it now?"
+    )
+    controller.bubbleAction("dismiss")
+    assert game.exam == "pottery"
+
+
+def test_a_catalogue_is_imported_from_a_file(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    controller.importCatalogue()  # the dialog closed: nothing
+    assert controller.property("bubble")["mode"] == "hidden"
+    files.chosen = Path("Downloads/Tagnan – AIF-C01 – 3 questions.json")
+    controller.importCatalogue()
+    assert controller.property("bubble")["text"] == (
+        "I couldn't read Tagnan – AIF-C01 – 3 questions.json: No such file."
+    )
+    files.files[files.chosen] = json.dumps(
+        catalogue.export(game.blueprint, []) | {"questions": numbered(3)}
+    )
+    controller.importCatalogue()
+    assert (
+        controller.property("bubble")["text"] == "3 new questions on AWS Certified AI Practitioner."
+    )
+    files.files[files.chosen] = "{}"
+    controller.importCatalogue()
+    assert controller.property("bubble")["text"] == "This file holds no questions I can read."
+
+
+def test_ones_questions_are_exported_for_a_colleague(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    controller.exportQuestions()
+    assert controller.property("bubble")["title"] == "Nothing to share yet"
+    assert files.written == []
+    fill(game, 3)  # his brain's
+    files.clipboard = catalogue_text(*numbered(2), origin="converted")
+    controller.pasteQuestions()
+    controller.exportQuestions()
+    ((name, data),) = files.written
+    assert name == "Tagnan – AIF-C01 – 3 questions.json"
+    assert len(data["questions"]) == 3  # the converted ones stay
+    assert data["course"]["code"] == "AIF-C01"
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Signed and sealed!"
+    assert bubble["text"] == (
+        "3 questions on AWS Certified AI Practitioner, in Downloads, ready to share. The 2"
+        " converted from your quizzes stay with you."
+    )
+    assert bubble["file"] == name
+    controller.bubbleAction("showexport")
+    assert files.shown == [Path("Downloads") / name]
+
+
+def test_his_menu_has_catalogues_beside_who_writes_his_questions(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, _, _ = make(game, catalogues=files)
+    fill(game, 2)
+    menu = Menu(controller)
+    content = menu.property("content")
+    assert content["catalogues"] == ""
+    assert [x["key"] for x in content["catalogueList"]] == [
+        "paste",
+        "import",
+        "export",
+        "",
+        "prompt:write",
+        "prompt:convert",
+    ]
+    assert content["catalogueList"][2]["hint"] == "2 on AIF-C01, to share"
+    assert content["catalogueList"][3]["header"] == "Prompts for your assistant"
+    menu.openAt(10, 10)
+    assert menu.run("catalogues:prompt:write") is False
+    assert files.clipboard.startswith("You write the questions of Tagnan")
+    files.clipboard = catalogue_text(*numbered(1, start=5))
+    menu.run("catalogues:paste")
+    assert controller.property("bubble")["title"] == "Fresh ink!"
+    menu.run("catalogues:export")
+    assert files.written[-1][0] == "Tagnan – AIF-C01 – 3 questions.json"
+
+    def actions(text: str) -> list[str]:
+        return [s["action"] for s in menu.suggest(text)]
+
+    assert actions("paste")[0] == "catalogues:paste"
+    assert actions("export")[0] == "catalogues:export"
+    assert [a for a in actions("catalogue") if a.startswith("catalogues:")] == [
+        "catalogues:paste",
+        "catalogues:import",
+        "catalogues:export",
+        "catalogues:prompt:write",
+        "catalogues:prompt:convert",
+    ]
 
 
 def test_a_flagged_question_never_comes_back(game: Game) -> None:
@@ -1370,7 +1635,8 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
     from tagnan.ui.placement import Placement
 
     fill(game)
-    controller, _, animator = make(game)
+    files = FakeCatalogues()
+    controller, _, animator = make(game, catalogues=files)
     menu = Menu(controller)
     warnings: list[str] = []
     qInstallMessageHandler(lambda _kind, _context, message: warnings.append(message))
@@ -1473,9 +1739,29 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         QTest.keyClick(popup, Qt.Key.Key_Down)
         QTest.keyClick(popup, Qt.Key.Key_Return)
         assert controller.property("model") == "claude-sonnet-5-5"
+        # Catalogues: actions, the prompts under their heading, which the arrows pass over.
+        menu.openAt(400, 300)  # a model chosen closed it
+        QApplication.processEvents()
+        shelf = next(i for i, r in enumerate(rows) if r.get("action") == "sub:catalogues")
+        assert shelf == model + 1
+        popup.openSub("catalogues", shelf)
+        QApplication.processEvents()
+        heading = next(
+            i
+            for i in items(popup.contentItem())
+            if i.property("text") == "PROMPTS FOR YOUR ASSISTANT"
+        )
+        assert heading.isVisible()
+        assert popup.property("subCurrent") == 0  # Paste questions
+        for _ in range(3):
+            QTest.keyClick(popup, Qt.Key.Key_Down)
+        assert popup.property("subCurrent") == 4  # Write questions, past the heading
+        QTest.keyClick(popup, Qt.Key.Key_Return)
+        assert files.clipboard.startswith("You write the questions of Tagnan")
+        assert menu.property("shown") is False
         # His hours: From and Until come before the days; the arrows beside move the one they
         # are on, an hour at a time, the list open.
-        menu.openAt(400, 300)  # a model chosen closed it
+        menu.openAt(400, 300)
         QApplication.processEvents()
         hours = next(i for i, r in enumerate(rows) if r.get("action") == "sub:hours")
         popup.openSub("hours", hours)

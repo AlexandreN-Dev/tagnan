@@ -1,7 +1,8 @@
 // Tagnan's menu, in his bubbles' style (tagnan/ui/menu.py says what it shows and does): his
 // grade and points at the top, a field to type a command ("break 45", "often", "learn pottery"),
-// then his commands. How often, Hours, Sound and Questions by open their lists beside it, Hours
-// with a range across the day above its days, Sound with his volume under its list. Arrows, Enter and Esc work throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
+// then his commands. How often, Hours, Sound, Questions by and Catalogues open their lists beside
+// it, Hours with a range across the day above its days, Sound with his volume under its list,
+// Catalogues with actions rather than choices. Arrows, Enter and Esc work throughout; a click elsewhere closes it, as any menu. Its window covers the screen's free area
 // while it is open and never moves: only the panels move within it, so nothing jumps. It grows
 // out of the pointer as it opens, its shadow with it, and fades as it closes.
 import QtQuick
@@ -16,7 +17,7 @@ Window {
 
     readonly property var c: menu.content
     readonly property int gap: 6
-    property string sub: ""  // "pace", "hours", "call" or "model": the list open beside the menu
+    property string sub: ""  // "pace", "hours", "call", "model" or "catalogues": the list beside
     property real subTop: 0
     property int subRow: -1  // the row whose list is open
     property int current: 0  // the row the keyboard is on
@@ -75,7 +76,12 @@ Window {
         spinner: "M12 3.5a8.5 8.5 0 1 1-8.1 5.9",
         account: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4.5 4-6.5 8-6.5s7 2 8 6.5",
         corner: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 8l8 8M16 11v5h-5",
-        grow: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM16 16L8 8M8 13V8h5"
+        grow: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM16 16L8 8M8 13V8h5",
+        catalogue: "M8 3h11a2 2 0 0 1 2 2v11M5 7h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM7 12h6M7 16h4",
+        paste: "M9 3h6v3H9zM9 4.5H6.5A1.5 1.5 0 0 0 5 6v13.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H15M9 12h6M9 16h4",
+        import: "M12 3v11M7.5 9.5 12 14l4.5-4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4",
+        export: "M12 14V3M7.5 7.5 12 3l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4",
+        prompt: "M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
     })
 
     function commandRows() {
@@ -88,6 +94,8 @@ Window {
             { action: "sub:hours", label: "Hours", value: c.hours, icon: "hours", more: true },
             { action: "sub:call", label: "Sound", value: c.sound, icon: "call", more: true },
             { action: "sub:model", label: "Questions by", value: c.model, icon: "model", more: true },
+            // Questions from elsewhere (tagnan.catalogue): paste, import, export, two prompts.
+            { action: "sub:catalogues", label: "Catalogues", value: c.catalogues, icon: "catalogue", more: true },
             { separator: true }
         ]
         // A study sheet on its way (controller.makeSheet): a busy row, as Update's.
@@ -113,6 +121,7 @@ Window {
             const verb = s.action === "sub:hours" ? "hours" : s.action.split(":")[0]
             const icon = verb === "theme" ? (s.action === "theme:dark" ? "moon" : "sun")
                 : verb === "small" ? (s.action === "small:off" ? "grow" : "corner")
+                : verb === "catalogues" ? s.action.split(":")[1]
                 : { pace: "pace", hours: "hours", days: "hours", call: "call", pause: "pause", learn: "learn",
                     focus: "focus" }[verb] || verb
             // "Hours…" opens its list beside it, as its row does.
@@ -141,7 +150,10 @@ Window {
         keyboard = true
         if (sub !== "") {
             const count = subList.count + (sub === "call" ? 1 : 0) + firstStop(sub)
-            subCurrent = (subCurrent + step + count) % count
+            let next = (subCurrent + step + count) % count
+            if (heading(next))
+                next = (next + step + count) % count  // a list's heading is not a stop
+            subCurrent = next
             return
         }
         const at = stops()
@@ -160,14 +172,19 @@ Window {
         }
         menu.run(row.action)
     }
-    // The lists beside: their choices, and the one kept.
+    // The lists beside: their choices, and the one kept; Catalogues' are actions, none kept.
     function choicesOf(which) {
         return which === "pace" ? c.paces : which === "call" ? c.calls : which === "model" ? c.models
-            : which === "hours" ? c.days : []
+            : which === "hours" ? c.days : which === "catalogues" ? c.catalogueList : []
     }
     function chosenOf(which) {
         return which === "pace" ? c.paceKey : which === "call" ? c.callKey : which === "hours" ? c.daysKey
-            : c.modelKey
+            : which === "model" ? c.modelKey : null  // none kept: no key matches it, not even a heading's
+    }
+    // A stop of the list beside that only heads what follows it (Catalogues' prompts).
+    function heading(index) {
+        const item = choicesOf(sub)[index - firstStop(sub)]
+        return item !== undefined && (item.header || "") !== ""
     }
     // The stops before a list's choices: From and Until, in his hours'.
     function firstStop(which) {
@@ -220,7 +237,7 @@ Window {
             return  // the arrows beside move it
         const list = choicesOf(sub)
         const at = index - firstStop(sub)
-        if (at < 0 || at >= list.length)
+        if (at < 0 || at >= list.length || heading(index))
             return
         subCurrent = index
         menu.run((sub === "hours" ? "days" : sub) + ":" + list[at].key)
@@ -895,7 +912,7 @@ Window {
                 topPadding: 4
                 bottomPadding: 6
                 text: ({ pace: "How often?", hours: "When may he ask?", call: "His call",
-                         model: "Who writes his questions?" })[win.sub] || ""
+                         model: "Who writes his questions?", catalogues: "Catalogues" })[win.sub] || ""
                 color: win.theme.text
                 font.family: win.theme.display
                 font.pixelSize: 14
@@ -903,10 +920,15 @@ Window {
             }
             Text {
                 visible: win.sub === "call" || win.sub === "model" || win.sub === "hours"
+                         || win.sub === "catalogues"
+                width: subColumn.width
+                wrapMode: Text.Wrap
                 leftPadding: 10
+                rightPadding: 10
                 bottomPadding: 4
                 text: ({ call: "A click plays it and keeps it.", model: "From his next batch on.",
-                         hours: "Not a word outside these hours." })[win.sub] || ""
+                         hours: "Not a word outside these hours.",
+                         catalogues: "Questions from elsewhere, to keep or to share." })[win.sub] || ""
                 color: win.theme.muted
                 font.family: win.theme.body
                 font.pixelSize: 12
@@ -1071,26 +1093,73 @@ Window {
                     required property var modelData
                     required property int index
                     readonly property bool chosen: modelData.key === win.chosenOf(win.sub)
+                    // Catalogues' prompts are headed: a line, then what they are for.
+                    readonly property bool header: (modelData.header || "") !== ""
+                    readonly property bool lit: win.subCurrent === index + win.firstStop(win.sub)
                     width: subColumn.width
-                    height: hint.visible ? 46 : 34
+                    height: header ? headingColumn.implicitHeight : hint.visible ? 46 : 34
                     radius: 9
                     color: "transparent"
-                    Accessible.role: Accessible.RadioButton
-                    Accessible.name: modelData.name
+                    Accessible.role: header ? Accessible.StaticText
+                        : win.sub === "catalogues" ? Accessible.Button : Accessible.RadioButton
+                    Accessible.name: header ? modelData.header : modelData.name
                     Accessible.checked: chosen
                     Glyph {
                         x: 8
                         anchors.verticalCenter: parent.verticalCenter
                         name: "check"
                         tint: win.theme.ink
-                        visible: choice.chosen
+                        visible: choice.chosen && !choice.header
+                    }
+                    // An action's icon, where a choice has its check.
+                    Glyph {
+                        x: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: choice.modelData.icon || ""
+                        tint: choice.lit ? win.theme.ink : win.theme.muted
+                        visible: !choice.header && (choice.modelData.icon || "") !== ""
                     }
                     Column {
+                        id: headingColumn
+                        visible: choice.header
+                        width: parent.width
+                        topPadding: 4
+                        bottomPadding: 4
+                        spacing: 0
+                        Rectangle {
+                            x: 10
+                            width: parent.width - 20
+                            height: 1
+                            color: win.theme.line
+                        }
+                        Item { width: 1; height: 8 }
+                        Text {
+                            leftPadding: 10
+                            text: (choice.modelData.header || "").toUpperCase()
+                            color: win.theme.muted
+                            font.family: win.theme.body
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                            font.letterSpacing: 0.4
+                        }
+                        Text {
+                            width: parent.width
+                            leftPadding: 10
+                            rightPadding: 10
+                            wrapMode: Text.Wrap
+                            text: choice.modelData.note || ""
+                            color: win.theme.muted
+                            font.family: win.theme.body
+                            font.pixelSize: 12
+                        }
+                    }
+                    Column {
+                        visible: !choice.header
                         x: 32
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 1
                         Text {
-                            text: choice.modelData.name
+                            text: choice.modelData.name || ""  // a heading has none
                             color: win.theme.text
                             font.family: win.theme.body
                             font.pixelSize: 13
@@ -1106,7 +1175,7 @@ Window {
                         }
                     }
                     Glyph {
-                        visible: win.sub === "call" && choice.modelData.key !== "silent"
+                        visible: win.sub === "call" && choice.modelData.key !== "silent" && !choice.header
                         anchors.right: parent.right
                         anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
@@ -1116,6 +1185,7 @@ Window {
                     MouseArea {
                         id: choiceMouse
                         anchors.fill: parent
+                        enabled: !choice.header
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onPositionChanged: (mouse) => {

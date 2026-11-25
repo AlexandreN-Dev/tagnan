@@ -10,9 +10,12 @@ from typing import Any
 
 from PySide6.QtCore import Property, QObject, QPoint, Signal, Slot
 
+from tagnan import catalogue
 from tagnan import config as configs
 from tagnan import pause as pauses
 from tagnan import progress as rules
+from tagnan.blueprint import Blueprint
+from tagnan.model import WRITTEN
 from tagnan.scheduler import PACES
 from tagnan.ui import sounds as calls
 from tagnan.ui.controller import Controller
@@ -56,6 +59,15 @@ WEEKDAY_WORDS = ("weekdays", "week days", "not on weekends")
 # Minimized: small in his corner, full size only to ask (his menu's button beside the moon).
 SMALL_WORDS = ("minimize", "minimise", "small", "smaller", "tiny", "mini", "shrink")
 FULL_WORDS = ("full size", "big", "bigger", "grow", "normal size", "maximize", "maximise")
+# Catalogues (tagnan.catalogue), typed: (action, label, words); "catalogue" finds them all.
+CATALOGUE_WORDS = ("catalogue", "catalogues", "catalog", "catalogs")
+CATALOGUE_COMMANDS = (
+    ("paste", "Paste questions", ("paste", "paste questions", "clipboard")),
+    ("import", "Import a catalogue…", ("import", "import a catalogue", "open a catalogue")),
+    ("export", "Export my questions", ("export", "export my questions", "share")),
+    ("prompt:write", "A prompt to write questions", ("prompt", "write questions", "assistant")),
+    ("prompt:convert", "A prompt to convert a quiz", ("prompt", "convert", "quiz")),
+)
 
 
 def menu_position(anchor: tuple[int, int], size: tuple[int, int], area: Box) -> tuple[int, int]:
@@ -203,11 +215,59 @@ class Menu(QObject):
             "update": self._updater.row() if self._updater else None,
             # Whose Claude login writes his questions, at the foot of the menu; None: not known.
             "account": c.worker.account,
+            # Catalogues: its row's value, and its list beside: actions, then the prompts.
+            "catalogues": "",
+            "catalogueList": self._catalogue_list(bp),
             # A study sheet on its way: a busy row, as Update's.
             "sheet": "a minute or two" if c.inking() else "",
             # Minimized: the button beside the moon, in ink.
             "small": bool(c.small),
         }
+
+    def _catalogue_list(self, bp: Blueprint) -> list[dict[str, str]]:
+        """Catalogues' list: paste, import and export act at once; the prompts are copied. A
+        header (no key) is not a stop."""
+        store = self._controller.game.store
+        shareable = store.count(bp.key, "") + store.count(bp.key, WRITTEN)
+        return [
+            {
+                "key": "paste",
+                "name": "Paste questions",
+                "hint": "your assistant's answer",
+                "icon": "paste",
+            },
+            {
+                "key": "import",
+                "name": "Import a file…",
+                "hint": "a catalogue, .json",
+                "icon": "import",
+            },
+            {
+                "key": "export",
+                "name": "Export my questions",
+                "hint": f"{shareable} on {bp.code}, to share"
+                if shareable
+                else "none of my own yet",
+                "icon": "export",
+            },
+            {
+                "key": "",
+                "header": "Prompts for your assistant",
+                "note": "Copied, to paste into ChatGPT, Gemini, Copilot…",
+            },
+            {
+                "key": "prompt:write",
+                "name": "Write questions",
+                "hint": f"on {bp.code}, {catalogue.BATCH} at a time",
+                "icon": "prompt",
+            },
+            {
+                "key": "prompt:convert",
+                "name": "Convert a quiz",
+                "hint": "a PDF, a page, a test",
+                "icon": "prompt",
+            },
+        ]
 
     # --- Opening and closing ------------------------------------------------------------------
 
@@ -325,6 +385,19 @@ class Menu(QObject):
             )
         if len(folded) > 2 and c.small and any(w.startswith(folded) for w in FULL_WORDS):
             add("Full size", "small:off", "Minimize off")
+        if len(folded) > 2:
+            everything = any(w.startswith(folded) for w in CATALOGUE_WORDS)
+            code = c.game.blueprint.code
+            subs = {
+                "paste": "from the clipboard",
+                "import": "a .json file",
+                "export": "to share",
+                "prompt:write": f"on {code}, {catalogue.BATCH} at a time",
+                "prompt:convert": "a PDF, a page, a test",
+            }
+            for key, label, words in CATALOGUE_COMMANDS:
+                if everything or any(w.startswith(folded) for w in words):
+                    add(label, f"catalogues:{key}", subs[key])
         everything = folded in ("model", "models", "brain", "claude", "questions by")
         for m in configs.MODELS:
             if everything or m.name.casefold().startswith(folded):
@@ -332,6 +405,17 @@ class Menu(QObject):
         return found[:MAX_SUGGESTIONS]
 
     # --- Running ------------------------------------------------------------------------------
+
+    def _catalogue(self, action: str) -> None:
+        c = self._controller
+        if action == "paste":
+            c.pasteQuestions()
+        elif action == "import":
+            c.importCatalogue()
+        elif action == "export":
+            c.exportQuestions()
+        elif action.startswith("prompt:"):
+            c.copyPrompt(action.removeprefix("prompt:"))
 
     @Slot(str, result=bool)
     def run(self, action: str) -> bool:
@@ -382,6 +466,8 @@ class Menu(QObject):
                 c.setPace(arg)
             case "model":
                 c.setModel(arg)
+            case "catalogues":
+                self._catalogue(arg)
             case "learn":
                 c.learnWith(arg)
             case "focus":

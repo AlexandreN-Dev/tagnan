@@ -12,6 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
+from tagnan import studysheet
 from tagnan.brain_client import BrainClient, BrainError
 from tagnan.game import Game
 from tagnan.paths import SOUNDS_DIR
@@ -24,10 +25,11 @@ from tagnan.ui.controller import Controller
 from tagnan.ui.desktop import Settings
 from tagnan.ui.menu import Menu, menu_position
 from tagnan.ui.placement import Box
+from tagnan.ui.sheetpdf import Files
 from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
-from tests.conftest import pottery_data, pottery_question, question_data
+from tests.conftest import pottery_data, pottery_question, question_data, sheet_data
 
 NOW = 1_800_000_000.0
 
@@ -137,6 +139,7 @@ class FakeWorker(BrainWorker):
         self.requests: list[dict[str, Any]] = []
         self.explanations: list[int] = []
         self.plans: list[str] = []
+        self.sheets: list[int] = []
         self.lookups = 0
 
     def generate(self, request: dict[str, Any]) -> bool:
@@ -152,8 +155,40 @@ class FakeWorker(BrainWorker):
         self.planning = words
         return True
 
+    def sheet(self, question_id: int, request: dict[str, Any]) -> bool:
+        self.sheets.append(question_id)
+        self.sheeting = True
+        return True
+
+    def write_sheet(self, question_id: int) -> None:
+        """The brain's words come back, as the real worker hands them."""
+        self.sheeting = False
+        self.sheetWritten.emit(question_id, studysheet.clean(sheet_data()))
+
     def look_up_account(self) -> None:
         self.lookups += 1
+
+
+class FakeFiles(Files):
+    """Study sheets drawn and shown nowhere."""
+
+    def __init__(self) -> None:
+        self.written: list[dict[str, Any]] = []
+        self.opened: list[Path] = []
+        self.shown: list[Path] = []
+        self.fail = ""
+
+    def write(self, sheet: dict[str, Any], meta: dict[str, Any]) -> Path:
+        if self.fail:
+            raise OSError(self.fail)
+        self.written.append(meta)
+        return Path("Downloads") / studysheet.file_name(sheet["title"])
+
+    def open(self, path: Path) -> None:
+        self.opened.append(path)
+
+    def show(self, path: Path) -> None:
+        self.shown.append(path)
 
 
 class Clock:
@@ -183,6 +218,7 @@ def make(
     settings: Settings | None = None,
     speaker: Speaker | None = None,
     model: str = "claude-opus-5-5",
+    files: FakeFiles | None = None,
 ) -> tuple[Controller, FakeWorker, Animator]:
     clock = clock or Clock()
     worker = FakeWorker()
@@ -200,6 +236,7 @@ def make(
         settings=settings,
         sounds=Sounds(speaker or Speaker()),
         model=model,
+        sheet_files=files or FakeFiles(),
     )
     return controller, worker, animator
 
@@ -253,7 +290,127 @@ def test_a_wrong_answer_explains_and_can_say_more(game: Game) -> None:
         "mode": "explanation",
         "title": "Listen well",
         "text": "Sacrebleu, listen well.",
+        "sheet": "ready",
     }
+
+
+def answered(controller: Controller, right: bool = False) -> int:
+    """A question asked and answered; its id."""
+    controller.askNow()
+    question = controller._current
+    assert question is not None
+    assert question.id is not None
+    wrong = next(i for i in range(len(question.choices)) if i not in question.answers)
+    controller.answer(list(question.answers) if right else [wrong])
+    return question.id
+
+
+def test_a_study_sheet_from_an_open_verdict(game: Game) -> None:
+    fill(game)
+    files = FakeFiles()
+    controller, worker, _ = make(game, files=files)
+    menu = Menu(controller)
+    question_id = answered(controller)
+    assert controller.property("bubble")["sheet"] == "ready"
+    controller.makeSheet()
+    assert worker.sheets == [question_id]
+    assert controller.property("bubble")["sheet"] == "inking"
+    assert menu.property("content")["sheet"] == "a minute or two"  # his menu's busy row
+    controller.makeSheet()  # asked twice: still one
+    assert worker.sheets == [question_id]
+    worker.write_sheet(question_id)
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["sheet"]) == ("result", "done")  # no word over the verdict
+    assert files.written[0]["course"] == "AWS Certified AI Practitioner"
+    assert files.written[0]["where"] == "Domain 3"
+    assert files.written[0]["source"] == "Amazon Bedrock User Guide, Guardrails"
+    assert menu.property("content")["sheet"] == ""
+    controller.openSheet()
+    assert files.opened == [Path("Downloads") / "Tagnan – RAG or fine-tuning.pdf"]
+
+
+def test_a_sheet_is_offered_under_tell_me_more_too(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    question_id = answered(controller)
+    controller.explainMore()
+    worker.explained.emit(question_id, "Sacrebleu, listen well.")
+    assert controller.property("bubble")["sheet"] == "ready"
+    controller.makeSheet()
+    assert controller.property("bubble")["sheet"] == "inking"
+
+
+def test_a_sheet_written_once_the_bubble_closed_is_announced(game: Game) -> None:
+    fill(game)
+    files = FakeFiles()
+    controller, worker, _ = make(game, files=files)
+    question_id = answered(controller, right=True)
+    controller.makeSheet()
+    controller.dismiss()
+    worker.write_sheet(question_id)
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Signed and sealed!"
+    assert bubble["file"] == "Tagnan – RAG or fine-tuning.pdf"
+    assert [b["action"] for b in bubble["buttons"]] == ["opensheet", "showfolder"]
+    controller.bubbleAction("showfolder")
+    assert files.shown == [Path("Downloads") / "Tagnan – RAG or fine-tuning.pdf"]
+    assert controller.property("bubble")["mode"] == "hidden"
+
+
+def test_a_sheet_written_during_a_question_waits_for_it(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    first = answered(controller)
+    controller.makeSheet()
+    controller.dismiss()
+    controller.askNow()
+    worker.write_sheet(first)
+    assert controller.property("bubble")["mode"] == "question"  # not over a question
+    question = controller._current
+    assert question is not None
+    controller.answer(list(question.answers))
+    assert controller.property("bubble")["mode"] == "result"  # nor over its verdict
+    controller.dismiss()
+    assert controller.property("bubble")["title"] == "Signed and sealed!"
+
+
+def test_a_second_sheet_waits_for_the_first(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    first = answered(controller)
+    controller.makeSheet()
+    controller.dismiss()
+    second = answered(controller)
+    controller.makeSheet()
+    assert worker.sheets == [first]  # the brain writes one at a time
+    assert controller.property("bubble")["sheet"] == "inking"
+    worker.write_sheet(first)
+    assert worker.sheets == [first, second]
+
+
+def test_a_sheet_that_fails_can_be_tried_again(game: Game) -> None:
+    fill(game)
+    files = FakeFiles()
+    controller, worker, _ = make(game, files=files)
+    question_id = answered(controller)
+    controller.makeSheet()
+    worker.sheeting = False
+    worker.sheetFailed.emit(question_id, "claude did not answer within 360 s")
+    bubble = controller.property("bubble")  # the verdict still open: said there, offered again
+    assert bubble["sheet"] == "ready"
+    assert bubble["news"] == "No sheet this time: claude did not answer within 360 s."
+    controller.dismiss()
+    files.fail = "disk full"  # the brain answers, the page cannot be saved
+    controller.makeSheet()
+    worker.write_sheet(question_id)
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "My quill broke"
+    assert "disk full" in bubble["text"]
+    files.fail = ""
+    controller.bubbleAction("retrysheet")
+    assert worker.sheets == [question_id, question_id, question_id]
+    worker.write_sheet(question_id)
+    assert controller.property("bubble")["title"] == "Signed and sealed!"
 
 
 def test_a_flagged_question_never_comes_back(game: Game) -> None:

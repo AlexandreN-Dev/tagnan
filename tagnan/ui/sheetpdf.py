@@ -442,6 +442,20 @@ def write(sheet: dict[str, Any], meta: dict[str, Any], folder: Path | None = Non
     return path
 
 
+class Files:
+    """Where his study sheets go and how they are shown: Downloads, the system's PDF reader and
+    its file manager. The controller's tests give it files of their own."""
+
+    def write(self, sheet: dict[str, Any], meta: dict[str, Any]) -> Path:
+        return write(sheet, meta)
+
+    def open(self, path: Path) -> None:
+        open_file(path)
+
+    def show(self, path: Path) -> None:
+        show_in_folder(path)
+
+
 def open_file(path: Path) -> None:
     """In the system's PDF reader."""
     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))

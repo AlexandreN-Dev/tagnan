@@ -5,6 +5,7 @@ import random
 import time
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
@@ -19,7 +20,7 @@ from tagnan import subject as subjects
 from tagnan.game import Game, Outcome
 from tagnan.model import Question
 from tagnan.scheduler import Scheduler, find_pace
-from tagnan.ui import desktop
+from tagnan.ui import desktop, sheetpdf
 from tagnan.ui import sounds as calls
 from tagnan.ui.animator import Animator
 from tagnan.ui.sounds import Sounds
@@ -57,7 +58,23 @@ MAX_COURSE_WORDS = 120
 BUSY_MODES = ("question", "thinking", "result", "explanation", "pause")
 UPDATED_KEY = "updated"  # in his settings, from tagnan/ui/updater.py: what an update changed
 UPDATED_SECONDS = 30
+SHEET_NEWS_SECONDS = 12  # "Signed and sealed!": his study sheet is in Downloads
+VERDICT_MODES = ("result", "thinking", "explanation")  # where a question's study sheet is offered
 THEMES = ("dark", "light")  # chosen in his menu; none: the system's
+
+
+def sheet_written(path: Path) -> dict[str, Any]:
+    """His word once a study sheet is in Downloads."""
+    return {
+        "mode": "message",
+        "title": "Signed and sealed!",
+        "text": "Your sheet is in Downloads: one page, to read at a glance.",
+        "file": path.name,
+        "buttons": [
+            {"label": "Open it", "action": "opensheet", "primary": True},
+            {"label": "Show in folder", "action": "showfolder"},
+        ],
+    }
 
 
 class Controller(QObject):
@@ -80,6 +97,7 @@ class Controller(QObject):
         settings: desktop.Settings | None = None,
         sounds: Sounds | None = None,
         model: str = configs.Brain.model,
+        sheet_files: sheetpdf.Files | None = None,
     ) -> None:
         super().__init__()
         self.game = game
@@ -90,6 +108,7 @@ class Controller(QObject):
         self._clock = clock
         self.settings = settings or desktop.Settings(None)
         self.sounds = sounds or Sounds()
+        self.sheet_files = sheet_files or sheetpdf.Files()
         # The hours and the pace chosen in his menu win over the config file's.
         hours = scheduler.rhythm.kept(self.settings.get("hours"))
         if hours != scheduler.rhythm:
@@ -117,6 +136,14 @@ class Controller(QObject):
         self._refill_after = 0.0
         self._pending_course: tuple[blueprints.Blueprint, str] | None = None
         self._first_run = game.summary()["answered"] == 0
+        # Study sheets (makeSheet): written this session, waiting or being written (the first),
+        # what the brain and the page need for each, and word of one written while he was busy.
+        self._sheets: dict[int, Path] = {}
+        self._sheet_queue: list[int] = []
+        self._sheet_requests: dict[int, tuple[dict[str, Any], dict[str, Any]]] = {}
+        self._sheet_news: dict[str, Any] | None = None
+        self._last_sheet: Path | None = None
+        self._failed_sheet: int | None = None
         animator.set_stage(self._stage)
         animator.tapped.connect(self._on_tapped)
         worker.batchReady.connect(self._on_batch)
@@ -125,6 +152,8 @@ class Controller(QObject):
         worker.explainFailed.connect(self._on_explain_failed)
         worker.planned.connect(self._on_planned)
         worker.planFailed.connect(self._on_plan_failed)
+        worker.sheetWritten.connect(self._on_sheet_written)
+        worker.sheetFailed.connect(self._on_sheet_failed)
         self._tick_timer = self._timer(self._tick, single=False)
         self._mood_timer = self._timer(lambda: self._set_mood("idle"))
         self._hide_timer = self._timer(self._auto_hide)
@@ -341,6 +370,7 @@ class Controller(QObject):
             "news": news,
             "promoted": outcome.promoted,
             "rank": rules.GRADES[after.grade].name if outcome.promoted else "",
+            "sheet": self._sheet_state(q.id),
         }
 
     @Slot()
@@ -809,6 +839,161 @@ class Controller(QObject):
     def quit(self) -> None:
         self.quitRequested.emit()
 
+    # --- Study sheets -----------------------------------------------------------------------
+
+    def inking(self) -> bool:
+        """A study sheet is being written (his menu's busy row)."""
+        return bool(self._sheet_queue)
+
+    def _sheet_state(self, question_id: int | None) -> str:
+        """A question's study sheet: "ready" to be asked for, "inking", "done"; "" for none."""
+        if question_id is None:
+            return ""
+        if question_id in self._sheets:
+            return "done"
+        return "inking" if question_id in self._sheet_queue else "ready"
+
+    def _showing(self, question_id: int) -> bool:
+        """His bubble is the verdict (or its explanation) of that question."""
+        outcome = self._outcome
+        return (
+            outcome is not None
+            and outcome.question.id == question_id
+            and self._bubble["mode"] in VERDICT_MODES
+        )
+
+    def _refresh_sheet(self, question_id: int, **changes: Any) -> None:
+        """The open verdict says where its sheet stands, without closing sooner or later."""
+        if self._showing(question_id) and "sheet" in self._bubble:
+            self._bubble = {**self._bubble, **changes, "sheet": self._sheet_state(question_id)}
+            self.bubbleChanged.emit()
+
+    def _sheet_meta(self, question: Question) -> dict[str, Any]:
+        """What the page says besides the brain's words: the course, where in it, what to read
+        again, the date, his grade (his figure on the page)."""
+        bp = self.game.blueprint
+        domain = bp.domain(question.domain)
+        today = datetime.fromtimestamp(self._clock())
+        return {
+            "course": bp.name,
+            "where": f"Domain {domain.id}" if bp.exam else domain.name,
+            "source": question.reference,
+            "date": f"{today.day} {today:%B %Y}",
+            "stage": self._stage,
+        }
+
+    @Slot()
+    def makeSheet(self) -> None:
+        """A study sheet on the notion behind the question just answered: its words by the brain,
+        its page drawn here, the file in Downloads. The bubble may close meanwhile; a second
+        sheet waits for the first."""
+        outcome = self._outcome
+        if outcome is None or outcome.question.id is None:
+            return
+        question = outcome.question
+        question_id = outcome.question.id
+        if question_id in self._sheets:
+            self.openSheet()
+            return
+        if question_id in self._sheet_queue:
+            return
+        self._sheet_requests[question_id] = (
+            self.game.sheet_request(question),
+            self._sheet_meta(question),
+        )
+        self._sheet_queue.append(question_id)
+        logger.info("study sheet asked for: question %s", question_id)
+        self._refresh_sheet(question_id)
+        self._next_sheet()
+
+    def _next_sheet(self) -> None:
+        if self._sheet_queue and not self.worker.sheeting:
+            question_id = self._sheet_queue[0]
+            self.worker.sheet(question_id, self._sheet_requests[question_id][0])
+        self.statusChanged.emit()  # his menu's busy row
+
+    def _on_sheet_written(self, question_id: int, answer: object) -> None:
+        if question_id in self._sheet_queue:
+            self._sheet_queue.remove(question_id)
+        asked = self._sheet_requests.get(question_id)
+        try:
+            if asked is None or not isinstance(answer, dict):
+                raise ValueError("nothing to draw")
+            path = self.sheet_files.write(answer, asked[1])
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            logger.warning("study sheet not drawn: %s", error)
+            self._sheet_failed(question_id, f"I could not draw it ({error})")
+        else:
+            self._sheet_requests.pop(question_id, None)
+            self._sheets[question_id] = self._last_sheet = path
+            if self._showing(question_id):
+                self._refresh_sheet(question_id)
+            else:
+                self._tell_sheet(sheet_written(path))
+        self._next_sheet()
+
+    def _on_sheet_failed(self, question_id: int, error: str) -> None:
+        if question_id in self._sheet_queue:
+            self._sheet_queue.remove(question_id)
+        self._sheet_failed(question_id, error)
+        self._next_sheet()
+
+    def _sheet_failed(self, question_id: int, error: str) -> None:
+        """Said in the verdict still open, else in a word of his with Try again."""
+        self._failed_sheet = question_id
+        if self._showing(question_id):
+            self._refresh_sheet(question_id, news=f"No sheet this time: {error}.")
+            return
+        self._tell_sheet(
+            {
+                "mode": "message",
+                "title": "My quill broke",
+                "text": f"I couldn't ink the sheet: {error}. Shall I try again?",
+                "buttons": [
+                    {"label": "Try again", "action": "retrysheet", "primary": True},
+                    {"label": "Not now", "action": "dismiss"},
+                ],
+            }
+        )
+
+    def _tell_sheet(self, news: dict[str, Any]) -> None:
+        """At once if his bubble is free, else once it closes: never over a question, a verdict,
+        a break or the subject being chosen."""
+        if self._bubble["mode"] in ("hidden", "quip", "message", "stats"):
+            self._show(news)
+            if news.get("file"):
+                self._hide_timer.start(SHEET_NEWS_SECONDS * 1000)
+        else:
+            self._sheet_news = news
+
+    @Slot()
+    def openSheet(self) -> None:
+        """The open verdict's sheet, else the last one written, in the system's PDF reader."""
+        outcome = self._outcome
+        path = self._sheets.get(outcome.question.id or -1) if outcome else None
+        path = path or self._last_sheet
+        if path is not None:
+            self.sheet_files.open(path)
+
+    @Slot(str)
+    def bubbleAction(self, action: str) -> None:
+        """A button of one of his words: opensheet, showfolder, retrysheet, dismiss."""
+        last = self._last_sheet
+        self._close()
+        if action == "opensheet" and last is not None:
+            self.sheet_files.open(last)
+        elif action == "showfolder" and last is not None:
+            self.sheet_files.show(last)
+        elif action == "retrysheet":
+            question_id = self._failed_sheet
+            if (
+                question_id is not None
+                and question_id in self._sheet_requests
+                and question_id not in self._sheet_queue
+            ):
+                self._sheet_queue.append(question_id)
+                self._next_sheet()
+
     # --- Brain ------------------------------------------------------------------------------
 
     def _refill_if_needed(self, force: bool = False) -> None:
@@ -889,7 +1074,14 @@ class Controller(QObject):
             and self._outcome
             and self._outcome.question.id == question_id
         ):
-            self._show({"mode": "explanation", "title": "Listen well", "text": text})
+            self._show(
+                {
+                    "mode": "explanation",
+                    "title": "Listen well",
+                    "text": text,
+                    "sheet": self._sheet_state(question_id),
+                }
+            )
 
     def _on_explain_failed(self, question_id: int, error: str) -> None:
         if self._bubble["mode"] == "thinking":
@@ -958,6 +1150,12 @@ class Controller(QObject):
         self._show({"mode": "hidden"})
         if self.animator.mood_name() == "ask":
             self._set_mood("idle")
+        if self._sheet_news is not None:  # a study sheet written, or failed, while he was busy
+            news, self._sheet_news = self._sheet_news, None
+            self._show(news)
+            if news.get("file"):
+                self._hide_timer.start(SHEET_NEWS_SECONDS * 1000)
+            return
         if self._pending_course is not None:  # a course drawn up while he was busy
             bp, intro = self._pending_course
             self._pending_course = None

@@ -200,6 +200,8 @@ class Menu(QObject):
             "update": self._updater.row() if self._updater else None,
             # Whose Claude login writes his questions, at the foot of the menu; None: not known.
             "account": c.worker.account,
+            # A study sheet on its way: a busy row, as Update's.
+            "sheet": "a minute or two" if c.inking() else "",
         }
 
     # --- Opening and closing ------------------------------------------------------------------

@@ -88,6 +88,9 @@ Window {
             { action: "sub:model", label: "Questions by", value: c.model, icon: "model", more: true },
             { separator: true }
         ]
+        // A study sheet on its way (controller.makeSheet): a busy row, as Update's.
+        if (c.sheet)
+            list.push({ action: "sheet", label: "Inking a sheet…", value: c.sheet, icon: "spinner", busy: true })
         if (c.paused) {
             list.push({ action: "resume", label: "Resume now", value: c.next, icon: "resume" })
             list.push({ action: "pause", label: "Change the break…", icon: "pause" })

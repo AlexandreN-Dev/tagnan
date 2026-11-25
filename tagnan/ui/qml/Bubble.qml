@@ -3,6 +3,7 @@
 // (content.mode). Tagnan speaks English.
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Shapes
 
 Item {
     id: bubble
@@ -110,6 +111,39 @@ Item {
             enabled: action.ready
             cursorShape: Qt.PointingHandCursor
             onClicked: action.activated()
+        }
+    }
+    // The study sheet of the question answered (controller.makeSheet): offered, being inked,
+    // written.
+    component SheetControl: Item {
+        id: sheetControl
+        readonly property string sheetState: bubble.content.sheet || ""
+        implicitWidth: sheetState === "inking" ? inking.implicitWidth : sheetAction.implicitWidth
+        implicitHeight: 30
+        Action {
+            id: sheetAction
+            visible: sheetControl.sheetState === "ready" || sheetControl.sheetState === "done"
+            label: sheetControl.sheetState === "done" ? "Open the sheet" : "Study sheet"
+            onActivated: sheetControl.sheetState === "done" ? bubble.controller.openSheet()
+                                                            : bubble.controller.makeSheet()
+        }
+        Text {
+            id: inking
+            visible: sheetControl.sheetState === "inking"
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Inking your sheet" + ".".repeat(1 + Math.floor(inkDots.step % 3))
+            color: bubble.theme.muted
+            font.family: bubble.theme.body
+            font.pixelSize: 13
+            font.italic: true
+            Timer {
+                id: inkDots
+                property int step: 0
+                interval: 400
+                repeat: true
+                running: inking.visible
+                onTriggered: step++
+            }
         }
     }
     component Para: Text {
@@ -405,6 +439,9 @@ Item {
                         label: "Tell me more"
                         onActivated: bubble.controller.explainMore()
                     }
+                    SheetControl {
+                        visible: bubble.mode === "result" && (bubble.content.sheet || "") !== ""
+                    }
                     Text {
                         visible: bubble.mode === "thinking"
                         anchors.verticalCenter: parent.verticalCenter
@@ -438,11 +475,53 @@ Item {
                 text: bubble.content.text || ""
                 font.pixelSize: 14
             }
-            Action {
+            Row {
                 visible: bubble.mode === "explanation"
-                label: "Got it"
-                primary: true
-                onActivated: bubble.controller.dismiss()
+                spacing: 8
+                Action {
+                    label: "Got it"
+                    primary: true
+                    onActivated: bubble.controller.dismiss()
+                }
+                SheetControl {
+                    visible: (bubble.content.sheet || "") !== ""
+                }
+            }
+            // A file just written (a study sheet): its name, with its icon.
+            Rectangle {
+                visible: bubble.mode === "message" && (bubble.content.file || "") !== ""
+                width: column.width
+                height: 34
+                radius: 7
+                color: bubble.theme.choice
+                Shape {
+                    x: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 24
+                    height: 24
+                    scale: 16 / 24
+                    transformOrigin: Item.Left
+                    preferredRendererType: Shape.CurveRenderer
+                    ShapePath {
+                        strokeColor: bubble.theme.ink
+                        strokeWidth: 2.2
+                        fillColor: "transparent"
+                        capStyle: ShapePath.RoundCap
+                        joinStyle: ShapePath.RoundJoin
+                        PathSvg { path: "M6 3h8l5 5v13H6zM14 3v5h5M9 13h6M9 17h6" }
+                    }
+                }
+                Text {
+                    x: 34
+                    width: parent.width - 44
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideMiddle
+                    text: bubble.content.file || ""
+                    color: bubble.theme.text
+                    font.family: bubble.theme.body
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
             }
             // A message may carry a button of its own ("Splendid!", once he is updated).
             Action {
@@ -450,6 +529,20 @@ Item {
                 label: bubble.content.button || ""
                 primary: true
                 onActivated: bubble.controller.dismiss()
+            }
+            // Or several, each doing what its action says (a study sheet: Open it, Show in folder).
+            Row {
+                visible: bubble.mode === "message" && (bubble.content.buttons || []).length > 0
+                spacing: 8
+                Repeater {
+                    model: bubble.mode === "message" ? (bubble.content.buttons || []) : []
+                    Action {
+                        required property var modelData
+                        label: modelData.label
+                        primary: modelData.primary === true
+                        onActivated: bubble.controller.bubbleAction(modelData.action)
+                    }
+                }
             }
 
             // --- Break --------------------------------------------------------------------

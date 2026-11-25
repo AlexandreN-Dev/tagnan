@@ -1,5 +1,5 @@
 """The brain's calls, off the window's thread: a batch or a new course takes minutes, an
-explanation up to a minute."""
+explanation up to a minute, a study sheet a minute or two."""
 
 import logging
 import threading
@@ -20,6 +20,8 @@ class BrainWorker(QObject):
     explainFailed = Signal(int, str)
     planned = Signal(str, object)  # the words, the brain's answer: {"understood", "course"...}
     planFailed = Signal(str, str)  # the words, the error
+    sheetWritten = Signal(int, object)  # question id, a study sheet's words (tagnan.studysheet)
+    sheetFailed = Signal(int, str)  # question id, the error
     accountChanged = Signal()
 
     def __init__(self, client: BrainClient) -> None:
@@ -28,6 +30,7 @@ class BrainWorker(QObject):
         self.generating = False
         self.offline = False  # development snapshots: no batch, no quota spent
         self.planning = ""  # the words of the course being drawn up
+        self.sheeting = False  # a study sheet's words are being written
         # Whose Claude login the brain writes with ({"signedIn", "email", "org", "plan"}), None
         # until known. Kept in memory only: never in his database, his settings or his log.
         self.account: dict[str, Any] | None = None
@@ -64,6 +67,26 @@ class BrainWorker(QObject):
             self.explained.emit(question_id, text)
 
         self._start(work)
+
+    def sheet(self, question_id: int, request: dict[str, Any]) -> bool:
+        """Start writing a study sheet's words, unless one is on its way."""
+        if self.sheeting or self.offline:
+            return False
+        self.sheeting = True
+
+        def work() -> None:
+            try:
+                answer = self._client.sheet(request)
+            except BrainError as error:
+                logger.warning("study sheet failed: %s", error)
+                self.sheeting = False
+                self.sheetFailed.emit(question_id, str(error))
+                return
+            self.sheeting = False
+            self.sheetWritten.emit(question_id, answer)
+
+        self._start(work)
+        return True
 
     def plan(self, words: str) -> bool:
         """Start drawing up a course, unless one is on its way."""

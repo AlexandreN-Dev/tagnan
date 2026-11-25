@@ -44,7 +44,7 @@ from tagnan.scheduler import Scheduler
 from tagnan.store import Store
 from tagnan.ui.animation.rig import WOBBLE_RATE, Rig
 from tagnan.ui.animator import Animator
-from tagnan.ui.controller import Controller
+from tagnan.ui.controller import Controller, sheet_written
 from tagnan.ui.desktop import Settings
 from tagnan.ui.images import LayerImages
 from tagnan.ui.menu import Menu
@@ -134,6 +134,17 @@ def demo(controller: Controller, what: str) -> None:
             right = list(question.answers)
             wrong = [i for i in range(len(question.choices)) if i not in right][: len(right)]
             controller.answer(right if what == "result-right" else wrong)
+    elif what.startswith("sheet"):  # a study sheet asked for, then written: nothing called
+        controller.askNow()
+        question = controller._current
+        if question is not None:
+            controller.answer(
+                [i for i in range(len(question.choices)) if i not in question.answers][:1]
+            )
+            controller.makeSheet()
+            if what == "sheet-ready":
+                controller.dismiss()
+                controller._tell_sheet(sheet_written(Path("Tagnan – RAG or fine-tuning.pdf")))
     elif what == "stats":
         controller.showStats()
     elif what == "quip":
@@ -196,6 +207,8 @@ def main() -> int:
             "subject",
             "menu",
             "promotion",
+            "sheet-inking",
+            "sheet-ready",
         ],
         help="development: show a bubble right away",
     )

@@ -914,6 +914,26 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 .pdoc .cat-opt > span { font-size: 12.5px; line-height: 1.5; color: var(--doc-muted); }
 .pdoc .cat-fields td:first-child { width: 92px; }
 .pdoc .cat-fields code { white-space: nowrap; overflow-wrap: normal; }
+/* Questions in plain text (proposal). */
+.tx-pair { display: flex; align-items: center; gap: 28px; padding: 36px 40px 30px; }
+.tx-pair > .scene { padding: 0; }
+.tx-note { flex: none; width: 430px; border-radius: 10px; overflow: hidden; background: #FFFFFF; border: 1px solid #D9DCE1; box-shadow: 0 10px 30px rgba(0, 0, 0, .12); }
+.tx-note .tn-bar { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #F4F5F7; border-bottom: 1px solid #E3E5E9; font: 12.5px system-ui, 'Segoe UI', sans-serif; color: #5B6270; }
+.tx-note pre { margin: 0; padding: 14px 16px 16px; font: 12.5px/1.6 ui-monospace, Consolas, monospace; color: #1F2328; white-space: pre-wrap; }
+.tx-note pre .h { color: #7B4FD6; font-weight: 700; }
+.tx-note pre .k { color: #0E7C66; font-weight: 600; }
+.tx-note pre .c { color: #2B5BB8; }
+.tx-note pre .m { color: #8A8F98; }
+.tx-arrow { flex: none; width: 46px; height: 2px; background: var(--tg-ink); position: relative; }
+.tx-arrow::after { content: ""; position: absolute; right: -2px; top: -5px; border: 6px solid transparent; border-right: 0; border-left: 9px solid var(--tg-ink); }
+.tx-sheet { padding: 28px 30px; background: #FFFFFF; }
+.tx-sheet .ts-bar { margin-bottom: 10px; font: 12.5px system-ui, 'Segoe UI', sans-serif; color: #5B6270; }
+.tx-sheet table { border-collapse: collapse; font: 12.5px/1.35 'Segoe UI', system-ui, sans-serif; color: #1F2328; }
+.tx-sheet th, .tx-sheet td { border: 1px solid #D5D9DF; padding: 5px 8px; text-align: left; vertical-align: top; max-width: 230px; }
+.tx-sheet th { background: #EEF1F4; font-weight: 600; color: #3D4450; }
+.tx-sheet td.n, .tx-sheet th.n { background: #F6F7F9; color: #8A8F98; text-align: center; font-weight: 400; }
+.pdoc .rtab.tx-understands td:first-child { width: 28%; }
+/* end of plain text */
 /* end of the catalogues */
 /* The PDF, opened in the system's reader. */
 .pdfwin { display: inline-flex; flex-direction: column; align-items: center; max-width: 100%; padding: 0 28px 28px; border-radius: 10px; overflow: hidden; background: #3A3E46; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); }
@@ -3049,10 +3069,11 @@ function catalogueList(c, u) {
     + `<span class="s-text"><span class="s-name">${esc(x.name)}</span><span class="s-hint">${esc(x.hint(c))}</span></span></div>`;
   return `<div class="m-subpanel${u.subLeft ? ' is-left' : ''}" data-subrow="${u.subRow}" data-m="list"><div class="s-title">Catalogues</div>`
     + '<div class="s-subtitle">Questions from elsewhere, to keep or to share.</div>'
-    + CAT_ACTIONS.map((x, i) => row(x, i)).join('')
+    + (c.text ? CAT_ACTIONS_TEXT : CAT_ACTIONS).map((x, i) => row(x, i)).join('')
     + '<div class="s-gap"></div><div class="s-sep"></div><div class="s-gap"></div>'
     + '<div class="s-k">Prompts for your assistant</div><div class="s-note s-pad">Copied, to paste into ChatGPT, Gemini, Copilot…</div>'
-    + CAT_PROMPTS.map((x, i) => row(x, i + CAT_ACTIONS.length)).join('') + '</div>';
+    + CAT_PROMPTS.map((x, i) => row(x, i + CAT_ACTIONS.length)).join('')
+    + (c.text ? catalogueTextRows(c, current, row) : '') + '</div>';
 }
 const SUGGEST_CAT = [
   { label: 'Paste questions', sub: 'from the clipboard', action: 'paste' },
@@ -3265,6 +3286,124 @@ function catPromptsDoc() {
     + '</div><p class="small">Twenty at a time: past that, an assistant often cuts its answer short. Each prompt carries the course itself, so that the questions fit its chapters wherever they were written.</p>'
     + '<div class="src"><span>tagnan/catalogue.py: write_prompt, convert_prompt, course_prompt, explain_prompt</span><span>tagnan/prompts/catalogue-format.md, catalogue-convert.md, catalogue-course.md</span><span>tagnan/prompts/system.md, generate.md, explain.md: reused</span></div>';
 }
+// --- Questions in plain text (proposal): read by Tagnan himself, no assistant, no licence ---------
+/* A note, a text file or a spreadsheet saved as CSV: questions written by hand in a simple shape,
+   as many already keep them. Tagnan reads the lines himself; a file is a course of its own. */
+const CAT_ACTIONS_TEXT = [
+  { icon: 'paste', name: 'Paste questions', hint: () => 'an answer, or your text' },
+  { icon: 'import', name: 'Import a file…', hint: () => '.json, .md, .txt, .csv' },
+  CAT_ACTIONS[2],
+];
+function catalogueTextRows(c, current, row) {
+  return '<div class="s-gap"></div><div class="s-sep"></div><div class="s-gap"></div>'
+    + '<div class="s-k">Write them yourself</div><div class="s-note s-pad">In a note or a text file, in this shape.</div>'
+    + row({ icon: 'doc', name: 'The plain-text format', hint: () => 'an example, copied' }, CAT_ACTIONS.length + CAT_PROMPTS.length);
+}
+const MENU_TEXT = { ...MENU_CAT, text: true };
+const TEXT_FORMAT = `# The course's name
+## A chapter
+
+Question: The question?
+A. A choice
+B. Another one
+C. A third
+Answer: B
+Explanation: Why B is right. (optional)`;
+const MSG_TEXT = {
+  copied: { mode: 'message', title: 'Your quill, sir!', buttons: catButtons('Paste questions', 'Got it'),
+    text: 'The format is in your clipboard: an example to follow. Write your questions in its shape, in a note or a text file, then Paste questions or Import a file…' },
+  pasted: { mode: 'message', title: 'A new course!', buttons: catButtons('Learn it now', 'Later'),
+    text: 'Networking basics: 3 chapters, 24 questions. Shall we learn it now?' },
+  partial: { mode: 'message', title: 'Fresh ink, mostly', buttons: catButtons('A question now', 'Got it'),
+    text: '22 new questions on Networking basics. 2 set aside: question 7: no Answer line; question 15: a single choice.' },
+  again: { mode: 'message', title: 'Fresh ink!', buttons: catButtons('A question now', 'Got it'),
+    text: '8 new questions on Networking basics. 24 I already had.' },
+};
+const Q_TEXT = {
+  mode: 'question', title: 'En garde!', meta: 'Networking basics · Domain 1 · Addressing', tag: 'Your question',
+  stem: 'An IPv6 address is 128 bits long.', choices: ch('True', 'False'), need: 1, hint: '',
+};
+const R_TEXT = {
+  mode: 'result', correct: false, title: 'Sacrebleu!', chosen: [], right: 'A. True', explanation: '', reference: '',
+  points: '−8 points · 112 in all · streak reset', news: 'This question will come back tomorrow.', promoted: false, rank: '',
+  sheet: 'ready', more: 'Tell me more',
+};
+
+// The note it comes from: an editor's plain text, drawn as none in particular.
+function textNoteHtml() {
+  const h = s => `<span class="h">${esc(s)}</span>`, k = s => `<span class="k">${esc(s)}</span>`;
+  const c = s => `<span class="c">${esc(s)}</span>`, m = s => `<span class="m">${esc(s)}</span>`;
+  const lines = [
+    h('# Networking basics'), '', h('## Addressing'), '',
+    `${k('Question 1:')} How long is an IPv4 address?`, `${c('A.')} 16 bits`, `${c('B.')} 32 bits`, `${c('C.')} 64 bits`, `${c('D.')} 128 bits`,
+    `${k('Answer:')} B`, `${k('Explanation:')} Four bytes, written as four numbers.`, '',
+    `${k('Question 2:')} An IPv6 address is 128 bits long.`, `${c('- [x]')} True`, `${c('- [ ]')} False`, '',
+    h('## Routing'), '',
+    `${k('Question 3:')} Which device forwards packets between networks?`, `${c('1.')} A switch`, `${c('2.')} A router`, `${c('3.')} A hub`,
+    `${k('Réponse :')} 2`, m('…'),
+  ];
+  return `<div class="tx-note"><div class="tn-bar">${glyph('doc', '#8A8F98', 15)}<span>Networking basics.md</span></div><pre>${lines.join('\n')}</pre></div>`;
+}
+function textPairHtml() {
+  return `<div class="tx-pair">${textNoteHtml()}<i class="tx-arrow" aria-hidden="true"></i>${scene(Q_TEXT, {}, 2, 'ask')}</div>`;
+}
+function textSheetHtml() {
+  const rows = [
+    ['chapter', 'question', 'A', 'B', 'C', 'D', 'answer', 'explanation'],
+    ['Addressing', 'How long is an IPv4 address?', '16 bits', '32 bits', '64 bits', '128 bits', 'B', 'Four bytes, written as four numbers.'],
+    ['Addressing', 'An IPv6 address is 128 bits long.', 'True', 'False', '', '', 'A', ''],
+    ['Routing', 'Which device forwards packets between networks?', 'A switch', 'A router', 'A hub', '', 'B', ''],
+  ];
+  const head = `<tr><th class="n"></th>${'ABCDEFGH'.split('').map(l => `<th class="n">${l}</th>`).join('')}</tr>`;
+  const body = rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${r.map(x => i === 0 ? `<th>${esc(x)}</th>` : `<td>${esc(x)}</td>`).join('')}</tr>`).join('');
+  return `<div class="tx-sheet"><div class="ts-bar">Networking basics.csv · saved from a spreadsheet</div><table>${head}${body}</table></div>`;
+}
+
+function textHowDoc() {
+  const row = (what, reads) => `<tr><td><b>${what}</b></td><td>${reads}</td></tr>`;
+  const code = s => `<code>${esc(s)}</code>`;
+  return '<div class="eyebrow">Catalogues · Proposal · 25 November 2026</div><h2>Questions in plain text</h2>'
+    + '<p class="lead">For whoever writes their questions by hand, keeps them in notes or in a spreadsheet: Tagnan reads a simple shape himself, with no assistant, no licence and no network. A note, a text file or a CSV pasted or imported; a file is a course of its own, its headings its chapters.</p>'
+    + '<div class="two"><div><h3>The shape he reads</h3>'
+    + `<pre class="cat-code">${esc(TEXT_FORMAT)}</pre>`
+    + '<p class="small">“The plain-text format”, in his Catalogues list, copies this example to follow.</p></div>'
+    + `<div><h3>What he understands</h3><table class="rtab tx-understands"><tbody>${[
+      row('The course', `${code('# A title')}; else the file’s name; a text pasted without one: “My questions”`),
+      row('A chapter', `${code('## A heading')}; none: a single chapter`),
+      row('A question', `${code('Question:')}, ${code('Question 3:')}, ${code('Q3.')}, ${code('### A heading')}: its lines up to its first choice`),
+      row('Its choices', `${code('A.')} ${code('A)')} ${code('a.')} ${code('1.')} ${code('1)')} ${code('-')} ${code('*')}: two to six`),
+      row('The right one', `${code('Answer: B')}, ${code('Réponse : 2')}, ${code('Answer: A, C')}, or the choice’s own words; or ${code('- [x]')} ticked`),
+      row('Why, if you like', `${code('Explanation:')} ${code('Explication :')} ${code('Why:')}`),
+      row('To read again', `${code('Source:')} ${code('Read again:')} ${code('À relire :')}`),
+    ].join('')}</tbody></table></div></div>`
+    + '<div class="two"><div><h3>A spreadsheet</h3><ul class="dl">'
+    + `<li><b>Saved as CSV</b>, one row a question: ${code('chapter, question, A, B, C, D, E, F, answer, explanation, source')}, the first row naming them. Commas or semicolons, as Excel writes them in French.</li>`
+    + '<li><b>No column of its own</b> for a chapter: a single one.</li></ul></div>'
+    + '<div><h3>Checked lighter</h3><ul class="dl">'
+    + '<li><b>Two to six choices</b>: true or false will do.</li>'
+    + '<li><b>No explanation needed</b>: the verdict then gives the right answer alone; Tell me more is there for more.</li>'
+    + '<li><b>Still set aside</b>: no right answer, an answer that names no choice, two choices alike, a question of over 900 characters; said in his report, question by question.</li>'
+    + '<li><b>What he fills in</b>: a medium level, its topic from its first words, one or several answers as the text says.</li></ul></div></div>'
+    + '<div class="howto"><span><b>Not for everything.</b> A PDF: copy its text, then Paste questions, if it follows this shape. A quiz online, or a text in no shape of its own: Convert a quiz, with an assistant. A Word document: copy its text, as a PDF’s.</span></div>'
+    + '<div class="src"><span>tagnan/catalogue.py: the plain text and the CSV, read with the standard library</span><span>tagnan/model.py: the lighter checks</span></div>';
+}
+function textChoicesDoc() {
+  const dec = (n, title, a, b, open) => `<div class="cat-dec"><h4><i>${n}</i>${title}</h4>`
+    + `<div class="cat-opt is-pick"><b>A · ${a[0]}<span class="pick">${open ? 'recommended' : 'retained'}</span></b><span>${a[1]}</span></div>`
+    + `<div class="cat-opt"><b>B · ${b[0]}${open ? '' : ' (not retained)'}</b><span>${b[1]}</span></div></div>`;
+  return '<div class="eyebrow">Catalogues · Proposal · Plain text · Choices</div><h2>What was chosen, and one thing still open</h2>'
+    + '<p class="lead">The first two were retained on 25 November; the third is to choose.</p>'
+    + dec('1', 'Where they go',
+      ['A course of its own', 'Named by its # title or the file’s name, its ## headings its chapters: nothing to guess. The same title again adds to the same course.'],
+      ['Into the course learned now', 'Each question would need a chapter of it, which plain text does not say.'])
+    + dec('2', 'How they are checked',
+      ['Lighter', 'Two to six choices, no explanation needed: what people keep in notes. The verdict gives the right answer alone.'],
+      ['As Claude’s', 'Four choices and every reason: most notes would be set aside.'])
+    + dec('3', 'When one exports',
+      ['Shared, as one’s own', 'They are what one writes by hand: one’s notes, for colleagues. A quiz of someone else’s goes through Convert a quiz, and stays with one.'],
+      ['Kept for oneself', 'As converted ones: safer, but one’s own notes could not be shared.'], true);
+}
+// --- end of plain text ----------------------------------------------------------------------------
 // --- end of the catalogues ------------------------------------------------------------------------
 // --- Pages -----------------------------------------------------------------------------------------
 function coverHtml() {
@@ -4085,6 +4224,32 @@ const PAGES = [
         docFrame('cat-format', 'A catalogue', catFormatDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: ['tagnan/model.py', 'tagnan/game.py', 'tagnan/catalogue.py'] }),
         docFrame('cat-prompts', 'The prompts', catPromptsDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: ['tagnan/prompts', 'tagnan/catalogue.py'] }),
       ] }],
+      // Plain text (proposal).
+      [{ id: 's-cat-text', name: 'Questions in plain text (proposal)', desc: 'Questions one writes by hand, in a note, a text file or a spreadsheet: Tagnan reads a simple shape himself, no assistant, no licence. A file is a course of its own, its headings its chapters; the checks are lighter. Proposed on 25 November 2026, not built.', frames: [
+        docFrame('tx-how', 'Questions in plain text', textHowDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: ['tagnan/catalogue.py', 'tagnan/model.py'] }),
+        { id: 'tx-note', name: 'From a note to a question', kind: 'Proposal · plain text', mode: 'follow', cls: 'desk', html: textPairHtml, src: ['tagnan/catalogue.py'], tokens: TK.bubble,
+          notes: ['A note as one keeps it, in any notes app or text file: letters, ticked boxes or numbers for the choices, an Answer line in English or in French.', 'Its # title is the course, its ## headings its chapters.', 'A true or false question: two choices will do.'],
+          cap: 'The note on the left, the question it gives on the right.' },
+        menuShot('tx-menu', 'Catalogues · the plain-text format', MENU_TEXT, { current: CAT_ROW, sub: 'catalogues', subRow: CAT_ROW, subCurrent: 5 }, {
+          notes: ['Paste and Import take plain text too: .md, .txt and .csv besides .json.', 'Under its own heading, The plain-text format copies an example to follow.'] }),
+        shot('tx-copied', 'The format, copied', MSG_TEXT.copied, { expr: 'wink',
+          notes: ['In the clipboard: the example of “The shape he reads”, to write one’s questions after.'] }),
+        shot('tx-pasted', 'A note pasted', MSG_TEXT.pasted, { expr: 'happy',
+          notes: ['A note pasted or a file imported: a course of its own, named by its # title or the file’s name.', 'Its ## headings are its chapters; none: a single one.'] }),
+        shot('tx-partial', 'Some not understood', MSG_TEXT.partial, {
+          notes: ['What he could not read is said question by question, by its place in the text.', 'The others are kept.'] }),
+        shot('tx-again', 'The same note, longer', MSG_TEXT.again, { expr: 'happy',
+          notes: ['The same title again: the same course; the questions it already has are skipped.', 'A note kept growing is pasted again whole.'] }),
+        shot('tx-question', 'A question of one’s own', Q_TEXT, { expr: 'ask',
+          notes: ['Asked as any other: “Your question” where the level would be.', 'Two choices for true or false.'] }),
+        shot('tx-verdict', 'Its verdict, no explanation', R_TEXT, { expr: 'angry',
+          notes: ['No explanation was written: the right answer alone.', 'Tell me more has one written (Ask your assistant, without a brain).'] }),
+        { id: 'tx-csv', name: 'A spreadsheet, saved as CSV', kind: 'Proposal · plain text', mode: 'none', html: textSheetHtml, src: ['tagnan/catalogue.py'],
+          notes: ['One row a question, the first naming the columns; empty cells for fewer choices.', 'Excel: File, Save as, CSV. Commas or semicolons alike.'],
+          cap: 'The same questions, kept in a spreadsheet.' },
+        docFrame('tx-choices', 'What was chosen, and one thing still open', textChoicesDoc, { w: 1180, kind: 'Documentation · proposal', cls: 'pdoc', src: ['tagnan/catalogue.py'] }),
+      ] }],
+      // end of plain text
     ],
   },
   // end of the catalogues

@@ -1,4 +1,5 @@
 import array
+import itertools
 import json
 import os
 import random
@@ -66,21 +67,51 @@ def run(rig: Rig, seconds: float) -> list[Any]:
     return poses
 
 
-def test_asking_raises_the_rapier_and_cheering_hops() -> None:
+def test_asking_points_his_blade_and_cheering_hops() -> None:
     rig = Rig(random.Random(1))
     rig.set_stage(4)
-    run(rig, 0.5)
-    assert rig.step(0.033).guard < 0.1
+    (_, shoulder_y), _ = art.SHOULDERS
+    rest = run(rig, 1.5)[-1]
+    assert rest.blade == pytest.approx(art.BLADE["idle"], abs=4)  # at the carry
+    assert rest.arms[7] > shoulder_y  # his sword hand at his hip
     rig.set_mood("ask")
-    assert run(rig, 1.2)[-1].guard > 0.9
+    asking = run(rig, 2.0)[-1]
+    assert asking.blade == pytest.approx(art.BLADE["ask"], abs=4)  # pointed at the question
+    assert asking.arms[7] < shoulder_y  # and raised
     rig.set_mood("happy")
     poses = run(rig, 1.2)
     assert min(p.body_y for p in poses) < -12  # two bounds, the first about 18 high
     assert {p.expression for p in poses} == {"happy"}
+    assert max(abs(p.blade - art.BLADE["happy"]) for p in poses) > 8  # it swings as he bounds
     rig.set_mood("angry")
     poses = run(rig, 1.5)
     assert max(abs(p.body_x) for p in poses[:15]) > 2  # he shakes with rage
-    assert poses[-1].guard < 0.15  # the rapier goes back down
+    trembling = [b.blade - a.blade for a, b in itertools.pairwise(poses[-12:])]
+    assert max(trembling) > 0.5  # and his blade with him
+    assert min(trembling) < -0.5
+
+
+def test_annoyed_he_wags_his_blade_and_the_captain_waves_his_hand() -> None:
+    rig = Rig(random.Random(11))
+    rig.set_stage(5)
+    run(rig, 0.5)
+    for _ in range(3):  # three taps within 1.5 s
+        rig.tap()
+        rig.step(0.1)
+    poses = run(rig, 1.2)
+    assert {p.expression for p in poses} == {"annoyed"}
+    blades = [p.blade for p in poses[12:]]
+    assert max(blades) - min(blades) > 8  # to and fro
+    captain, lieutenant, musketeer = (Rig(random.Random(12)) for _ in range(3))
+    for rig, stage in ((captain, 5), (lieutenant, 4), (musketeer, 3)):
+        rig.set_stage(stage)
+        run(rig, 0.3)
+        rig.tap()  # one tap: a wink
+    waves = [p.wave for p in run(captain, 0.7)]
+    assert max(waves) > 6  # his open hand waves with his wrist
+    assert min(waves) < -6
+    assert all(p.wave == 0 for p in run(lieutenant, 0.7))  # a round hand has nothing to wave
+    assert all(p.blade == 0 and len(p.arms) == 8 for p in run(musketeer, 0.7))  # no rapier yet
 
 
 def test_taps_splash_and_change_his_face() -> None:
@@ -109,7 +140,8 @@ def test_the_inkwell_stays_put_and_reduced_motion_is_still() -> None:
     calm.set_stage(5)
     calm.set_mood("ask")
     pose = calm.step(0.033)
-    assert (pose.body_y, pose.body_x, pose.guard, pose.expression) == (0.0, 0.0, 1.0, "ask")
+    assert (pose.body_y, pose.body_x, pose.blade, pose.arms) == (0.0, 0.0, 0.0, ())
+    assert pose.expression == "ask"
 
 
 def test_animator_hands_the_outline_to_qml() -> None:
@@ -191,8 +223,42 @@ def test_the_musketeer_still_takes_each_mood_pose_in_reduced_motion() -> None:
     animator.advance(0.1)
     right, left = animator.property("arms")
     (_, hand), (_, other) = art.ARMS["happy"]
-    assert right["hand"] == pytest.approx(list(hand))
-    assert left["hand"] == pytest.approx(list(other))
+    assert right["hand"]["palm"][:2] == pytest.approx(list(hand))
+    assert left["hand"]["palm"][:2] == pytest.approx(list(other))
+
+
+def test_animator_hands_his_hands_and_his_rapier_to_qml() -> None:
+    animator = Animator(Rig(random.Random(13)), stage=4)
+    right, left = animator.property("arms")
+    assert right["hand"]["shape"] == left["hand"]["shape"] == "round"  # round as his drops
+    assert left["blade"] == pytest.approx(art.BLADE["idle"])  # his rapier at the carry
+    assert left["hand"]["palm"][:2] == pytest.approx(list(art.arm_pose(4, "idle")[1][1]))
+    animator.setProperty("stage", 5)
+    right, left = animator.property("arms")
+    assert (right["hand"]["shape"], left["hand"]["shape"]) == ("fist", "grip")
+    assert len(left["hand"]["tones"]) == 3  # three fingers closed on his grip
+    animator.advance(0.3)
+    animator.tap()
+    animator.advance(0.2)
+    right, left = animator.property("arms")
+    assert right["hand"]["shape"] == "open"  # a wink: he waves
+    over = left["hand"]["over"]
+    animator.advance(0.2)  # the tap swings his blade: his fingers follow it
+    assert animator.property("arms")[1]["hand"]["over"] != over
+    animator.setProperty("stage", 3)
+    right, left = animator.property("arms")
+    assert left["hand"]["shape"] == "round"  # the Musketeer's hands hold nothing
+
+
+def test_the_captain_still_takes_each_mood_pose_in_reduced_motion() -> None:
+    animator = Animator(Rig(random.Random(14), reduced_motion=True), stage=5)
+    animator.setProperty("mood", "ask")
+    animator.advance(0.1)
+    right, left = animator.property("arms")
+    (_, hand), (_, other) = art.arm_pose(5, "ask")
+    assert right["hand"]["palm"][:2] == pytest.approx(list(hand))
+    assert left["hand"]["palm"][:2] == pytest.approx(list(other))
+    assert left["blade"] == art.BLADE["ask"]  # his blade at the mood's angle, still
 
 
 # --- The game in the window -------------------------------------------------------------------

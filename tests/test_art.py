@@ -212,7 +212,6 @@ def test_the_cadet_is_lit_and_shaded_along_his_ripple() -> None:
         assert all(d.startswith("M") and d.endswith("Z") for d in shading.values())
         seen.add(shading["shade"])
     assert len(seen) > 1
-    assert art.figure(2)["shadeOffset"] == [0.0, 0.0]  # no offset copy any more
 
 
 def test_the_cadet_drips_hang_from_his_rippling_edge() -> None:
@@ -310,7 +309,6 @@ def test_the_musketeer_head_and_body_are_lit_and_shaded() -> None:
         assert sum(shade[0::2]) / len(shade[0::2]) > blob.cx  # shaded on his right
         assert sum(light[0::2]) / len(light[0::2]) < blob.cx  # lit on his left
     assert art.ink_shading(3, 1.0) == art.body_shading(3, 1.0)
-    assert art.figure(3)["shadeOffset"] == [0.0, 0.0]
 
 
 def test_the_musketeer_drips_hang_from_his_trailing_body() -> None:
@@ -355,8 +353,7 @@ def test_the_musketeer_arms_bend_at_the_elbow_with_a_cuff_and_a_hand() -> None:
     assert math.dist(b, hand) < 2 * art.ARM_WIDTH
     assert len(parts["lace"]) == 3
     assert all(math.dist(p, b) < 3.5 for p in parts["lace"])
-    assert parts["hand"] == list(hand)
-    assert parts["handShade"].startswith("M")
+    assert set(parts) == {"sleeve", "cuff", "lace"}  # its hand is hand_parts'
 
 
 def test_the_musketeer_arms_take_each_mood() -> None:

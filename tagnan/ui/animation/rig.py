@@ -4,9 +4,9 @@ frame at a time.
 Dartt's rig, adapted (same springs, blinks, idle behaviours and tap counting): Tagnan breathes,
 ripples, blinks, looks around or at the pointer, twitches his moustache, swings his rapier,
 hops; he perks up to ask, bounds when you are right, shakes with rage when you are wrong, and
-splashes droplets when tapped. The Musketeer, a man of ink, also moves his head, his arms and
-the bottom of his body. Units are those of the drawing (tagnan.art), angles in degrees,
-durations in seconds.
+splashes droplets when tapped. A man of ink (from the Musketeer on) also moves his head, his
+arms and the bottom of his body, and from the Lieutenant on the rapier in his hand. Units are
+those of the drawing (tagnan.art), angles in degrees, durations in seconds.
 """
 
 import itertools
@@ -54,10 +54,10 @@ SHAKE = (6.0, 9.0, 0.7)  # amplitude, frequency, duration of his rage
 HUFF = (3.0, 12.0, 0.5)
 SULK_TURN = (9.0, 6.0)  # he turns away: offset, angle
 
-# The Musketeer (grade 3): his head lags a hop and nods as he lands, and leans around his neck
-# with his mood on top of a sway of its own (amplitude, period, phase); the bottom of his body
+# A man of ink (from grade 3 on): his head lags a hop and nods as he lands, and leans around his
+# neck with his mood on top of a sway of its own (amplitude, period, phase); the bottom of his body
 # trails a hop, within these bounds; his arms are sprung towards each mood's pose
-# (tagnan.art.ARMS), each with its own little gesture (gesture()).
+# (tagnan.art.arm_pose), each with its own little gesture (gesture()).
 HEAD_LEAN = {
     "idle": 0.0,
     "ask": 4.0,
@@ -71,8 +71,14 @@ HEAD_SWAY = (1.2, 5.3, 0.6)
 TRAIL = (-2.5, 5.0)
 ELBOW = (170, 0.7)  # stiffness, damping
 WRIST = (140, 0.55)
-
-SWORD_FLOAT = (1.6, 3.3)  # the floating rapier bobs: amplitude, period
+# With the rapier in his hand (from grade 4 on): its blade is sprung to each mood's angle
+# (tagnan.art.BLADE), swings on hops, taps and flourishes, trembles with his rage and, when he is
+# annoyed, wags (degrees each way, period). The Captain's open hand waves with his wrist when he
+# winks or cheers (degrees each way, period).
+BLADE = (70, 0.75)
+BLADE_TREMBLE = (2.0, 13.0)  # degrees, times a second
+BLADE_WAG = (7.0, 0.5)
+HAND_WAVE = (12.0, 0.5)
 DROP_FLOAT = ((4.1, 0.0), (3.6, -1.0), (4.6, -2.0), (3.9, -0.5), (4.3, -1.6))
 DROP_DRIFT = (1.6, -3.2)
 
@@ -94,16 +100,15 @@ class Pose:
     plume: float = 0.0
     hat: float = 0.0
     quill: float = 0.0
-    guard: float = 0.0  # 0: rapier floating point down; 1: raised en garde
-    sword: float = 0.0  # swing on top of the guard's angle
-    sword_y: float = 0.0  # the floating rapier bobs
+    blade: float = 0.0  # his rapier's angle in his hand (0: straight up; clockwise)
+    wave: float = 0.0  # how far the Captain's open hand turns as it waves
     drops: tuple[float, ...] = (0.0,) * 10
     drip: float = 0.0  # 0 to 1 along the drip's cycle
     burst: float = -1.0  # seconds since a tap splashed droplets, -1 when none
     decor: float = 1.0  # pop-in of the decoration
     glow: float = 0.45
     shadow: float = 1.0
-    head_y: float = 0.0  # the Musketeer's head: it lags a hop and nods as he lands
+    head_y: float = 0.0  # a man of ink's head: it lags a hop and nods as he lands
     head_lean: float = 0.0  # around his neck
     trail: float = 0.0  # how far the bottom of his body trails a hop
     # His right elbow (x, y) and hand (x, y), then his left's; empty: the mood's pose, at rest.
@@ -116,7 +121,7 @@ Gesture = tuple[float, float, float, float]  # elbow dx, dy, hand dx, dy
 
 
 def gesture(expression: str, now: float) -> tuple[Gesture, Gesture]:
-    """What the Musketeer's arms do on top of their pose, his right then his left: a sway at rest,
+    """What a man of ink's arms do on top of their pose, his right then his left: a sway at rest,
     a raised hand that beckons to ask, both up and waving when you are right, clenched and
     trembling with rage, a flourish for the wink, an elbow that twitches when annoyed."""
 
@@ -206,7 +211,7 @@ class Rig:
         self._landing = Spring(180, 0.35)
         self._tap = Spring(300, 0.3)
         self._sword = Spring(50, 0.22)
-        self._guard = Spring(70, 0.75)
+        self._blade = Spring(*BLADE, value=art.BLADE["idle"], target=art.BLADE["idle"])
         self._moustache = Spring(300, 0.5)
         self._plume = Spring(90, 0.25)
         self._hat = Spring(160, 0.4)
@@ -301,7 +306,7 @@ class Rig:
         overlay = self._taps.mood(self.real_now)
         expression = overlay.value if overlay is not Mood.NONE else self.mood
         if self.reduced_motion:
-            return Pose(expression=expression, guard=1.0 if self._en_garde(expression) else 0.0)
+            return Pose(expression=expression)
 
         still = self.stage == 0  # the inkwell does not breathe or hop
         if self.mood == "idle" and overlay is Mood.NONE:
@@ -344,16 +349,22 @@ class Rig:
         plume = self._plume.step(dt, -hop_speed * 0.8) + 4.0 * math.sin(2 * math.pi * now / 3.8)
         hat = self._hat.step(dt, -hop_speed * 0.15) + 0.4 * sway
 
-        # Rapier: raised en garde to ask or cheer, at his side otherwise; it swings on hops,
-        # taps and idle flourishes.
-        self._guard.target = 1.0 if self._en_garde(expression) else 0.0
-        guard = min(max(self._guard.step(dt), -0.1), 1.1)
+        # Rapier: in his hand, its blade sprung to the mood's angle; it swings on hops, taps and
+        # idle flourishes, trembles with his rage, wags when he is annoyed.
+        blade = wave = 0.0
         if idle and idle.kind == "blade" and not idle.kicked and self._progress(idle, now) > 0.35:
             idle.kicked = True
             self._sword.kick(-240)
-        sword = self._sword.step(dt, -sway * 1.5)
-        if expression == "angry":
-            sword += 2.0 * math.sin(2 * math.pi * 13 * now)
+        swing = self._sword.step(dt, -sway * 1.5)
+        if art.stands(self.stage):
+            self._blade.target = art.BLADE[expression]
+            blade = self._blade.step(dt) + swing
+            if expression == "angry":
+                blade += BLADE_TREMBLE[0] * math.sin(2 * math.pi * BLADE_TREMBLE[1] * now)
+            if expression == "annoyed":
+                blade += BLADE_WAG[0] * math.sin(2 * math.pi * now / BLADE_WAG[1])
+        if art.fingered(self.stage) and expression in ("wink", "happy"):
+            wave = HAND_WAVE[0] * math.sin(2 * math.pi * now / HAND_WAVE[1])
 
         # Decoration pops in when the mood changes.
         self._decor.target = 1.0
@@ -361,7 +372,7 @@ class Rig:
 
         head_y = head_lean = trail = 0.0
         arms: tuple[float, ...] = ()
-        if self.stage == art.MUSKETEER:
+        if art.man(self.stage):
             head_y = self._head.step(dt, -hop_speed * 0.6) + 0.5 * breathing(now + 0.4)
             self._lean.target = HEAD_LEAN[expression]
             amplitude, period, phase = HEAD_SWAY
@@ -393,9 +404,8 @@ class Rig:
             plume=plume,
             hat=hat,
             quill=QUILL_SWAY * math.sin(2 * math.pi * now / 4.2),
-            guard=guard,
-            sword=sword,
-            sword_y=SWORD_FLOAT[0] * math.sin(2 * math.pi * now / SWORD_FLOAT[1]),
+            blade=blade,
+            wave=wave,
             drops=self._drops(now, hop_y),
             drip=(now % DRIP_PERIOD) / DRIP_PERIOD,
             burst=burst,
@@ -411,12 +421,12 @@ class Rig:
     # --- Parts ------------------------------------------------------------------------------
 
     def _arms(self, expression: str, now: float, dt: float, hop_speed: float) -> tuple[float, ...]:
-        """The Musketeer's elbows and hands, sprung towards the mood's pose and its gesture; they
+        """A man of ink's elbows and hands, sprung towards the mood's pose and its gesture; they
         lag a hop, the hands more than the elbows."""
         targets = [
             v + dv
             for (elbow, hand), move in zip(
-                art.ARMS[expression], gesture(expression, now), strict=True
+                art.arm_pose(self.stage, expression), gesture(expression, now), strict=True
             )
             for v, dv in zip((*elbow, *hand), move, strict=True)
         ]
@@ -426,10 +436,6 @@ class Rig:
             spring.target = target
             joints.append(spring.step(dt, -hop_speed * k))
         return tuple(joints)
-
-    @staticmethod
-    def _en_garde(expression: str) -> bool:
-        return expression in ("ask", "happy")
 
     def _schedule_idle(self, now: float) -> None:
         if now < self._next_idle or self._idle is not None:
@@ -481,7 +487,7 @@ class Rig:
             self._landing.kick(speed * 0.012)
             self._sword.kick(-speed * 0.8)
             self._plume.kick(speed * 0.6)
-            if self.stage == art.MUSKETEER:  # he lands: a nod, his ink and his hands bounce
+            if art.man(self.stage):  # he lands: a nod, his ink and his hands bounce
                 self._head.kick(speed * 0.1)
                 self._trail.kick(-speed * 0.1)
                 for wrist_y in self._joints[3::4]:

@@ -18,23 +18,16 @@ Item {
     readonly property real unit: Math.min(width / 120, height / 140)
     // Device pixels per unit of the drawing, at this grade's scale.
     readonly property real px: unit * Screen.devicePixelRatio * spec.scale
-    readonly property real guard: animator.guard
-    // The rapier floats beside him, as Dartt's: from its rest (point down) to en garde.
-    readonly property var rapierAt: spec.hasRapier
-        ? [spec.rapierDown[0] + (spec.rapierUp[0] - spec.rapierDown[0]) * guard,
-           spec.rapierDown[1] + (spec.rapierUp[1] - spec.rapierDown[1]) * guard,
-           spec.rapierDown[2] + (spec.rapierUp[2] - spec.rapierDown[2]) * guard]
-        : [0, 0, 0]
     // The drip grows, lets go and falls, once every few seconds.
     readonly property real dripScale: {
         const v = animator.drip
         return v < 0.55 ? 0.15 + 0.85 * v / 0.55 : v < 0.6 ? 1 - 0.85 * (v - 0.55) / 0.05 : 0.15
     }
     readonly property real fallT: animator.drip < 0.57 || animator.drip > 0.76 ? -1 : (animator.drip - 0.57) / 0.19
-    // The Cadet's drip lands on his puddle (spec.landing, the desk's y) and rings it.
+    // From the Cadet on, his drip lands on his puddle (spec.landing, the desk's y) and rings it.
     readonly property bool lands: spec.landing >= 0
     readonly property real splashT: animator.drip < 0.76 || animator.drip > 0.96 ? -1 : (animator.drip - 0.76) / 0.2
-    // The Cadet's hat rides his rippling head (tagnan.art.hat_ride) on top of its own sway.
+    // His hat rides his rippling head (tagnan.art.hat_ride) on top of its own sway.
     readonly property real hatAngle: animator.hat + animator.hatRideTip
 
     // His evolution, as in the games: he turns white, his old and new looks swap faster and
@@ -165,16 +158,55 @@ Item {
             PathSvg { path: d }
         }
     }
-    // One of the Musketeer's arms, his right (side 0) or his left (tagnan.art.arm_parts): a
-    // sleeve of ink lit on its upper left and shaded on its lower right, a cream cuff and its
-    // lace, a hand round as a drop.
+    // A finger's or a thumb's three tones (tagnan.art.FINGER_TONES): its light, its shade, its ink
+    // again, each a little thinner than it.
+    component Digit: Shape {
+        property var paths: []
+        property real thickness: 0
+        property var skin: ["transparent", "transparent", "transparent", "transparent"]
+        property var thin: [0, 0, 0]
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            fillColor: "transparent"
+            strokeColor: skin[2]
+            strokeWidth: Math.max(0, thickness + thin[0])
+            capStyle: ShapePath.RoundCap
+            PathSvg { path: paths.length > 0 ? paths[0] : "" }
+        }
+        ShapePath {
+            fillColor: "transparent"
+            strokeColor: skin[1]
+            strokeWidth: Math.max(0, thickness + thin[1])
+            capStyle: ShapePath.RoundCap
+            PathSvg { path: paths.length > 1 ? paths[1] : "" }
+        }
+        ShapePath {
+            fillColor: "transparent"
+            strokeColor: skin[0]
+            strokeWidth: Math.max(0, thickness + thin[2])
+            capStyle: ShapePath.RoundCap
+            PathSvg { path: paths.length > 2 ? paths[2] : "" }
+        }
+    }
+    // One of a man of ink's arms, his right (side 0) or his left (tagnan.art.arm_parts): a sleeve
+    // of ink lit on its upper left and shaded on its lower right, a cream cuff and its lace. Then
+    // its hand (tagnan.art.hand_parts): round as a drop, or the Captain's, gloved, with three
+    // fingers and a thumb. His left hand holds his rapier from the Lieutenant on: under the drop
+    // of a round hand, between the palm and the fingers of the Captain's.
     component Arm: Item {
         id: arm
         property int side
         readonly property var parts: root.animator.arms.length > side ? root.animator.arms[side] : null
+        readonly property var hand: parts ? parts.hand : null
+        readonly property bool armed: side === 1 && root.spec.hasRapier
         readonly property var tones: root.spec.man
             ? root.spec.sleeveTones
             : [["transparent", 0, 0, 0], ["transparent", 0, 0, 0], ["transparent", 0, 0, 0]]
+        readonly property var skin: root.spec.man
+            ? root.spec.handSkin
+            : ["transparent", "transparent", "transparent", "transparent"]
+        readonly property var thin: root.spec.man ? root.spec.fingerTones : [0, 0, 0]
         readonly property string sleeve: parts ? parts.sleeve : ""
         readonly property string cuff: parts ? parts.cuff : ""
         visible: parts !== null
@@ -206,7 +238,7 @@ Item {
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
-                fillColor: root.spec.cream || "transparent"
+                fillColor: root.spec.laceColour || "transparent"
                 strokeColor: "transparent"
                 PathSvg {
                     path: arm.parts
@@ -214,29 +246,77 @@ Item {
                         : ""
                 }
             }
+        }
+        // His hand: the fingers that lie under its palm.
+        Stroke { d: arm.hand ? arm.hand.under : ""; colour: arm.skin[0]; thickness: arm.hand ? arm.hand.fingerWidth : 0 }
+        Item {
+            visible: arm.armed
+            z: root.spec.fingers ? 3 : 1
+            x: arm.hand ? arm.hand.palm[0] : 0
+            y: arm.hand ? arm.hand.palm[1] : 0
+            transformOrigin: Item.TopLeft
+            rotation: arm.parts && arm.armed ? arm.parts.blade : 0
+            scale: arm.armed ? root.spec.rapierScale : 1
+            Image {
+                readonly property var frame: arm.armed ? root.spec.rapierBox : [0, 0, 1, 1]
+                readonly property var grip: arm.armed ? root.spec.rapierGrip : [0, 0]
+                x: frame[0] - grip[0]
+                y: frame[1] - grip[1]
+                width: frame[2]
+                height: frame[3]
+                source: arm.armed ? root.layerUrl("rapier", false) : ""
+                sourceSize: Qt.size(Math.ceil(frame[2] * root.px * parent.scale), Math.ceil(frame[3] * root.px * parent.scale))
+                smooth: true
+            }
+        }
+        Shape {
+            z: 2
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
             ShapePath {
-                fillColor: root.spec.ink
+                fillColor: arm.skin[0]
                 strokeColor: "transparent"
                 PathSvg {
-                    path: arm.parts ? root.ellipse(arm.parts.hand[0], arm.parts.hand[1], root.spec.hand, root.spec.hand) : ""
+                    path: arm.hand ? root.ellipse(arm.hand.palm[0], arm.hand.palm[1], arm.hand.palm[2], arm.hand.palm[2]) : ""
                 }
             }
             ShapePath {
-                fillColor: root.spec.shade
+                fillColor: arm.skin[1]
                 strokeColor: "transparent"
-                PathSvg { path: arm.parts ? arm.parts.handShade : "" }
+                PathSvg { path: arm.hand ? arm.hand.palmShade : "" }
             }
             ShapePath {
-                fillColor: root.spec.dropLight
+                fillColor: arm.skin[3]
                 strokeColor: "transparent"
                 PathSvg {
-                    readonly property var light: arm.parts ? arm.parts.handLight : [0, 0, 0]
+                    readonly property var light: arm.hand ? arm.hand.palmLight : [0, 0, 0]
                     path: light[2] > 0 ? root.ellipse(light[0], light[1], light[2], light[2]) : ""
                 }
             }
         }
+        // Over his palm: his fingers closed on the grip, each finger's tones, then his thumb.
+        Stroke { z: 4; d: arm.hand ? arm.hand.over : ""; colour: arm.skin[0]; thickness: arm.hand ? arm.hand.fingerWidth : 0 }
+        Repeater {
+            model: 3
+            Digit {
+                required property int index
+                z: 4
+                paths: arm.hand && arm.hand.tones.length > index ? arm.hand.tones[index] : []
+                thickness: arm.hand ? arm.hand.fingerWidth : 0
+                skin: arm.skin
+                thin: arm.thin
+            }
+        }
+        Stroke { z: 4; d: arm.hand ? arm.hand.thumb : ""; colour: arm.skin[0]; thickness: arm.hand ? arm.hand.thumbWidth : 0 }
+        Digit {
+            z: 4
+            paths: arm.hand ? arm.hand.thumbTones : []
+            thickness: arm.hand ? arm.hand.thumbWidth : 0
+            skin: arm.skin
+            thin: arm.thin
+        }
     }
-    // The Musketeer's ribbon tails and the Cadet's: they ride with his hat and swing.
+    // His ribbon's tails, the Cadet's and a man of ink's: they ride with his hat and swing.
     component Tails: Layer {
         name: "tails"
         transform: [
@@ -305,7 +385,7 @@ Item {
 
             // What lies on the desk never moves: the cap, a blot, the knocked-over inkwell, the
             // split one.
-            Layer { name: "ground"; visible: root.stage <= 3 }
+            Layer { name: "ground" }
             // Where the Cadet's drip lands, a ring widens on his puddle.
             Shape {
                 anchors.fill: parent
@@ -375,6 +455,10 @@ Item {
                 // The Cadet's ribbon tails, behind his head and his body.
                 Tails { visible: root.stage === 2 }
 
+                // His legs and his boots, from the Lieutenant on: under his body, whose rippling
+                // hem passes over them.
+                Layer { name: "legs"; visible: root.spec.hasLegs }
+
                 // The Cadet's ink stays under his brim, wherever his hat sits, so that it never
                 // shows through the felt: clipped in the hat's frame (spec.underHat), then brought
                 // back to the body's.
@@ -412,20 +496,13 @@ Item {
                                 }
                             ]
 
-                            Ink {
-                                visible: root.spec.shadeOffset[0] !== 0 || root.spec.shadeOffset[1] !== 0
-                                d: root.animator.inkPath
-                                fill: root.spec.shade
-                                transform: Translate { x: root.spec.shadeOffset[0]; y: root.spec.shadeOffset[1] }
-                            }
                             Ink { d: root.animator.inkPath }
                             // Grade 0: the inkwell's ink, shaded on the right, lit under its surface, with
                             // its meniscus; all three follow the slosh (tagnan.art.inkwell_shading).
                             // Grade 1: the Gascon's, shaded on the lower right, lit on the upper left, with
                             // a rim of light; all three follow the ripple (tagnan.art.splash_shading).
-                            // Grades 2 and 3: the Cadet's, the Musketeer's body's, the same.
+                            // From the Cadet on, the same (a man of ink's: his body's).
                             Shape {
-                                visible: root.stage <= 3
                                 anchors.fill: parent
                                 preferredRendererType: Shape.CurveRenderer
                                 ShapePath {
@@ -490,7 +567,7 @@ Item {
                 }
 
                 // A tap splashes droplets off his edge, and a ring widens in the ink: under the
-                // face and the hat, over the whole Musketeer, his head and arms.
+                // face and the hat, over the whole of a man of ink, his head and arms.
                 Item {
                     z: root.spec.man ? 1 : 0
                     width: 120
@@ -540,13 +617,13 @@ Item {
                     }
                 }
 
-                // The cross; the Musketeer's, on his tabard, and his collar.
-                Layer { name: "cross"; visible: root.stage >= 3 }
+                // A man of ink's tabard, its cross sewn on, and his collar.
+                Layer { name: "cross"; visible: root.spec.man }
                 Layer { name: "collar"; visible: root.spec.man }
 
-                // His face and his hat. The Musketeer's head is his own ink, between his ribbon's
+                // His face and his hat. A man of ink's head is his own ink, between his ribbon's
                 // tails and his face: it leans around his neck with his mood and lags his hops
-                // (tagnan.art.head_path); the other grades' face rides his body.
+                // (tagnan.art.head_path); before the Musketeer, his face rides his body.
                 Item {
                     width: 120
                     height: 140
@@ -602,7 +679,7 @@ Item {
                             angle: root.animator.moustache
                         }
                     }
-                    Layer { name: "royale"; byExpression: true; visible: root.stage >= 5 }
+                    Layer { name: "royale"; byExpression: true; visible: root.spec.fingers }
 
                     // Grade 0: the face is in the ink, behind the quill and the glass.
                     Layer {
@@ -616,8 +693,9 @@ Item {
                     }
                     Layer { name: "glass"; visible: root.stage === 0 }
 
-                    // The hat, its plumes swaying on top; the Musketeer's quill sways stiffer, under
-                    // the ribbon and the bow that hold it.
+                    // His hat. A man of ink's quill sways over the felt, stiffer than a plume, under
+                    // the ribbon and the bow that hold it; behind it, the Captain's golden plume
+                    // sways more freely, around his cockade.
                     Item {
                         visible: root.spec.hasHat
                         width: 120
@@ -630,45 +708,32 @@ Item {
                             },
                             Translate { y: root.animator.hatRideY }
                         ]
+                        Layer { name: "hat"; visible: root.spec.hasHat }
+                        Layer {
+                            name: "panache"
+                            visible: root.spec.fingers
+                            transform: Rotation {
+                                origin.x: root.spec.fingers ? root.spec.panache[0] : 0
+                                origin.y: root.spec.fingers ? root.spec.panache[1] : 0
+                                angle: root.spec.panacheSway * root.animator.plume
+                            }
+                        }
                         Layer {
                             name: "plume"
                             visible: root.spec.hasPlume
-                            z: root.spec.man ? 1 : 0
                             transform: Rotation {
-                                origin.x: root.spec.hasHat ? root.spec.plume[0] : 0
-                                origin.y: root.spec.hasHat ? root.spec.plume[1] : 0
+                                origin.x: root.spec.hasPlume ? root.spec.plume[0] : 0
+                                origin.y: root.spec.hasPlume ? root.spec.plume[1] : 0
                                 angle: root.spec.plumeSway * root.animator.plume
                             }
                         }
-                        Layer { name: "hat"; visible: root.spec.hasHat }
-                        Layer { name: "bow"; visible: root.spec.man; z: 2 }
+                        Layer { name: "bow"; visible: root.spec.man }
                     }
                 }
 
-                // The Musketeer's arms, in his mood's pose.
+                // A man of ink's arms, in his mood's pose; his rapier in his left hand.
                 Arm { side: 0 }
                 Arm { side: 1 }
-
-                // The rapier, floating beside him: point down at rest, raised en garde, swaying.
-                Item {
-                    visible: root.spec.hasRapier
-                    x: root.rapierAt[0]
-                    y: root.rapierAt[1] + root.animator.swordY
-                    transformOrigin: Item.TopLeft
-                    rotation: root.rapierAt[2] + root.animator.sword
-                    scale: root.spec.hasRapier ? root.spec.rapierScale : 1
-                    Image {
-                        readonly property var frame: root.spec.hasRapier ? root.spec.rapierBox : [0, 0, 1, 1]
-                        readonly property var grip: root.spec.hasRapier ? root.spec.rapierGrip : [0, 0]
-                        x: frame[0] - grip[0]
-                        y: frame[1] - grip[1]
-                        width: frame[2]
-                        height: frame[3]
-                        source: root.spec.hasRapier ? root.layerUrl("rapier", false) : ""
-                        sourceSize: Qt.size(Math.ceil(frame[2] * root.px * parent.scale), Math.ceil(frame[3] * root.px * parent.scale))
-                        smooth: true
-                    }
-                }
             }
 
             // What lies on the desk in front of him, and stays there whatever his body does: the

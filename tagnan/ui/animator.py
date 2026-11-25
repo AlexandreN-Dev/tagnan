@@ -13,10 +13,12 @@ from tagnan.ui.animation.rig import REST_POSE, Pose, Rig
 
 FRAME_MS = 33  # about 30 frames per second
 POINTER_JITTER_PX = 2
-# The Musketeer's body is redrawn when the trail of its bottom moves this much (the caches hold
-# every outline of a hop), his arms when one of their joints moves a tenth of a unit.
+# A man of ink's body is redrawn when the trail of its bottom moves this much (the caches hold
+# every outline of a hop); his arms and his hands when one of their joints moves a quarter of a
+# unit (a third of a pixel at his usual size), his blade half a degree, his waving hand a degree.
 TRAIL_STEP = 0.25
-ARM_DIGITS = 1
+ARM_STEP = 0.25
+BLADE_STEP = 0.5
 
 
 def ripple(wobble: float) -> float:
@@ -52,7 +54,7 @@ def shading(stage: int, phase: float, drag: float = 0.0) -> tuple[str, str, str]
 
 @lru_cache(maxsize=64)
 def head(phase: float) -> tuple[str, str, str, str]:
-    """The Musketeer's head: its outline, its shaded side, lit band and rim of light."""
+    """A man of ink's head: its outline, its shaded side, lit band and rim of light."""
     shaded = art.head_shading(phase)
     return art.head_path(phase), shaded["shade"], shaded["light"], shaded["rim"]
 
@@ -67,18 +69,32 @@ def drip_tops(stage: int, phase: float, drag: float = 0.0) -> list[float]:
     return art.drip_tops(stage, phase, drag)
 
 
-def arm_parts(joints: tuple[float, ...]) -> list[dict[str, Any]]:
-    """The Musketeer's two arms as the window draws them (tagnan.art.arm_parts), from his elbows'
-    and hands' positions."""
-    return [
-        art.arm_parts(shoulder, (joints[i], joints[i + 1]), (joints[i + 2], joints[i + 3]))
-        for shoulder, i in zip(art.SHOULDERS, (0, 4), strict=True)
-    ]
+def arm_parts(
+    stage: int, expression: str, joints: tuple[float, ...], blade: float, wave: float
+) -> list[dict[str, Any]]:
+    """A man of ink's two arms as the window draws them, from his elbows' and hands' positions:
+    each sleeve, cuff and lace (tagnan.art.arm_parts) and its hand (tagnan.art.hand_parts). His
+    right hand is free: round, or the Captain's, open or a fist as the mood has it, turned with
+    his wrist and by its wave. His left is on his rapier from the Lieutenant on: its blade at
+    that angle."""
+    (r_elbow, r_hand), (l_elbow, l_hand) = (
+        ((joints[i], joints[i + 1]), (joints[i + 2], joints[i + 3])) for i in (0, 4)
+    )
+    right = art.arm_parts(art.SHOULDERS[0], r_elbow, r_hand)
+    right["hand"] = art.free_hand(stage, expression, r_elbow, r_hand, wave)
+    left = art.arm_parts(art.SHOULDERS[1], l_elbow, l_hand)
+    left["hand"] = (
+        art.sword_hand(stage, l_hand, blade)
+        if art.stands(stage)
+        else art.hand_parts("round", l_hand)
+    )
+    left["blade"] = blade
+    return [right, left]
 
 
-def rest_joints(expression: str) -> tuple[float, ...]:
+def rest_joints(stage: int, expression: str) -> tuple[float, ...]:
     """His elbows and hands in the mood's pose, his right arm's then his left's."""
-    return tuple(v for elbow, hand in art.ARMS[expression] for v in (*elbow, *hand))
+    return tuple(v for elbow, hand in art.arm_pose(stage, expression) for v in (*elbow, *hand))
 
 
 def _pose_property(name: str, kind: type, notify: Signal) -> Any:
@@ -103,7 +119,7 @@ class Animator(QObject):
         self._pose: Pose = REST_POSE
         self._drawn = (0.0, 0.0)  # the ripple's phase and the trail his ink is drawn at
         self._redraw()
-        self._joints: tuple[float, ...] = ()
+        self._arms_at: tuple[Any, ...] = ()  # what his arms are drawn from
         self._arms: list[dict[str, Any]] = []
         self._move_arms()
         self._eyes: QPointF | None = None
@@ -219,17 +235,24 @@ class Animator(QObject):
         self._head = head(phase) if art.man(stage) else ("", "", "", "")
 
     def _move_arms(self) -> bool:
-        """The Musketeer's arms where the pose has them (in the mood's pose, without motion);
-        whether they moved."""
-        if self._rig.stage != art.MUSKETEER:
-            joints: tuple[float, ...] = ()
-        else:
-            moving = self._pose.arms or rest_joints(self._pose.expression)
-            joints = tuple(round(v, ARM_DIGITS) for v in moving)
-        if joints == self._joints:
+        """A man of ink's arms where the pose has them (in the mood's pose, his blade at the
+        mood's angle, without motion); whether they moved."""
+        stage, pose = self._rig.stage, self._pose
+        at: tuple[Any, ...] = ()
+        if art.man(stage):
+            joints = pose.arms or rest_joints(stage, pose.expression)
+            blade = pose.blade if pose.arms else art.BLADE[pose.expression]
+            at = (
+                stage,
+                pose.expression,
+                tuple(round(round(v / ARM_STEP) * ARM_STEP, 2) for v in joints),
+                round(blade / BLADE_STEP) * BLADE_STEP if art.stands(stage) else 0.0,
+                float(round(pose.wave)),
+            )
+        if at == self._arms_at:
             return False
-        self._joints = joints
-        self._arms = arm_parts(joints) if joints else []
+        self._arms_at = at
+        self._arms = arm_parts(*at) if at else []
         return True
 
     @Property(str, notify=outlineChanged)
@@ -272,8 +295,9 @@ class Animator(QObject):
 
     @Property(list, notify=armsChanged)
     def arms(self) -> list[dict[str, Any]]:
-        """The Musketeer's arms, his right then his left (tagnan.art.arm_parts); none at the
-        other grades."""
+        """A man of ink's arms, his right then his left: sleeve, cuff, lace, and under "hand"
+        what his hand is drawn of (tagnan.art.arm_parts, hand_parts); his left arm's "blade" is
+        his rapier's angle. None before the Musketeer."""
         return self._arms
 
     @Property(float, notify=outlineChanged)
@@ -300,9 +324,6 @@ class Animator(QObject):
     plume = _pose_property("plume", float, poseChanged)
     hat = _pose_property("hat", float, poseChanged)
     quill = _pose_property("quill", float, poseChanged)
-    guard = _pose_property("guard", float, poseChanged)
-    sword = _pose_property("sword", float, poseChanged)
-    swordY = _pose_property("sword_y", float, poseChanged)
     drops = _pose_property("drops", list, poseChanged)
     drip = _pose_property("drip", float, poseChanged)
     burst = _pose_property("burst", float, poseChanged)

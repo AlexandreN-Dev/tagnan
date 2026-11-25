@@ -6,7 +6,7 @@ Non-negotiable constraints:
 - Claude is called only through the official `claude` CLI, started by `scripts/brain` with the clean environment and isolation flags of `tagnan/brain.py` (never the Anthropic API directly, never the credentials stored in `~/.claude/`).
 - The game, the store and the brain use the standard library only: the same code runs in WSL, in the window's Windows Python and on macOS.
 - The bash scripts also run on macOS: bash 3.2 (no `mapfile`, `${x,,}`, `setsid`, GNU options). Each script picks its way with `is_mac` (`scripts/_mac.sh`); what the window asks of macOS goes through ctypes in `tagnan/ui/macos.py`, with no dependency.
-- Tagnan's layers live in `tagnan/art.py`; the window itself only draws the ink and the drops (the Musketeer's head and arms included, from the shapes `art.py` gives).
+- Tagnan's layers live in `tagnan/art.py`; the window itself only draws the ink and the drops (a man of ink's head, arms and hands included, from the shapes `art.py` gives).
 
 Commands, from the repository root:
 

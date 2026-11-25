@@ -560,10 +560,8 @@ def figure(stage: int) -> dict[str, Any]:
         "ink": INK,
         "shade": INK_SHADE,
         "glow": GOLD_GLOW if stage >= 5 else GLOW,
-        # Every ink is shaded inside (inkwell_shading, ink_shading, head_shading), none by an
-        # offset copy any more.
-        "shadeOffset": [0.0, 0.0],
-        # Their shading as QML colours; the window gets the paths from the animator.
+        # The ink's shading (inkwell_shading, ink_shading, head_shading) as QML colours; the
+        # window gets the paths from the animator.
         "inkLight": argb(*INK_LIT),
         "inkEdge": argb(*INK_EDGE),
         "meniscusWidth": INKWELL_MENISCUS[2],
@@ -1301,7 +1299,7 @@ def arm_parts(
     shoulder: tuple[float, float], elbow: tuple[float, float], hand: tuple[float, float]
 ) -> dict[str, Any]:
     """An arm as the window draws it: the sleeve from the shoulder to the hand, bent at the
-    elbow; the cuff towards the hand and the three scallops of its lace; the hand, a drop."""
+    elbow; the cuff towards the hand and the three scallops of its lace. Its hand: hand_parts."""
     a, c, b = _qsub(shoulder, elbow, hand, 0.66, 0.86)
     tx, ty = b[0] - c[0], b[1] - c[1]
     k = math.hypot(tx, ty) or 1.0
@@ -1310,9 +1308,6 @@ def arm_parts(
         "sleeve": f"M{pt(*shoulder)} Q{pt(*elbow)} {pt(*hand)}",
         "cuff": f"M{pt(*a)} Q{pt(*c)} {pt(*b)}",
         "lace": [[b[0] + tx * 0.5 - ty * o, b[1] + ty * 0.5 + tx * o] for o in (-2.9, 0.0, 2.9)],
-        "hand": list(hand),
-        "handShade": drop_shade(*hand, HAND),
-        "handLight": drop_light(*hand, HAND),
     }
 
 

@@ -11,7 +11,7 @@ from typing import Any
 from tagnan import blueprint as blueprints
 from tagnan import progress as rules
 from tagnan.blueprint import Blueprint
-from tagnan.model import Question, parse_question
+from tagnan.model import TYPED, Question, parse_question
 from tagnan.progress import Progress
 from tagnan.store import Store
 from tagnan.subject import Subject, from_key
@@ -298,16 +298,20 @@ class Game:
         origin: str,
         subject: str = "",
     ) -> Added:
-        """Questions from elsewhere (tagnan.catalogue): each checked as the brain's are, the
-        good ones shuffled and kept, but those whose stem the course already has, even reported
-        ones."""
+        """Questions from elsewhere (tagnan.catalogue): each checked as the brain's are (lighter
+        for those typed by hand), the good ones shuffled and kept, but those whose stem the
+        course already has, even reported ones. A question the catalogue could not read says
+        why, as "problem"."""
         known = {plain(stem) for stem in self.store.stems(bp.key)}
         kept: list[Question] = []
         already = 0
         rejected = []
         for number, data in enumerate(raw, 1):
+            typed = origin == TYPED or data.get("origin") == TYPED
             try:
-                question = parse_question(data, bp).shuffled(self._rng)
+                if data.get("problem"):
+                    raise ValueError(str(data["problem"]))
+                question = parse_question(data, bp, lighter=typed).shuffled(self._rng)
             except ValueError as error:
                 rejected.append((number, str(error)))
                 continue
@@ -316,7 +320,7 @@ class Game:
                 already += 1
                 continue
             known.add(stem)
-            kept.append(replace(question, subject=subject, origin=origin))
+            kept.append(replace(question, subject=subject, origin=TYPED if typed else origin))
         return Added(self.store.add_questions(bp.key, kept, now), already, rejected)
 
     def explain_request(self, question: Question, chosen: Sequence[int]) -> dict[str, Any]:

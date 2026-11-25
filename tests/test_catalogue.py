@@ -1,4 +1,5 @@
 import json
+import random
 from pathlib import Path
 from typing import Any
 
@@ -7,7 +8,8 @@ import pytest
 from tagnan import blueprint, catalogue
 from tagnan.blueprint import Blueprint
 from tagnan.game import Game
-from tagnan.model import CONVERTED, WRITTEN
+from tagnan.model import CONVERTED, TYPED, WRITTEN
+from tagnan.store import Store
 from tests.conftest import pottery_data, pottery_question, question_data
 
 NOW = 1_800_000_000.0
@@ -223,3 +225,201 @@ def test_ask_your_assistant_is_what_tell_me_more_asks_his_brain(game: Game) -> N
     prompt = catalogue.explain_prompt(game.blueprint, question, [wrong])
     assert prompt.startswith("Someone learning AWS Certified AI Practitioner (AIF-C01) got this")
     assert f"Answer given: {'ABCD'[wrong]}" in prompt
+
+
+# --- Typed by hand -----------------------------------------------------------------------------
+
+NOTE = """# Networking basics
+
+Some words before the first question are left aside.
+
+## Addressing
+
+Question 1: How long is an IPv4 address?
+A. 16 bits
+B. 32 bits
+C. 64 bits
+D. 128 bits
+Answer: B
+Explanation: Four bytes, written
+as four numbers.
+Source: RFC 791
+
+Question 2: An IPv6 address is 128 bits long.
+- [x] True
+- [ ] False
+
+## Routing
+
+Question 3: Which device forwards packets
+between networks?
+1. A switch
+2. A router
+3. A hub
+Réponse : 2
+
+Q4. Which two are routing protocols?
+a) OSPF
+b) HTTP
+c) BGP
+Answer: a, c
+
+### Which one is the loopback address?
+- 127.0.0.1
+- 10.0.0.1
+Answer: 127.0.0.1
+
+Question 6: Lost its answer
+A. one
+B. two
+
+Question 7: Alone
+A. one
+Answer: A
+"""
+
+
+def test_a_note_typed_by_hand_is_read_in_its_usual_shapes() -> None:
+    found = catalogue.read(NOTE)
+    assert found.typed
+    assert found.origin == TYPED
+    assert isinstance(found.course, Blueprint)
+    course = found.course
+    assert (course.key, course.name, course.exam) == (
+        "networking-basics",
+        "Networking basics",
+        False,
+    )
+    assert [d.name for d in course.domains] == ["Addressing", "Routing"]
+    assert course.kinds == ("single", "multiple")
+    first, true, router, two, loopback, lost, alone = found.questions
+    assert first["stem"] == "How long is an IPv4 address?"
+    assert (first["answers"], first["domain"], first["task"]) == ([1], 1, "1.1")
+    assert first["explanation"] == "Four bytes, written as four numbers."
+    assert first["reference"] == "RFC 791"
+    assert (true["choices"], true["answers"]) == (["True", "False"], [0])
+    assert router["stem"] == "Which device forwards packets between networks?"
+    assert (router["answers"], router["domain"]) == ([1], 2)
+    assert (two["answers"], two["kind"]) == ([0, 2], "multiple")
+    assert (loopback["stem"], loopback["answers"]) == ("Which one is the loopback address?", [0])
+    assert lost["problem"] == "no Answer line"
+    assert alone["problem"] == "a single choice"
+
+
+def test_a_typed_text_without_a_title_is_named_by_its_file_or_untitled() -> None:
+    text = "Question: Two plus two?\nA. 3\nB. 4\nAnswer: B\n"
+    assert catalogue.read(text, "Arithmetic").course.name == "Arithmetic"  # type: ignore[union-attr]
+    untitled = catalogue.read(text).course
+    assert isinstance(untitled, Blueprint)
+    assert (untitled.name, [d.name for d in untitled.domains]) == ("My questions", ["My questions"])
+    with pytest.raises(ValueError, match="I find no questions in it"):
+        catalogue.read("Just some notes, with no question in them.")
+
+
+@pytest.mark.parametrize("comma", [",", ";"])
+def test_a_spreadsheet_saved_as_csv(comma: str) -> None:
+    rows = [
+        ["Chapitre", "Question", "A", "B", "C", "D", "Réponse", "Explication"],
+        [
+            "Addressing",
+            "How long is an IPv4 address?",
+            "16 bits",
+            "32 bits",
+            "64 bits",
+            "128 bits",
+            "B",
+            "Four bytes.",
+        ],
+        ["Addressing", "An IPv6 address is 128 bits long.", "True", "False", "", "", "A", ""],
+        [
+            "Routing",
+            "Which device forwards packets, between networks?",
+            "A switch",
+            "A router",
+            "",
+            "",
+            "A router",
+            "",
+        ],
+    ]
+    text = "\n".join(comma.join(f'"{c}"' if comma in c else c for c in row) for row in rows)
+    found = catalogue.read(text, "Networking basics")
+    assert isinstance(found.course, Blueprint)
+    assert [d.name for d in found.course.domains] == ["Addressing", "Routing"]
+    assert [q["answers"] for q in found.questions] == [[1], [0], [1]]
+    assert found.questions[1]["choices"] == ["True", "False"]
+    assert found.questions[2]["stem"] == "Which device forwards packets, between networks?"
+
+
+def test_typed_questions_are_checked_lighter(game: Game) -> None:
+    found = catalogue.read(NOTE)
+    assert isinstance(found.course, Blueprint)
+    added = game.add_questions(found.course, found.questions, NOW, found.origin)
+    assert len(added.ids) == 5  # two choices, no explanation: kept
+    assert [(n, catalogue.reason(why)) for n, why in added.rejected] == [
+        (6, "no Answer line"),
+        (7, "a single choice"),
+    ]
+    q = game.store.question(added.ids[1])
+    assert (q.origin, q.explanation, q.why_wrong) == (TYPED, "", ("", ""))
+    # Written by an assistant, the same question is checked in full.
+    strict = game.add_questions(
+        found.course, [{**found.questions[1], "stem": "Other?"}], NOW, WRITTEN
+    )
+    assert catalogue.reason(strict.rejected[0][1]) == "it needs four to six choices"
+
+
+def test_a_note_pasted_again_adds_its_new_chapters(game: Game) -> None:
+    first = catalogue.read(NOTE)
+    assert isinstance(first.course, Blueprint)
+    game.keep_course(first.course)
+    game.add_questions(first.course, first.questions, NOW, TYPED)
+    longer = catalogue.read(
+        NOTE
+        + "\n## Switching\n\nQuestion: What does a switch learn?\nA. MAC addresses\nB. Routes\n"
+        "Answer: A\n\n## routing\n\nQuestion: Which protocol is a distance vector one?\n"
+        "A. RIP\nB. OSPF\nAnswer: A\n"
+    )
+    assert isinstance(longer.course, Blueprint)
+    merged, moved = catalogue.merge(
+        game.course("networking-basics"), longer.course, longer.questions
+    )
+    assert [d.name for d in merged.domains] == ["Addressing", "Routing", "Switching"]
+    assert [(q["domain"], q["task"]) for q in moved[-2:]] == [(3, "3.1"), (2, "2.1")]  # by name
+    added = game.add_questions(merged, moved, NOW, TYPED)
+    assert (len(added.ids), added.known) == (2, 5)
+    # A course of exam/ keeps its guide's chapters: one it lacks is set aside; "Domain 3" is
+    # its third.
+    note = catalogue.read(
+        "## Domain 3\nQuestion: Which?\nA. a\nB. b\nAnswer: A\n"
+        "## Pottery\nQuestion: Clay?\nA. a\nB. b\nAnswer: B\n"
+    )
+    assert isinstance(note.course, Blueprint)
+    exam, kept = catalogue.merge(game.course("aif-c01"), note.course, note.questions)
+    assert exam.domains == game.course("aif-c01").domains
+    assert kept[0]["domain"] == 3
+    assert kept[1]["problem"] == "its chapter, Pottery, is not one of AIF-C01's"
+
+
+def test_typed_questions_are_shared_and_read_back_lighter(game: Game) -> None:
+    found = catalogue.read(NOTE)
+    assert isinstance(found.course, Blueprint)
+    game.keep_course(found.course)
+    game.add_questions(found.course, found.questions, NOW, TYPED)
+    shared = game.store.shareable("networking-basics")
+    assert len(shared) == 5  # one's own notes: shared
+    data = catalogue.export(found.course, shared)
+    assert {q["origin"] for q in data["questions"]} == {TYPED}
+    colleague = Game(Store(":memory:"), game.course("aif-c01"), random.Random(2))
+    again = catalogue.read(json.dumps(data))
+    assert isinstance(again.course, Blueprint)
+    added = colleague.add_questions(again.course, again.questions, NOW, again.origin)
+    assert (len(added.ids), added.rejected) == (5, [])
+    assert colleague.store.question(added.ids[0]).origin == TYPED
+
+
+def test_the_format_example_reads_as_it_says() -> None:
+    found = catalogue.read(catalogue.FORMAT_EXAMPLE)
+    assert isinstance(found.course, Blueprint)
+    assert found.course.name == "The course's name"
+    assert [q.get("answers") for q in found.questions] == [[1], [0, 2]]

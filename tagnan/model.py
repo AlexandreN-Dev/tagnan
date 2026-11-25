@@ -11,8 +11,9 @@ DIFFICULTIES = ("easy", "medium", "hard")
 KINDS = ("single", "multiple")
 MAX_STEM, MAX_CHOICE, MAX_TEXT = 900, 220, 700
 # Who wrote a question that his brain did not (tagnan.catalogue): someone, or an assistant, for
-# him; or converted from a quiz of someone else's, kept for oneself and never exported.
-WRITTEN, CONVERTED = "written", "converted"
+# him; or converted from a quiz of someone else's, kept for oneself and never exported; or typed
+# by hand in plain text, one's own notes, checked lighter.
+WRITTEN, CONVERTED, TYPED = "written", "converted", "typed"
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ class Question:
     why_wrong: tuple[str, ...]  # one per choice, "" for the right ones
     reference: str = ""  # the AWS document to read
     subject: str = ""  # the subject it was written for (tagnan.subject's key), "" for the exam
-    origin: str = ""  # "" his brain; WRITTEN or CONVERTED: from a catalogue
+    origin: str = ""  # "" his brain; WRITTEN, CONVERTED or TYPED: from a catalogue
     id: int | None = None
 
     def is_correct(self, chosen: Iterable[int]) -> bool:
@@ -74,8 +75,11 @@ def _text(data: Mapping[str, Any], key: str, limit: int, required: bool = True) 
     return value
 
 
-def parse_question(data: Mapping[str, Any], blueprint: Blueprint) -> Question:
-    """Check a question as the brain wrote it; ValueError says what is wrong."""
+def parse_question(
+    data: Mapping[str, Any], blueprint: Blueprint, lighter: bool = False
+) -> Question:
+    """Check a question as the brain wrote it; ValueError says what is wrong. Lighter, for one
+    typed by hand: two to six choices, and no explanation needed, nor why each one is wrong."""
     domain = data.get("domain")
     if not isinstance(domain, int) or domain not in {d.id for d in blueprint.domains}:
         raise ValueError(f"unknown domain: {domain!r}")
@@ -89,8 +93,9 @@ def parse_question(data: Mapping[str, Any], blueprint: Blueprint) -> Question:
     if difficulty not in DIFFICULTIES:
         raise ValueError(f"unknown difficulty: {difficulty!r}")
     raw_choices = data.get("choices")
-    if not isinstance(raw_choices, list) or not 4 <= len(raw_choices) <= 6:
-        raise ValueError("4 to 6 choices are needed")
+    fewest = 2 if lighter else 4
+    if not isinstance(raw_choices, list) or not fewest <= len(raw_choices) <= 6:
+        raise ValueError(f"{fewest} to 6 choices are needed")
     choices = tuple(_text({"choice": c}, "choice", MAX_CHOICE) for c in raw_choices)
     if len({c.casefold() for c in choices}) != len(choices):
         raise ValueError("two identical choices")
@@ -102,13 +107,15 @@ def parse_question(data: Mapping[str, Any], blueprint: Blueprint) -> Question:
         raise ValueError(f"invalid answer indices: {raw_answers}")
     if kind == "single" and len(answers) != 1:
         raise ValueError("a single-answer question has exactly one right answer")
-    if kind == "multiple" and not 2 <= len(answers) <= 3:
+    if kind == "multiple" and not 2 <= len(answers) <= min(3, len(choices) - 1):
         raise ValueError("a multiple-answer question has two or three")
     raw_why = data.get("why_wrong")
+    if lighter and (not isinstance(raw_why, list) or len(raw_why) != len(choices)):
+        raw_why = [""] * len(choices)
     if not isinstance(raw_why, list) or len(raw_why) != len(choices):
         raise ValueError("why_wrong: one text per choice")
     why_wrong = tuple(
-        "" if i in answers else _text({"why_wrong": w}, "why_wrong", MAX_TEXT)
+        "" if i in answers else _text({"why_wrong": w}, "why_wrong", MAX_TEXT, required=not lighter)
         for i, w in enumerate(raw_why)
     )
     return Question(
@@ -120,7 +127,7 @@ def parse_question(data: Mapping[str, Any], blueprint: Blueprint) -> Question:
         stem=_text(data, "stem", MAX_STEM),
         choices=choices,
         answers=answers,
-        explanation=_text(data, "explanation", MAX_TEXT),
+        explanation=_text(data, "explanation", MAX_TEXT, required=not lighter),
         why_wrong=why_wrong,
         reference=_text(data, "reference", 200, required=False),
     )

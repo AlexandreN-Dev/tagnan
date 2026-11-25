@@ -21,8 +21,8 @@ GRADES = (
     Grade("Gascon", 250, "he escapes from the inkwell"),
     Grade("Cadet", 900, "a felt hat"),
     Grade("Musketeer", 2000, "a man's shape, the musketeers' tabard and his quill in his hat"),
-    Grade("Lieutenant", 3600, "the rapier and a hooked moustache"),
-    Grade("Captain", 6000, "the cockaded hat, the goatee and the gold"),
+    Grade("Lieutenant", 3600, "legs and boots, the rapier in his hand and a hooked moustache"),
+    Grade("Captain", 6000, "fingers in his gloves, the cockade, the golden plume and the goatee"),
 )
 
 RIGHT, STREAK_BONUS, MAX_BONUS, WRONG = 10, 1, 5, -8

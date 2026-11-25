@@ -77,8 +77,8 @@ When a new version is out, "Update & Restart" in his menu shows a gold "New": on
 | Gascon | 250 | he climbs out of the inkwell | 2 days |
 | Cadet | 900 | a felt hat | 1 week |
 | Musketeer | 2,000 | a man's shape, the musketeers' tabard, his quill in his hat | 2 and a half weeks |
-| Lieutenant | 3,600 | the rapier and the hooked moustache | 4 weeks |
-| Captain | 6,000 | the cockaded hat, the royale and the gold | 7 weeks |
+| Lieutenant | 3,600 | legs and boots, the rapier in his hand, the hooked moustache | 4 weeks |
+| Captain | 6,000 | gloved hands with fingers, the cockade, the golden plume, the royale and the gold | 7 weeks |
 
 The road is long on purpose. A right answer earns 10 points, plus 1 per right answer in a row (up to +5); a mistake costs 8 and resets the streak. The durations assume about a hundred answers a week, the starting pace; faster, the road gets shorter in proportion. At 70 % right answers it takes ten weeks to become Captain, at 60 % more than four months. A rank is only lost well below its threshold. Questions are easy in the inkwell, at exam level after that, hard for the last two ranks; the domains where you make the most mistakes come back more often.
 

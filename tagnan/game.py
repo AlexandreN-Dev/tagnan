@@ -278,6 +278,14 @@ class Game:
             "chosen": list(chosen),
         }
 
+    def sheet_request(self, question: Question) -> dict[str, Any]:
+        """What the brain needs to write a study sheet on the notion behind a question."""
+        return {
+            "exam": self.exam,
+            "course": self.blueprint.to_dict(),
+            "question": question.to_dict(),
+        }
+
     def summary(self) -> dict[str, Any]:
         """What the stats show: grade, points, streaks, accuracy by domain, the bank."""
         p = self.progress

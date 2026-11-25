@@ -96,6 +96,54 @@ def question_data(**changes: Any) -> dict[str, Any]:
     return data
 
 
+def sheet_data(**changes: Any) -> dict[str, Any]:
+    """A study sheet's words as the brain answers them (tagnan.studysheet.SCHEMA)."""
+    side = {"name": "Fine-tuning", "what": "learns by heart", "icon": "learn"}
+    data: dict[str, Any] = {
+        "title": "RAG or fine-tuning?",
+        "tagline": "Facts that change every week? Hand the model the pages. Don't retrain it.",
+        "versus": {
+            "left": side,
+            "right": {"name": "RAG", "what": "reads, then answers", "icon": "book"},
+            "rows": [
+                {
+                    "label": "To update",
+                    "left": {"good": False, "text": "Retrain: hours, $$$"},
+                    "right": {"good": True, "text": "Sync: minutes"},
+                },
+                {
+                    "label": "Best for",
+                    "left": {"good": True, "text": "Style, tone, format"},
+                    "right": {"good": True, "text": "Facts that change"},
+                },
+                {
+                    "label": "Sources",
+                    "left": {"good": False, "text": "None to show"},
+                    "right": {"good": True, "text": "Cites its passages"},
+                },
+            ],
+        },
+        "steps": {
+            "title": "How RAG answers",
+            "list": [
+                {"name": "Chunk", "what": "docs into passages", "icon": "pieces"},
+                {"name": "Embed", "what": "each as a vector", "icon": "vector"},
+                {"name": "Retrieve", "what": "the closest ones", "icon": "search"},
+                {"name": "Answer", "what": "and cite them", "icon": "quote"},
+            ],
+        },
+        "terms": [
+            {"name": "Knowledge Bases", "what": "Bedrock's managed RAG, from your own documents."},
+            {"name": "Embedding", "what": "Text as numbers that keep its meaning."},
+            {"name": "Vector store", "what": "Finds the nearest meaning, fast."},
+        ],
+        "trap": "Fine-tuning to teach facts that change: slow, costly, and stale by next week.",
+        "remember": "RAG is an open-book exam. Fine-tuning is learning by heart.",
+    }
+    data.update(changes)
+    return data
+
+
 @pytest.fixture
 def store() -> Store:
     return Store(":memory:")

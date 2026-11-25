@@ -33,6 +33,8 @@ allowed-confusables = ["–"]
 "tests/**" = ["S101", "S105", "S106", "S311", "S314", "S603", "S607"]
 # The drawing is SVG path data: long lines read better unbroken; its randomness is a fixed seed.
 "tagnan/art.py" = ["E501", "S311"]
+# The study sheet's icons are SVG path data too.
+"tagnan/studysheet.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

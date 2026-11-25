@@ -9,7 +9,7 @@ import pytest
 from tagnan import blueprint, brain, config
 from tagnan.blueprint import Blueprint
 from tagnan.brain_client import BrainClient, BrainError, decode
-from tests.conftest import pottery_data, pottery_question, question_data
+from tests.conftest import pottery_data, pottery_question, question_data, sheet_data
 
 FAKE_CLAUDE = """#!/usr/bin/env python3
 import json, os, sys
@@ -106,6 +106,38 @@ def test_explain_returns_text(fake_claude: Path) -> None:
     prompt = str(call_log(fake_claude)["stdin"])
     assert "Answer given: D (Amazon SageMaker Clarify)" in prompt
     assert "Right answer: A (Amazon Bedrock Guardrails)" in prompt
+
+
+def test_a_study_sheet_is_written_by_tell_me_mores_model(fake_claude: Path) -> None:
+    answer(fake_claude, sheet_data(title="  RAG   or **fine-tuning**? "))
+    cfg = config.Config(
+        brain=config.Brain(explain_model="claude-sonnet-5-5", explain_effort="high")
+    )
+    sheet = brain.sheet({"exam": "aif-c01", "question": question_data()}, cfg)
+    assert sheet["title"] == "RAG or fine-tuning?"
+    assert len(sheet["versus"]["rows"]) == 3
+    assert [s["name"] for s in sheet["steps"]["list"]] == ["Chunk", "Embed", "Retrieve", "Answer"]
+    log = call_log(fake_claude)
+    argv = log["argv"]
+    assert isinstance(argv, list)
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"
+    assert argv[argv.index("--effort") + 1] == "high"
+    schema = json.loads(argv[argv.index("--json-schema") + 1])
+    assert set(schema["required"]) >= {"title", "tagline", "versus", "steps", "terms", "trap"}
+    prompt = str(log["stdin"])
+    assert prompt.startswith("Make an explanatory PDF of this subject.")
+    assert "as little text as possible" in prompt
+    assert "Right answer: A (Amazon Bedrock Guardrails)" in prompt
+    assert "AWS Certified AI Practitioner (AIF-C01)" in prompt
+
+
+def test_a_sheet_with_neither_comparison_nor_steps_is_refused(fake_claude: Path) -> None:
+    empty = sheet_data(
+        versus={"left": {}, "right": {}, "rows": []}, steps={"title": "", "list": []}
+    )
+    answer(fake_claude, empty)
+    with pytest.raises(brain.BrainError, match="neither a comparison nor steps"):
+        brain.sheet({"exam": "aif-c01", "question": question_data()}, config.Config())
 
 
 def test_the_account_is_what_claude_says_of_its_login(fake_claude: Path) -> None:

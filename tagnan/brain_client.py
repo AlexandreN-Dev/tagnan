@@ -71,6 +71,10 @@ class BrainClient:
     def explain(self, request: Mapping[str, Any], timeout: float = 270.0) -> str:
         return str(self.call("explain", request, timeout).get("text", ""))
 
+    def sheet(self, request: Mapping[str, Any], timeout: float = 390.0) -> dict[str, Any]:
+        """A study sheet's words (tagnan.studysheet.clean's shape)."""
+        return self.call("sheet", request, timeout)
+
     def plan(self, words: str, timeout: float = 630.0) -> dict[str, Any]:
         return self.call("plan", {"words": words}, timeout)
 

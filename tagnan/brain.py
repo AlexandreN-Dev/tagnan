@@ -2,6 +2,7 @@
 
     scripts/brain generate < request.json   # {"course", "slots", "avoid", "subject", "model"}
     scripts/brain explain < request.json    # {"course", "question": {...}, "chosen": [...]}
+    scripts/brain sheet < request.json      # {"course", "question": {...}}: a study sheet's words
     scripts/brain plan < request.json       # {"words": "pottery"}: a new course's blueprint
     scripts/brain check                     # one tiny call with the configured model
     scripts/brain account                   # whose Claude login it writes with
@@ -28,6 +29,7 @@ from typing import Any
 
 from tagnan import blueprint as blueprints
 from tagnan import config as configs
+from tagnan import studysheet
 from tagnan.blueprint import Blueprint
 from tagnan.model import parse_question
 from tagnan.paths import PROMPTS_DIR, config_file
@@ -49,6 +51,7 @@ ISOLATION_FLAGS = (
 )
 # Opus at max effort thinks long: a batch of ten can take minutes, an explanation a minute.
 GENERATE_TIMEOUT, EXPLAIN_TIMEOUT, CHECK_TIMEOUT, PLAN_TIMEOUT = 600.0, 240.0, 180.0, 600.0
+SHEET_TIMEOUT = 360.0
 ACCOUNT_TIMEOUT = 30.0
 MAX_WORDS = 120
 DIFFICULTIES = ("easy", "medium", "hard")
@@ -248,9 +251,13 @@ def course(request: Mapping[str, Any], cfg: configs.Config) -> Blueprint:
     return blueprints.load(str(request.get("exam", cfg.exam)))
 
 
+def goal(bp: Blueprint) -> str:
+    """What the learner is after, as the prompts say it."""
+    return f"prepare for the {bp.name} ({bp.code}) certification" if bp.exam else f"learn {bp.name}"
+
+
 def system_prompt(bp: Blueprint) -> str:
-    goal = f"prepare for the {bp.name} ({bp.code}) certification" if bp.exam else f"learn {bp.name}"
-    return _template("system.md", goal=goal, guidance=bp.guidance)
+    return _template("system.md", goal=goal(bp), guidance=bp.guidance)
 
 
 def generate_prompt(
@@ -332,6 +339,19 @@ def explain_prompt(bp: Blueprint, question: Mapping[str, Any], chosen: Sequence[
     )
 
 
+def sheet_prompt(bp: Blueprint, question: Mapping[str, Any]) -> str:
+    choices = [str(c) for c in question["choices"]]
+    letters = "ABCDEF"
+    return _template(
+        "sheet.md",
+        course=f"{bp.name} ({bp.code})" if bp.exam else bp.name,
+        stem=question["stem"],
+        choices="\n".join(f"{letters[i]}. {c}" for i, c in enumerate(choices)),
+        right=" and ".join(f"{letters[int(a)]} ({choices[int(a)]})" for a in question["answers"]),
+        explanation=question.get("explanation", ""),
+    )
+
+
 def generate(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     bp = course(request, cfg)
     slots = request.get("slots") or []
@@ -382,6 +402,29 @@ def explain(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     if not text:
         raise BrainError("empty explanation")
     return {"text": text}
+
+
+def sheet(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
+    """A study sheet's words on the notion behind a question (tagnan.studysheet): the window
+    draws the page. Written by the model and effort of "Tell me more"."""
+    bp = course(request, cfg)
+    question = request.get("question")
+    if not isinstance(question, Mapping):
+        raise BrainError("request without a question")
+    structured = run_claude(
+        sheet_prompt(bp, question),
+        system=f"You write the study sheets of Tagnan, a little ink musketeer who helps someone"
+        f" {goal(bp)}. Everything you write is in English. Answer with the requested JSON object"
+        " only.",
+        schema=studysheet.SCHEMA,
+        model=cfg.brain.explain_model,
+        effort=cfg.brain.explain_effort,
+        timeout=SHEET_TIMEOUT,
+    )
+    try:
+        return studysheet.clean(structured)
+    except ValueError as error:
+        raise BrainError(f"no usable sheet: {error}") from None
 
 
 def plan(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
@@ -470,7 +513,9 @@ def account() -> dict[str, Any]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brain", description="Tagnan's brain")
-    parser.add_argument("action", choices=["generate", "explain", "plan", "check", "account"])
+    parser.add_argument(
+        "action", choices=["generate", "explain", "sheet", "plan", "check", "account"]
+    )
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
     try:
@@ -482,9 +527,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = check(cfg)
         else:
             request = json.loads(sys.stdin.read() or "{}")
-            result = {"generate": generate, "explain": explain, "plan": plan}[args.action](
-                request, cfg
-            )
+            actions = {"generate": generate, "explain": explain, "sheet": sheet, "plan": plan}
+            result = actions[args.action](request, cfg)
     except (BrainError, ValueError, KeyError) as error:
         print(f"brain: {error}", file=sys.stderr)
         return 1

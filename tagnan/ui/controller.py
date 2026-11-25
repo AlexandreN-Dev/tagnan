@@ -60,6 +60,11 @@ UPDATED_KEY = "updated"  # in his settings, from tagnan/ui/updater.py: what an u
 UPDATED_SECONDS = 30
 SHEET_NEWS_SECONDS = 12  # "Signed and sealed!": his study sheet is in Downloads
 VERDICT_MODES = ("result", "thinking", "explanation")  # where a question's study sheet is offered
+# Minimized (his menu's button beside the moon), he takes his full size for these bubbles only:
+# he grows before the question shows, and goes back to his corner this long after the last.
+FULL_SIZE_MODES = ("question", *VERDICT_MODES)
+GROW_MS = 380  # Main.qml grows him in 350 ms
+SHRINK_SECONDS = 3
 THEMES = ("dark", "light")  # chosen in his menu; none: the system's
 
 
@@ -79,6 +84,7 @@ def sheet_written(path: Path) -> dict[str, Any]:
 
 class Controller(QObject):
     stageChanged = Signal()
+    sizeChanged = Signal()  # minimized or not, grown to ask or not
     promotionChanged = Signal()
     bubbleChanged = Signal()
     statusChanged = Signal()
@@ -126,6 +132,11 @@ class Controller(QObject):
         self._model = chosen.model if chosen else ""
         theme = self.settings.get("theme", "")
         self._theme = theme if theme in THEMES else ""
+        # Minimized: small in his corner, but while he asks (FULL_SIZE_MODES).
+        self._small = self.settings.get("small") is True
+        self._grown = False
+        self._pending_question: dict[str, Any] | None = None  # shown once he has grown
+        self._pointer_on_him = False
         self._stage = game.progress.grade
         self._spec = art.figure(self._stage)
         self._promotion: dict[str, int] = {}
@@ -160,6 +171,8 @@ class Controller(QObject):
         self._unanswered_timer = self._timer(self._unanswered)
         self._swap_timer = self._timer(self._swap)
         self._reveal_timer = self._timer(self._reveal)
+        self._grow_timer = self._timer(self._grown_ready)
+        self._shrink_timer = self._timer(self._shrink)
 
     def _timer(self, slot: Callable[[], None], single: bool = True) -> QTimer:
         timer = QTimer(self)
@@ -245,6 +258,16 @@ class Controller(QObject):
         """The model that writes his questions: his menu's choice, else the config file's."""
         return self._model or self._config_model
 
+    @Property(bool, notify=prefsChanged)
+    def small(self) -> bool:
+        """Minimized, as chosen in his menu."""
+        return self._small
+
+    @Property(bool, notify=sizeChanged)
+    def tiny(self) -> bool:
+        """Drawn small now: minimized, and not grown to ask."""
+        return self._small and not self._grown
+
     @Property(str, notify=prefsChanged)
     def theme(self) -> str:
         """His colours: "dark" or "light" as chosen in his menu, "" for the system's."""
@@ -266,7 +289,11 @@ class Controller(QObject):
         now = self._clock()
         self._refill_if_needed()
         self.statusChanged.emit()
-        if self._bubble["mode"] not in ("hidden", "quip") or not self.scheduler.due(now):
+        if (
+            self._bubble["mode"] not in ("hidden", "quip")
+            or self._pending_question is not None
+            or not self.scheduler.due(now)
+        ):
             return
         if desktop.busy():
             self.scheduler.postpone(now, BUSY_RETRY_MINUTES)
@@ -289,7 +316,7 @@ class Controller(QObject):
             meta = f"{self.game.subject.text} · Domain {domain.id}"
         if not self.game.blueprint.exam:  # a subject of one's own: its name says what it is
             meta = f"{self.game.blueprint.code} · {meta}"
-        self._show(
+        self._show_question(
             {
                 "mode": "question",
                 "title": self._rng.choice(ASKS),
@@ -416,7 +443,7 @@ class Controller(QObject):
 
     @Slot()
     def askNow(self) -> None:
-        if self._bubble["mode"] in ("question", "thinking"):
+        if self._bubble["mode"] in ("question", "thinking") or self._pending_question is not None:
             return
         if not self._ask(self._clock()):
             self._show(
@@ -1135,12 +1162,67 @@ class Controller(QObject):
             self._promotion = {}
             self.promotionChanged.emit()
 
+    # --- Minimized ----------------------------------------------------------------------------
+
+    @Slot(bool)
+    def setSmall(self, on: bool) -> None:
+        """Minimized or not, kept as his theme is."""
+        if on == self._small:
+            return
+        self._small = on
+        self.settings.set("small", on)
+        logger.info("small: %s", on)
+        self._grown = on and self._bubble["mode"] in FULL_SIZE_MODES
+        self._shrink_timer.stop()
+        self.prefsChanged.emit()
+        self.sizeChanged.emit()
+
+    @Slot(bool)
+    def pointerOnHim(self, on: bool) -> None:
+        """The pointer on his figure: he waits before shrinking, lest he slip from under it."""
+        self._pointer_on_him = on
+
+    def _show_question(self, content: dict[str, Any]) -> None:
+        """Minimized, he grows first; the question shows once he has (Main.qml)."""
+        if self.property("tiny"):
+            self._grown = True
+            self.sizeChanged.emit()
+            self._pending_question = content
+            self._grow_timer.start(GROW_MS)
+            return
+        self._show(content)
+
+    def _grown_ready(self) -> None:
+        content, self._pending_question = self._pending_question, None
+        if content is not None:
+            self._show(content)
+
+    def _fit_size(self) -> None:
+        """Grown, he keeps his size while a question, its verdict or Tell me more is open; the
+        last closed, he waits a little, then goes back to his corner."""
+        if not (self._small and self._grown):
+            return
+        if self._bubble["mode"] in FULL_SIZE_MODES or self._pending_question is not None:
+            self._shrink_timer.stop()
+        elif not self._shrink_timer.isActive():
+            self._shrink_timer.start(SHRINK_SECONDS * 1000)
+
+    def _shrink(self) -> None:
+        if self._bubble["mode"] in FULL_SIZE_MODES or self._pending_question is not None:
+            return
+        if self._held or self._pointer_on_him:
+            self._shrink_timer.start(1000)
+            return
+        self._grown = False
+        self.sizeChanged.emit()
+
     # --- Bubble -----------------------------------------------------------------------------
 
     def _show(self, bubble: dict[str, Any]) -> None:
         self._hide_timer.stop()
         self._bubble = bubble
         self.bubbleChanged.emit()
+        self._fit_size()
 
     def _close(self) -> None:
         self._unanswered_timer.stop()

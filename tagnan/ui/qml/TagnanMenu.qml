@@ -73,7 +73,9 @@ Window {
         check: "M5 12.5l4.5 4.5L19 7",
         update: "M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9M18.6 3.2v4.1h-4.1M5.4 20.8v-4.1h4.1",
         spinner: "M12 3.5a8.5 8.5 0 1 1-8.1 5.9",
-        account: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4.5 4-6.5 8-6.5s7 2 8 6.5"
+        account: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c1-4.5 4-6.5 8-6.5s7 2 8 6.5",
+        corner: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 8l8 8M16 11v5h-5",
+        grow: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM16 16L8 8M8 13V8h5"
     })
 
     function commandRows() {
@@ -110,6 +112,7 @@ Window {
         return suggestions.map(function(s) {
             const verb = s.action === "sub:hours" ? "hours" : s.action.split(":")[0]
             const icon = verb === "theme" ? (s.action === "theme:dark" ? "moon" : "sun")
+                : verb === "small" ? (s.action === "small:off" ? "grow" : "corner")
                 : { pace: "pace", hours: "hours", days: "hours", call: "call", pause: "pause", learn: "learn",
                     focus: "focus" }[verb] || verb
             // "Hours…" opens its list beside it, as its row does.
@@ -469,7 +472,7 @@ Window {
                     smooth: true
                 }
                 Column {
-                    width: column.width - 76 - themeButton.width - 4
+                    width: column.width - 76 - headButtons.width - 4
                     spacing: 5
                     anchors.verticalCenter: parent.verticalCenter
                     Text {
@@ -500,27 +503,56 @@ Window {
                         font.pixelSize: 12
                     }
                 }
-                // Dark or light, his bubble too: a moon in the light, a sun in the dark.
-                Rectangle {
-                    id: themeButton
-                    objectName: "theme"
-                    width: 32
-                    height: 32
-                    radius: 9
-                    color: themeMouse.containsMouse ? win.theme.choiceHover : win.theme.choice
-                    Accessible.role: Accessible.Button
-                    Accessible.name: win.theme.dark ? "Light mode" : "Dark mode"
-                    Glyph {
-                        anchors.centerIn: parent
-                        name: win.theme.dark ? "sun" : "moon"
-                        tint: win.theme.ink
+                // His size and his colours, side by side.
+                Row {
+                    id: headButtons
+                    spacing: 6
+                    // Minimized: small in his corner, full size only to ask; in ink while on.
+                    Rectangle {
+                        id: smallButton
+                        objectName: "small"
+                        readonly property bool on: win.c.small === true
+                        width: 32
+                        height: 32
+                        radius: 9
+                        color: on ? win.theme.ink : smallMouse.containsMouse ? win.theme.choiceHover : win.theme.choice
+                        Accessible.role: Accessible.Button
+                        Accessible.name: on ? "Full size" : "Minimize"
+                        Glyph {
+                            anchors.centerIn: parent
+                            name: smallButton.on ? "grow" : "corner"
+                            tint: smallButton.on ? win.theme.panel : win.theme.ink
+                        }
+                        MouseArea {
+                            id: smallMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: win.menu.run(smallButton.on ? "small:off" : "small:on")
+                        }
                     }
-                    MouseArea {
-                        id: themeMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: win.menu.run(win.theme.dark ? "theme:light" : "theme:dark")
+                    // Dark or light, his bubble too: a moon in the light, a sun in the dark.
+                    Rectangle {
+                        id: themeButton
+                        objectName: "theme"
+                        width: 32
+                        height: 32
+                        radius: 9
+                        color: themeMouse.containsMouse ? win.theme.choiceHover : win.theme.choice
+                        Accessible.role: Accessible.Button
+                        Accessible.name: win.theme.dark ? "Light mode" : "Dark mode"
+                        Glyph {
+                            anchors.centerIn: parent
+                            name: win.theme.dark ? "sun" : "moon"
+                            tint: win.theme.ink
+                        }
+                        MouseArea {
+                            id: themeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: win.menu.run(win.theme.dark ? "theme:light" : "theme:dark")
+                        }
                     }
                 }
             }

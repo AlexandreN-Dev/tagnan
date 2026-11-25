@@ -108,6 +108,11 @@ class Animator(QObject):
     def reduced_motion(self) -> bool:
         return self._rig.reduced_motion
 
+    @Property(bool, constant=True)
+    def reducedMotion(self) -> bool:
+        """For QML: no spring when he changes size."""
+        return self._rig.reduced_motion
+
     def _get_stage(self) -> int:
         return self._rig.stage
 

@@ -145,6 +145,12 @@ def demo(controller: Controller, what: str) -> None:
             if what == "sheet-ready":
                 controller.dismiss()
                 controller._tell_sheet(sheet_written(Path("Tagnan – RAG or fine-tuning.pdf")))
+    elif what.startswith("small"):  # minimized, nothing saved; then a question he grows for
+        controller._small = True
+        controller.prefsChanged.emit()
+        controller.sizeChanged.emit()
+        if what == "small-question":
+            QTimer.singleShot(900, controller.askNow)
     elif what == "stats":
         controller.showStats()
     elif what == "quip":
@@ -209,6 +215,8 @@ def main() -> int:
             "promotion",
             "sheet-inking",
             "sheet-ready",
+            "small",
+            "small-question",
         ],
         help="development: show a bubble right away",
     )

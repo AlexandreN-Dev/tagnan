@@ -413,6 +413,92 @@ def test_a_sheet_that_fails_can_be_tried_again(game: Game) -> None:
     assert controller.property("bubble")["title"] == "Signed and sealed!"
 
 
+def test_minimized_he_grows_to_ask_then_goes_back_to_his_corner(game: Game) -> None:
+    fill(game)
+    settings = Settings(None)
+    controller, _, _ = make(game, settings=settings)
+    sizes: list[bool] = []
+    controller.sizeChanged.connect(lambda: sizes.append(controller.property("tiny")))
+    controller.setSmall(True)
+    assert controller.property("small") is True
+    assert settings.get("small") is True
+    assert sizes == [True]
+    controller.askNow()
+    assert sizes == [True, False]  # he grows first...
+    assert controller.property("bubble")["mode"] == "hidden"
+    controller.askNow()  # ...and is not asked twice meanwhile
+    controller._grown_ready()
+    assert controller.property("bubble")["mode"] == "question"  # ...then asks
+    question = controller._current
+    assert question is not None
+    controller.answer(list(question.answers))
+    assert not controller._shrink_timer.isActive()  # his verdict: still full size
+    controller.dismiss()
+    assert controller._shrink_timer.isActive()  # the bubble closed: 3 s, then small
+    controller._shrink()
+    assert sizes == [True, False, True]
+
+
+def test_the_pointer_on_him_holds_him_at_full_size(game: Game) -> None:
+    fill(game)
+    controller, _, _ = make(game)
+    controller.setSmall(True)
+    controller.askNow()
+    controller._grown_ready()
+    controller.later()
+    controller.pointerOnHim(True)
+    controller._shrink()
+    assert controller.property("tiny") is False
+    assert controller._shrink_timer.isActive()  # tried again a moment later
+    controller.pointerOnHim(False)
+    controller._shrink()
+    assert controller.property("tiny") is True
+
+
+def test_only_a_question_makes_him_grow(game: Game) -> None:
+    fill(game)
+    controller, _, _ = make(game)
+    controller.setSmall(True)
+    controller.showStats()
+    controller.animator.tap()
+    controller.showPause()
+    assert controller.property("tiny") is True
+
+
+def test_minimized_during_a_question_he_shrinks_once_it_is_done(game: Game, tmp_path: Path) -> None:
+    fill(game)
+    settings = Settings(tmp_path / "settings.json")
+    controller, _, _ = make(game, settings=settings)
+    controller.askNow()
+    controller.setSmall(True)
+    assert controller.property("tiny") is False  # not under the question being asked
+    question = controller._current
+    assert question is not None
+    controller.answer(list(question.answers))
+    controller.dismiss()
+    controller._shrink()
+    assert controller.property("tiny") is True
+    again, _, _ = make(game, settings=Settings(tmp_path / "settings.json"))
+    assert again.property("small") is True  # kept for next time
+    assert again.property("tiny") is True
+    again.setSmall(False)
+    assert again.property("tiny") is False
+
+
+def test_his_menu_minimizes_him_by_a_button_or_words(game: Game) -> None:
+    controller, _, _ = make(game)
+    menu = Menu(controller)
+    assert menu.property("content")["small"] is False
+    [found] = [s for s in menu.suggest("small") if s["action"].startswith("small")]
+    assert (found["label"], found["action"]) == ("Minimize", "small:on")
+    assert menu.run("small:on") is True  # the menu stays open: one sees him shrink
+    assert controller.property("small") is True
+    assert menu.property("content")["small"] is True
+    assert any(s["action"] == "small:off" for s in menu.suggest("full size"))
+    assert menu.run("small") is True  # the button: on, then off
+    assert controller.property("small") is False
+
+
 def test_a_flagged_question_never_comes_back(game: Game) -> None:
     fill(game, 1)
     controller, _, _ = make(game)

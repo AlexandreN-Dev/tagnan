@@ -53,6 +53,9 @@ RANGE_WORDS = ("hours", "from", "hours from")
 HOURS_RANGE = re.compile(r"(\d{1,2})(?::00|h)? ?(?:-|–|to) ?(\d{1,2})(?::00|h)?")
 WEEKEND_WORDS = ("weekend", "weekends", "every day", "saturday", "sunday", "all week")
 WEEKDAY_WORDS = ("weekdays", "week days", "not on weekends")
+# Minimized: small in his corner, full size only to ask (his menu's button beside the moon).
+SMALL_WORDS = ("minimize", "minimise", "small", "smaller", "tiny", "mini", "shrink")
+FULL_WORDS = ("full size", "big", "bigger", "grow", "normal size", "maximize", "maximise")
 
 
 def menu_position(anchor: tuple[int, int], size: tuple[int, int], area: Box) -> tuple[int, int]:
@@ -202,6 +205,8 @@ class Menu(QObject):
             "account": c.worker.account,
             # A study sheet on its way: a busy row, as Update's.
             "sheet": "a minute or two" if c.inking() else "",
+            # Minimized: the button beside the moon, in ink.
+            "small": bool(c.small),
         }
 
     # --- Opening and closing ------------------------------------------------------------------
@@ -312,6 +317,14 @@ class Menu(QObject):
         for key, names in THEME_WORDS.items():
             if len(folded) > 2 and any(w.startswith(folded) for w in names):
                 add(f"{key.capitalize()} mode", f"theme:{key}")
+        if len(folded) > 2 and any(w.startswith(folded) for w in SMALL_WORDS):
+            add(
+                "Minimize",
+                "small:on",
+                "Already on" if c.small else "Small in his corner, full size to ask",
+            )
+        if len(folded) > 2 and c.small and any(w.startswith(folded) for w in FULL_WORDS):
+            add("Full size", "small:off", "Minimize off")
         everything = folded in ("model", "models", "brain", "claude", "questions by")
         for m in configs.MODELS:
             if everything or m.name.casefold().startswith(folded):
@@ -336,6 +349,9 @@ class Menu(QObject):
         if verb == "theme":
             c.setTheme(arg)
             return True  # one sees it at once, the menu open
+        if verb == "small":
+            c.setSmall(arg == "on" if arg else not c.small)
+            return True  # one sees him change size, the menu open
         if verb == "hours":
             start, _, end = arg.partition("-")
             if start.isdigit() and end.isdigit():

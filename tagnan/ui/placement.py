@@ -15,6 +15,8 @@ GAP = -22
 ABOVE_FEET = 54  # the tail points at his body, this far above his feet
 ABOVE_HEAD = 24  # with no room beside him, the bubble sits on his hat's brim
 MARGIN = 8  # from the screen's edges
+# These hold for his figure at full size; minimized (Main.qml), they shrink with him.
+FIGURE_HEIGHT = 176
 
 logger = logging.getLogger(__name__)
 
@@ -42,19 +44,28 @@ def bubble_position(figure: Box, bubble: tuple[int, int], area: Box) -> tuple[in
     side has room; always within the screen (a bubble cut by the screen's edge is no use).
     """
     width, height = bubble
-    fits_left = figure.x - GAP - width >= area.x + MARGIN
-    fits_right = figure.right + GAP + width <= area.right - MARGIN
+    k = figure.height / FIGURE_HEIGHT
+    gap = round(GAP * k)
+    above_feet = round(ABOVE_FEET - (FIGURE_HEIGHT - figure.height) / 2)  # still at his middle
+    fits_left = figure.x - gap - width >= area.x + MARGIN
+    fits_right = figure.right + gap + width <= area.right - MARGIN
     if fits_left or fits_right:
         left = fits_left
-        x = figure.x - GAP - width if left else figure.right + GAP
-        y = figure.bottom - ABOVE_FEET - height
+        x = figure.x - gap - width if left else figure.right + gap
+        y = figure.bottom - above_feet - height
     else:
         left = True
         x = figure.x + figure.width // 2 - width // 2
-        y = figure.y + ABOVE_HEAD - height
+        y = figure.y + round(ABOVE_HEAD * k) - height
     x = max(area.x + MARGIN, min(x, area.right - MARGIN - width))
     y = max(area.y + MARGIN, min(y, area.bottom - MARGIN - height))
     return x, y, left
+
+
+def nearest_corner(x: float, y: float, area: Box) -> tuple[bool, bool]:
+    """The corner of the screen a point is nearest: (on the right, at the bottom). Minimized, he
+    shrinks into it, so that the room he gives back is all of a piece."""
+    return x > area.x + area.width / 2, y > area.y + area.height / 2
 
 
 def screen_area(point: QPoint) -> Box:
@@ -87,6 +98,11 @@ class Placement(QObject):
         if (x, y, left) != (self._x, self._y, self._left):
             self._x, self._y, self._left = x, y, left
             self.changed.emit()
+
+    @Slot(float, float, result=list)
+    def anchorOf(self, x: float, y: float) -> list[bool]:
+        """[right, bottom]: the corner of his screen his figure's centre is nearest."""
+        return list(nearest_corner(x, y, screen_area(QPoint(round(x), round(y)))))
 
     @Property(int, notify=changed)
     def bubbleX(self) -> int:

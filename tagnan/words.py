@@ -9,6 +9,7 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from typing import Any
 
 from tagnan import language
 from tagnan.model import Card
@@ -130,6 +131,36 @@ def build(card: Card, others: Sequence[Card], rng: random.Random, early: bool = 
         order.index(card),
         tuple(order),
         early,
+    )
+
+
+def as_question(
+    touch: Touch, picked: int | None, typed: str, learned: str
+) -> tuple[dict[str, Any], list[int]]:
+    """A touch as a question his brain can explain (Tell me more), and the answer given."""
+    card = touch.card
+    gap = card.gap
+    if touch.kind in (GAP, TYPE_GAP) and gap:
+        stem = f"{gap[0]}____{gap[2]}" + (f" ({card.translation})" if card.translation else "")
+    elif touch.kind == MEANING:
+        stem = f'What does "{card.term}" mean?'
+    else:
+        stem = f'How does one say "{card.meaning}" in {learned}?'
+    if touch.kind in TYPED:
+        choices = [touch.expected, typed.strip() or "(no answer)"]
+        answers, chosen = [0], [1]
+    else:
+        choices = list(touch.choices)
+        answers = [touch.answer]
+        chosen = [] if picked is None else [picked]
+    explanation = f"{card.term}: {card.meaning}."
+    if card.example:
+        explanation += f" {card.sentence}"
+    if card.note:
+        explanation += f" {card.note}"
+    return (
+        {"stem": stem, "choices": choices, "answers": answers, "explanation": explanation},
+        chosen,
     )
 
 

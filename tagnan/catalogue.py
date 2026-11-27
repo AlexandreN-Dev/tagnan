@@ -450,7 +450,13 @@ def read_words(text: str, name: str = "") -> Catalogue | None:
     title = " ".join((title or name or UNTITLED_WORDS).split())[:80]
     names = list(dict.fromkeys(w["chapter"] or title for w in listed))
     course = blueprints.language_course(title, "", "", [(n, n) for n in names])
-    words = tuple({**w, "chapter": names.index(w["chapter"] or title) + 1} for w in listed)
+    words = tuple(
+        {
+            **{k: v for k, v in w.items() if k != "chapter"},
+            "domain": names.index(w["chapter"] or title) + 1,
+        }
+        for w in listed
+    )
     return Catalogue(course=course, questions=(), words=words, origin=TYPED, typed=True)
 
 
@@ -763,9 +769,13 @@ def language_prompt(learned: str, level: str, speaks: str, purpose: str = "") ->
     )
 
 
-def explain_prompt(bp: Blueprint, question: Question, chosen: Sequence[int]) -> str:
-    """In place of Tell me more: what his brain would be asked."""
-    return brain.explain_prompt(bp, question.to_dict(), chosen)
+def explain_prompt(
+    bp: Blueprint, question: Question | Mapping[str, Any], chosen: Sequence[int]
+) -> str:
+    """In place of Tell me more: what his brain would be asked, of a question or of a word
+    (tagnan.words.as_question)."""
+    data = question.to_dict() if isinstance(question, Question) else question
+    return brain.explain_prompt(bp, data, chosen)
 
 
 def answer_format(

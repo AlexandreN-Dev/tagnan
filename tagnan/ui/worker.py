@@ -3,7 +3,7 @@ explanation up to a minute, a study sheet a minute or two."""
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -22,6 +22,10 @@ class BrainWorker(QObject):
     planFailed = Signal(str, str)  # the words, the error
     sheetWritten = Signal(int, object)  # question id, a study sheet's words (tagnan.studysheet)
     sheetFailed = Signal(int, str)  # question id, the error
+    wordsReady = Signal(object)  # a language's words: {"words": [...], "rejected", "course"}
+    wordsFailed = Signal(str)
+    levelReady = Signal(str, object)  # the language, questions that place one in it
+    levelFailed = Signal(str, str)  # the language, the error
     accountChanged = Signal()
 
     def __init__(self, client: BrainClient) -> None:
@@ -31,6 +35,7 @@ class BrainWorker(QObject):
         self.offline = False  # development snapshots: no batch, no quota spent
         self.planning = ""  # the words of the course being drawn up
         self.sheeting = False  # a study sheet's words are being written
+        self.levelling = ""  # the language one is being placed in
         # Whose Claude login the brain writes with ({"signedIn", "email", "org", "plan"}), None
         # until known. Kept in memory only: never in his database, his settings or his log.
         self.account: dict[str, Any] | None = None
@@ -52,6 +57,47 @@ class BrainWorker(QObject):
                 return
             self.generating = False
             self.batchReady.emit(answer)
+
+        self._start(work)
+        return True
+
+    def words(self, request: dict[str, Any]) -> bool:
+        """Start writing a language course's words, unless a batch is on its way."""
+        if self.generating or self.offline:
+            return False
+        self.generating = True
+
+        def work() -> None:
+            try:
+                answer = self._client.words(request)
+            except BrainError as error:
+                logger.warning("words failed: %s", error)
+                self.generating = False
+                self.wordsFailed.emit(str(error))
+                return
+            self.generating = False
+            self.wordsReady.emit(answer)
+
+        self._start(work)
+        return True
+
+    def level(self, learned: str, speaks: str) -> bool:
+        """Start writing the questions that place one in a language, unless some are on
+        their way."""
+        if self.levelling or self.offline:
+            return False
+        self.levelling = learned
+
+        def work() -> None:
+            try:
+                answer = self._client.level({"learned": learned, "speaks": speaks})
+            except BrainError as error:
+                logger.warning("placement failed: %s", error)
+                self.levelling = ""
+                self.levelFailed.emit(learned, str(error))
+                return
+            self.levelling = ""
+            self.levelReady.emit(learned, answer)
 
         self._start(work)
         return True
@@ -88,15 +134,21 @@ class BrainWorker(QObject):
         self._start(work)
         return True
 
-    def plan(self, words: str) -> bool:
-        """Start drawing up a course, unless one is on its way."""
+    def plan(
+        self,
+        words: str,
+        language: Mapping[str, Any] | None = None,
+        course: Mapping[str, Any] | None = None,
+    ) -> bool:
+        """Start drawing up a course, unless one is on its way. With `language` ({"learned",
+        "speaks", "level"}), a language course's chapters; with `course` too, it a level up."""
         if self.planning:
             return False
         self.planning = words
 
         def work() -> None:
             try:
-                answer = self._client.plan(words)
+                answer = self._client.plan(words, language, course)
             except BrainError as error:
                 logger.warning("course failed: %s", error)
                 self.planning = ""

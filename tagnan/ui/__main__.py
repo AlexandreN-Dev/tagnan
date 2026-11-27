@@ -36,6 +36,7 @@ from PySide6.QtWidgets import QApplication
 
 from tagnan import blueprint as blueprints
 from tagnan import config as configs
+from tagnan import language
 from tagnan import progress as rules
 from tagnan.brain_client import BrainClient
 from tagnan.game import Game
@@ -125,9 +126,97 @@ def compose(window: QQuickWindow) -> QImage:
     return image
 
 
+# Development: a language course to show (--demo lang-…), in a database of its own. The word,
+# its meaning, its sentence, that sentence's meaning, its chapter, a note.
+DEMO_CHAPTERS = (
+    ("Everyday life", "the day's routine, the home, the family"),
+    ("Food and eating out", "meals, the restaurant, the market"),
+    ("Getting around", "transport, directions, the town"),
+    ("Work and the office", "meetings, deadlines, colleagues"),
+    ("Talking about the past", "yesterday, last week, as a child"),
+)
+DEMO_WORDS = (
+    ("embarazada", "pregnant", "Mi hermana está **embarazada** de seis meses.",
+     "My sister is six months pregnant.", 1, "A false friend: embarrassed is avergonzado."),
+    ("madrugar", "to get up early", "Mañana tengo que **madrugar**.",
+     "I have to get up early tomorrow.", 1, ""),
+    ("trasnochar", "to stay up late", "No me gusta **trasnochar**.", "I hate late nights.", 1, ""),
+    ("desayunar", "to have breakfast", "Suelo **desayunar** a las ocho.", "Breakfast at 8.", 1, ""),
+    ("dormirse", "to fall asleep", "Me cuesta **dormirse** pronto.", "", 1, ""),
+    ("la cuenta", "the bill", "¿Nos trae **la cuenta**, por favor?",
+     "Could you bring us the bill, please?", 2, ""),
+    ("el cuento", "a tale", "Me contó **el cuento** entero.", "He told me the whole tale.", 2, ""),
+    ("la cuchara", "the spoon", "Falta **la cuchara**.", "The spoon is missing.", 2, ""),
+    ("la cocina", "the kitchen", "Comemos en **la cocina**.", "We eat in the kitchen.", 2, ""),
+    ("la estación", "the station", "¿Dónde está **la estación**?", "Where is the station?", 3, ""),
+    ("la parada", "the stop", "Bajo en la próxima parada.", "I get off at the next stop.", 3, ""),
+    ("el plazo", "the deadline", "**El plazo** termina el viernes.", "It ends on Friday.", 4, ""),
+)  # fmt: skip
+
+
+def language_demo(game: Game) -> None:
+    """Development: the game on a Spanish course with a few words, he a Cadet there."""
+    course = blueprints.language_course("Spanish", "English", "A2", DEMO_CHAPTERS)
+    game.set_course(course)
+    game.add_cards(
+        course,
+        [
+            {"domain": d, "term": w, "meaning": m, "example": e, "translation": tr, "note": n}
+            for w, m, e, tr, d, n in DEMO_WORDS
+        ],
+        time.time(),
+    )
+    game.store.save_progress(
+        game.exam, rules.Progress(points=1284, streak=4, best_streak=11, grade=2)
+    )
+
+
+def language_scene(controller: Controller, scene: str) -> None:
+    """Development: a moment of a language course: its level bubble, its progress, or a bout as
+    far as `scene`: a word shown, one picked right, one missed in its sentence, one typed."""
+    game = controller.game
+    now = time.time()
+    if scene == "level":
+        controller._show_level(language.Found("Spanish", "A2"))
+        return
+    cards = {c.term: c.id or 0 for c in game.store.cards(game.exam)}
+    if scene == "stats":
+        for i, card_id in enumerate(cards.values()):
+            game.store.move_card(card_id, (6, 6, 3, 6, 2, 0)[i % 6], now + i * 3600, now - 7200)
+        controller.showStats()
+        return
+    for card_id in cards.values():  # known to him, none due: the choices of the others
+        game.store.move_card(card_id, 2, now + 5 * rules.DAY, now - rules.DAY)
+    game.store.move_card(cards["embarazada"], 0, 0.0, 0.0)
+    for late, (term, step) in enumerate((("la estación", 4), ("la cuenta", 3), ("madrugar", 1))):
+        game.store.move_card(cards[term], step, now - 60 * (late + 1), now - rules.DAY)
+    controller.askNow()
+    steps = ("meet", "pick", "right", "gap", "miss", "type", "almost", "end")
+    reach = steps.index(scene) if scene in steps else 0
+    if reach >= 1:
+        controller.meetWord(False)
+    if reach >= 2 and controller._touch is not None:
+        controller.touchPick(controller._touch.answer)
+    if reach >= 3:
+        controller.nextTouch()
+    if reach >= 4 and controller._touch is not None:
+        touch = controller._touch
+        wrong = touch.choices.index("el cuento") if "el cuento" in touch.choices else 0
+        controller.touchPick(wrong if wrong != touch.answer else (wrong + 1) % len(touch.choices))
+    if reach >= 5:
+        controller.nextTouch()
+    if reach >= 6:
+        controller.touchType("la estacion")
+    if reach >= 7:
+        controller.nextTouch()
+    controller._advance_timer.stop()  # a picture: the bout waits
+
+
 def demo(controller: Controller, what: str) -> None:
     """Development: show a bubble at once (snapshots)."""
-    if what.startswith("question") or what.startswith("result"):
+    if what.startswith("lang-"):
+        language_scene(controller, what.removeprefix("lang-"))
+    elif what.startswith("question") or what.startswith("result"):
         controller.askNow()
         question = controller._current
         if what != "question" and question is not None:
@@ -217,6 +306,16 @@ def main() -> int:
             "sheet-ready",
             "small",
             "small-question",
+            "lang-level",
+            "lang-meet",
+            "lang-pick",
+            "lang-right",
+            "lang-gap",
+            "lang-miss",
+            "lang-type",
+            "lang-almost",
+            "lang-end",
+            "lang-stats",
         ],
         help="development: show a bubble right away",
     )
@@ -256,8 +355,11 @@ def main() -> int:
         logging.error("%s", error)
         return 1
     rng = random.Random()  # noqa: S311 - questions and interjections, not secrets
-    store = Store(args.db)
+    wordy = bool(args.demo and args.demo.startswith("lang-"))  # a language course to show
+    store = Store(":memory:" if wordy else args.db)
     game = Game(store, bp, rng)
+    if wordy:
+        language_demo(game)
     if args.grade is not None:
         from dataclasses import replace
 

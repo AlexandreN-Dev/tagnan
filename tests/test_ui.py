@@ -3,6 +3,7 @@ import itertools
 import json
 import os
 import random
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,14 @@ from tagnan.ui.sheetpdf import Files
 from tagnan.ui.sounds import Sounds
 from tagnan.ui.tray import Tray
 from tagnan.ui.worker import BrainWorker
-from tests.conftest import pottery_data, pottery_question, question_data, sheet_data
+from tests.conftest import (
+    pottery_data,
+    pottery_question,
+    question_data,
+    sheet_data,
+    spanish,
+    word_data,
+)
 
 NOW = 1_800_000_000.0
 
@@ -271,6 +279,10 @@ class FakeWorker(BrainWorker):
         self.requests: list[dict[str, Any]] = []
         self.explanations: list[int] = []
         self.plans: list[str] = []
+        self.languages: list[dict[str, Any] | None] = []  # the language each plan was for
+        self.raised: list[dict[str, Any] | None] = []  # the course each plan raised a level
+        self.words_asked: list[dict[str, Any]] = []
+        self.levels: list[tuple[str, str]] = []
         self.sheets: list[int] = []
         self.lookups = 0
 
@@ -282,9 +294,26 @@ class FakeWorker(BrainWorker):
     def explain(self, question_id: int, request: dict[str, Any]) -> None:
         self.explanations.append(question_id)
 
-    def plan(self, words: str) -> bool:
+    def plan(
+        self,
+        words: str,
+        language: Mapping[str, Any] | None = None,
+        course: Mapping[str, Any] | None = None,
+    ) -> bool:
         self.plans.append(words)
+        self.languages.append(dict(language) if language is not None else None)
+        self.raised.append(dict(course) if course is not None else None)
         self.planning = words
+        return True
+
+    def words(self, request: dict[str, Any]) -> bool:
+        self.words_asked.append(request)
+        self.generating = True
+        return True
+
+    def level(self, learned: str, speaks: str) -> bool:
+        self.levels.append((learned, speaks))
+        self.levelling = learned
         return True
 
     def sheet(self, question_id: int, request: dict[str, Any]) -> bool:
@@ -871,6 +900,7 @@ def test_his_menu_has_catalogues_beside_who_writes_his_questions(game: Game) -> 
         "prompt:convert",
         "",
         "format",
+        "format:words",
     ]
     assert content["catalogueList"][2]["hint"] == "2 on AIF-C01, to share"
     assert content["catalogueList"][3]["header"] == "Prompts for your assistant"
@@ -895,7 +925,8 @@ def test_his_menu_has_catalogues_beside_who_writes_his_questions(game: Game) -> 
         "catalogues:prompt:write",
         "catalogues:prompt:convert",
         "catalogues:format",
-    ]
+    ]  # six suggestions at most: the list of words comes by its own name
+    assert "catalogues:format:words" in actions("list of words")
 
 
 def test_without_a_brain_he_asks_his_catalogues_and_calls_none(game: Game) -> None:
@@ -2005,6 +2036,624 @@ def test_his_menu_loads_in_the_window_and_answers_the_keyboard(game: Game) -> No
         assert popup.property("closing") is True
         QTest.qWait(400)
         assert not popup.isVisible()
+        window.close()
+        del engine  # before the objects it shows
+    finally:
+        qInstallMessageHandler(None)
+    assert [w for w in warnings if "qml" in w.casefold()] == []
+
+
+# --- A language course -------------------------------------------------------------------------
+
+
+def rested(game: Game, steps: dict[int, int]) -> None:
+    """Words put where a test wants them: {card id: step}, all due, the first the longest; the
+    others known to him and not due, so that they are choices only."""
+    for card in game.store.cards(game.exam):
+        assert card.id is not None
+        game.store.move_card(card.id, 2, NOW + 5 * 86400, NOW - 86400)
+    for late, (card_id, step) in enumerate(reversed(list(steps.items())), 1):
+        game.store.move_card(card_id, step, NOW - 60 * late if step else 0.0, NOW - 86400)
+
+
+def test_a_language_asks_ones_level_then_draws_up_its_course(game: Game, tmp_path: Path) -> None:
+    fill(game)
+    settings = Settings(tmp_path / "settings.json")
+    controller, worker, _ = make(game, settings=settings)
+    preview = controller.previewCourse("learn Spanish")
+    assert preview == {
+        "ok": True,
+        "text": "Spanish: a language. I'll ask your level, then draw up its chapters.",
+    }
+    assert controller.previewCourse("the French Revolution")["text"].startswith("I'll draw up")
+    assert controller.learnWith("learn Spanish") is True
+    assert worker.plans == []  # not yet: one's level first
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["title"], bubble["level"]) == ("level", "A language!", "")
+    assert [x["key"] for x in bubble["levels"]] == ["A1", "A2", "B1", "B2", "C1"]
+    assert bubble["levels"][1]["label"] == "A2 · Elementary"
+    assert bubble["speaks"][:2] == [
+        {"key": "English", "label": "English"},
+        {"key": "French", "label": "Français"},
+    ]
+    assert bubble["find"] is True
+    controller.drawLanguage()  # no level yet: nothing
+    assert controller.property("bubble")["mode"] == "level"
+    controller.setLevel("A2")
+    controller.setSpeaks("français")
+    bubble = controller.property("bubble")
+    assert (bubble["level"], bubble["speak"]) == ("A2", "French")
+    controller.setSpeaks("Spanish")  # not the language one learns
+    assert controller.property("bubble")["speak"] == "French"
+    controller.drawLanguage()
+    assert worker.plans == ["Spanish"]
+    assert worker.languages == [
+        {"learned": "Spanish", "level": "A2", "speaks": "French", "purpose": ""}
+    ]
+    assert "Spanish at A2: I'm drawing up its chapters" in controller.property("bubble")["text"]
+    assert settings.get("speaks") == "French"  # offered first next time
+    course = spanish()
+    worker.planning = ""
+    worker.planned.emit("Spanish", {"understood": True, "course": course.to_dict()})
+    assert game.exam == "spanish"
+    assert game.is_language
+    text = controller.property("bubble")["text"]
+    assert text == (
+        "Your course is ready: Spanish, A2. 1. Everyday life; 2. Food and eating out."
+        " Here I'm Inkwell. Your first words in a minute or two."
+    )
+    assert controller.property("stage") == 0
+    # He asks his brain for words, not questions; they are kept and the first bout comes soon.
+    assert worker.requests == []  # the first course had questions enough
+    assert worker.words_asked[-1]["chapters"] == [{"id": 1, "count": 10}, {"id": 2, "count": 10}]
+    assert worker.words_asked[-1]["course"]["language"]["level"] == "A2"
+    worker.generating = False
+    worker.wordsReady.emit(
+        {"words": [word_data(i) for i in range(8)] + [word_data(0, chapter=7)], "course": "spanish"}
+    )
+    assert len(game.store.cards("spanish")) == 8
+    controller.dismiss()
+    controller.askNow()
+    assert controller.property("bubble")["mode"] == "meet"
+    controller.later()
+    # Named again, in any words: back to the course one has, not a new one.
+    assert controller.previewCourse("Spanish B1") == {"ok": True, "text": "Back to Spanish."}
+    assert controller.learnWith("learn spanish") is True
+    assert controller.property("bubble")["text"].startswith("We're already on Spanish")
+    menu = Menu(controller)
+    assert menu.property("content")["subject"] == "Spanish A2"
+    # A language he does not know by name: the brain finds it, and its level comes first.
+    controller.dismiss()
+    assert controller.learnWith("business wolof") is True
+    assert worker.plans[-1] == "business wolof"
+    worker.planning = ""
+    worker.planned.emit("business wolof", {"understood": True, "language": "Wolof"})
+    bubble = controller.property("bubble")
+    assert bubble["mode"] == "level"
+    assert bubble["text"].startswith("Wolof: I'll ask you its words")
+    assert bubble["speak"] == "French"  # as chosen last
+    controller.dismiss()
+    assert controller._setup is None
+
+
+def test_a_bout_shows_a_new_word_then_asks_those_due(lingo: Game) -> None:
+    rested(lingo, {1: 0, 2: 1, 5: 3, 4: 4})  # madrugar new; trasnochar, la cuenta, la estación
+    clock = Clock()
+    controller, worker, animator = make(lingo, clock)
+    controller.askNow()
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["title"], bubble["term"]) == ("meet", "A new word", "madrugar")
+    assert bubble["meta"] == "Spanish A2 · Everyday life"
+    assert bubble["dots"] == ["now", "", "", ""]
+    assert bubble["example"] == "Mañana tengo que **madrugar**."
+    assert animator.property("mood") == "ask"
+    assert not controller.closes_on_outside()  # as a question: it waits for its answer
+    controller.touchPick(0)  # not a touch: nothing
+    controller.meetWord(False)
+    assert lingo.store.card(1).step == 1
+    # Step 1: its meaning, picked among his other words'.
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["term"], bubble["ask"]) == (
+        "touch",
+        "trasnochar",
+        "What does it mean?",
+    )
+    assert (bubble["plain"], bubble["typing"], bubble["dots"]) == (
+        False,
+        False,
+        ["seen", "now", "", ""],
+    )
+    assert len(bubble["choices"]) == 4
+    touch = controller._touch
+    assert touch is not None
+    controller.touchPick(touch.answer)
+    bubble = controller.property("bubble")
+    assert (bubble["done"], bubble["good"], bubble["tone"]) == (True, touch.answer, "good")
+    assert bubble["verdict"].endswith("«No me gusta **trasnochar**.»")
+    assert bubble["dots"] == ["seen", "good", "", ""]
+    assert animator.property("mood") == "happy"
+    assert controller._advance_timer.isActive()  # the next comes by itself
+    controller.touchPick(0)  # answered already: nothing
+    assert lingo.progress.points == 3
+    controller.nextTouch()  # or at a click
+    # Step 3: the word in its sentence; a miss stops the bout until Next.
+    bubble = controller.property("bubble")
+    assert (bubble["sentence"], bubble["ask"]) == (
+        "¿Nos trae ____, por favor?",
+        "Which word goes there?",
+    )
+    assert (bubble["term"], bubble["translation"]) == ("", "The bill, please?")
+    touch = controller._touch
+    assert touch is not None
+    wrong = next(i for i in range(len(touch.choices)) if i != touch.answer)
+    controller.touchPick(wrong)
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["tone"], bubble["right"]) == (
+        "miss",
+        "bad",
+        "**la cuenta**: the bill.",
+    )
+    assert bubble["chosen"].startswith(f"You picked **{touch.choices[wrong]}**: ")
+    assert bubble["news"] == "One step down: it comes back tomorrow."
+    assert bubble["dots"] == ["seen", "good", "bad", ""]
+    assert animator.property("mood") == "angry"
+    assert not controller._advance_timer.isActive()
+    assert not controller.closes_on_outside()
+    controller.nextTouch()
+    # Step 4: typed, with the letters a keyboard may lack; its accent missing still counts.
+    bubble = controller.property("bubble")
+    assert (bubble["term"], bubble["plain"], bubble["ask"]) == ("the station", True, "In Spanish:")
+    assert (bubble["typing"], bubble["choices"], bubble["other"]) == (True, [], "I don't know")
+    assert bubble["focus"] is True  # one has taken part: the keyboard is his
+    assert bubble["letters"] == ["á", "ñ", "ó"]  # of the course's words and sentences
+    controller.touchType("  ")  # nothing typed: no answer yet
+    assert controller.property("bubble")["done"] is False
+    controller.touchType("la estacion")
+    bubble = controller.property("bubble")
+    assert (bubble["done"], bubble["tone"], bubble["typed"]) == (True, "gold", "la estacion")
+    assert bubble["verdict"] == "Touché, all but the accent: **la estación**."
+    controller._advance()  # as the timer would
+    # The bout's end: each word, where it goes and when it comes back.
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["title"], bubble["tone"]) == ("bout", "Well fought!", "")
+    assert bubble["dots"] == ["seen", "good", "bad", "good"]
+    assert bubble["rows"] == [
+        {"term": "madrugar", "mark": "seen", "next": "met · asked later today"},
+        {"term": "trasnochar", "mark": "good", "next": "step 2 · tomorrow"},
+        {"term": "la cuenta", "mark": "bad", "next": "back to step 2 · tomorrow"},
+        {"term": "la estación", "mark": "good", "next": "step 5 · in 3 weeks"},
+    ]
+    assert bubble["points"] == "+4 points · 4 in all"
+    assert (bubble["promoted"], bubble["news"]) == (False, "")
+    assert lingo.progress.points == 4
+    assert controller.scheduler.next_at > clock.now  # his call is done: the next one later
+    assert controller.closes_on_outside()
+    assert len(worker.words_asked) == 1  # no new word left: his brain writes more
+    controller.dismiss()
+    assert controller.property("bubble")["mode"] == "hidden"
+    assert controller._bout == []
+
+
+def test_a_word_missed_can_be_explained_and_the_bout_goes_on(lingo: Game) -> None:
+    rested(lingo, {4: 4, 5: 2})
+    controller, worker, _ = make(lingo)
+    controller.askNow()
+    controller.touchSkip()  # la estación, typed: I don't know
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["chosen"], bubble["more"]) == ("miss", "", "Tell me more")
+    assert bubble["news"] == "One step down: it comes back tomorrow."
+    controller.explainMore()
+    assert controller.property("bubble")["more"] == "thinking"
+    assert worker.explanations == [-4]
+    controller.explainMore()  # asked already
+    assert worker.explanations == [-4]
+    worker.explained.emit(-4, "Sacrebleu, estación takes an accent.")
+    bubble = controller.property("bubble")
+    assert bubble == {
+        "mode": "explanation",
+        "title": "Listen well",
+        "text": "Sacrebleu, estación takes an accent.",
+        "sheet": "",
+    }
+    controller.dismiss()  # Got it: the bout's next word, not its end
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["term"]) == ("touch", "the bill")
+    # A wrong word typed is said back; an explanation that fails leaves the miss as it was.
+    lingo.store.move_card(5, 4, NOW, NOW)
+    controller.later()
+    controller.askNow()
+    controller.touchType("el cuento")
+    assert controller.property("bubble")["chosen"] == "You wrote **el cuento**."
+    controller.explainMore()
+    worker.explainFailed.emit(-5, "claude did not answer")
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["more"]) == ("miss", "Tell me more")
+    assert bubble["news"] == "No more explanation: claude did not answer"
+
+
+def test_a_bout_is_put_off_a_word_reported_and_one_left_alone(lingo: Game) -> None:
+    rested(lingo, {1: 1, 2: 1, 3: 1})
+    clock = Clock()
+    controller, _, _ = make(lingo, clock)
+    controller.askNow()
+    assert controller.property("bubble")["term"] == "madrugar"
+    controller.flag()  # a wrong word: never again, and the bout goes on
+    assert controller.property("bubble")["term"] == "trasnochar"
+    assert [c.id for c in lingo.store.cards("spanish")] == [2, 3, 4, 5, 6, 7, 8]
+    controller.later()
+    assert controller.property("bubble")["mode"] == "hidden"
+    assert controller.scheduler.next_at == clock.now + 600  # put off, as a question
+    assert lingo.store.card(2).step == 1  # not asked: it stays due
+    # Left alone ten minutes, it goes away; the words wait.
+    controller.askNow()
+    assert controller.property("bubble")["dots"] == ["now", ""]
+    controller._unanswered()
+    assert controller.property("bubble")["mode"] == "hidden"
+    assert controller._bout == []
+    # His own call sounds for a bout as for a question, and the keyboard stays one's own.
+    lingo.store.move_card(2, 4, NOW, NOW - 86400)
+    lingo.store.move_card(3, 2, NOW + 5 * 86400, NOW)  # not due: the word to type comes first
+    clock.now = controller.scheduler.next_at + 1
+    controller._tick()
+    bubble = controller.property("bubble")
+    assert (bubble["typing"], bubble["focus"]) == (True, False)
+
+
+def test_a_bout_that_takes_him_over_the_line_promotes_him_at_its_end(lingo: Game) -> None:
+    rested(lingo, {1: 1, 2: 1})
+    lingo.store.save_progress("spanish", Progress(points=246))  # four points under Gascon
+    controller, _, _ = make(lingo)
+    controller.animator._rig.reduced_motion = True
+    controller.askNow()
+    for _ in range(2):
+        touch = controller._touch
+        assert touch is not None
+        controller.touchPick(touch.answer)
+        assert controller.property("stage") == 0  # not in the middle of a bout
+        controller.nextTouch()
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["tone"], bubble["promoted"], bubble["rank"]) == (
+        "bout",
+        "good",
+        True,
+        "Gascon",
+    )
+    assert bubble["news"].startswith("Promotion! Tagnan is now a Gascon")
+    assert bubble["points"] == "+6 points · 252 in all"
+    assert controller.property("stage") == 1
+    assert not controller._hide_timer.isActive()  # a promotion stays to be read
+
+
+def placed(level: str, sentence: str = "Yo ____ aquí.") -> dict[str, Any]:
+    return {"level": level, "sentence": sentence, "choices": ["a", "b", "c", "d"], "answer": 0}
+
+
+def test_a_few_questions_find_ones_level(game: Game) -> None:
+    fill(game)
+    controller, worker, _ = make(game)
+    controller.learnWith("Spanish")
+    controller.findLevel()
+    assert worker.levels == [("Spanish", "English")]
+    assert "A few questions to find your level in Spanish" in controller.property("bubble")["text"]
+    questions = [placed(level) for level in ("A1", "A2", "A2", "B1", "B1", "B2", "B2", "C1")]
+    worker.levelling = ""
+    worker.levelReady.emit("Spanish", {"questions": questions})
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["title"], bubble["placement"]) == (
+        "touch",
+        "Where do you stand?",
+        True,
+    )
+    assert (bubble["sentence"], bubble["ask"], bubble["other"]) == (
+        "Yo ____ aquí.",
+        "Which one fits?",
+        "",
+    )
+    assert len(bubble["dots"]) == 8
+    assert sorted(c["text"] for c in bubble["choices"]) == ["a", "b", "c", "d"]  # shuffled
+
+    def answer(right: bool) -> None:
+        asked = controller.property("bubble")
+        placement = controller._placement
+        assert placement is not None
+        good = placement["questions"][placement["at"]]["answer"]
+        controller.touchPick(good if right else (good + 1) % 4)
+        done = controller.property("bubble")
+        assert (done["done"], done["good"]) == (True, good)
+        assert done["bad"] == (-1 if right else (good + 1) % 4)
+        assert asked["meta"] == "Spanish · your level"
+        controller.nextTouch()  # or the timer, a moment later
+
+    for right in (True, True, False, True, False):  # A1, A2, then one A2 missed, B1, B1 missed
+        answer(right)
+    assert controller.property("bubble")["mode"] == "touch"
+    answer(False)  # a second miss in a row: that will do
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["level"]) == ("level", "B1")
+    assert bubble["status"] == "I'd say B1, Intermediate. Change it if you like."
+    assert game.progress.points == 0  # no points either way
+    assert controller._placement is None
+    controller.drawLanguage()
+    assert worker.languages[-1] == {
+        "learned": "Spanish",
+        "level": "B1",
+        "speaks": "English",
+        "purpose": "",
+    }
+    # The questions written while a question waits for its answer wait for the bubble.
+    controller.dismiss()
+    controller.learnWith("German")
+    controller.findLevel()
+    assert worker.levels[-1] == ("German", "English")
+    worker.levelling = ""
+    worker.levelFailed.emit("German", "claude did not answer")
+    assert "pick a level" in controller.property("bubble")["status"]
+
+
+def test_his_progress_counts_words_and_offers_the_next_level(lingo: Game) -> None:
+    lingo.store.move_card(1, 6, NOW + 60 * 86400, NOW)
+    lingo.store.move_card(5, 2, NOW + 3600, NOW)
+    lingo.store.save_progress("spanish", Progress(points=1284, streak=4, best_streak=11, grade=2))
+    controller, worker, _ = make(lingo)
+    controller.showStats()
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["title"], bubble["points"]) == ("stats", "Cadet", 1284)
+    words = bubble["words"]
+    assert (words["course"], words["known"], words["climbing"], words["fresh"]) == (
+        "Spanish · A2",
+        1,
+        1,
+        6,
+    )
+    assert words["chapters"] == [
+        {"name": "1. Everyday life", "rate": 0.25, "count": "1/4"},
+        {"name": "2. Food and eating out", "rate": 0.0, "count": "0/4"},
+    ]
+    assert (words["up"], words["news"]) == ("", "")
+    assert words["bank"].startswith("1 word due today. Next bout around ")
+    controller.moveUp()  # not offered: nothing
+    assert worker.plans == []
+    for i in range(90):  # nine touches right in ten, this week
+        lingo.store.record_touch(5, "meaning", i % 10 != 0, 3, NOW - 3600)
+    controller.showStats()
+    words = controller.property("bubble")["words"]
+    assert words["up"] == "B1"
+    assert words["news"] == "You hold A2 well: nine right in ten this week. B1 whenever you like."
+    controller.moveUp()
+    assert worker.plans == ["Spanish"]
+    asked = worker.languages[-1]
+    assert asked is not None
+    assert asked["level"] == "B1"
+    raised = worker.raised[-1]
+    assert raised is not None
+    assert raised["key"] == "spanish"
+    assert controller.property("bubble")["title"] == "B1 it is!"
+    up = blueprint.raise_level(
+        lingo.blueprint, "B1", [("Opinions", "doubt"), ("The news", "media")]
+    )
+    worker.planning = ""
+    worker.planned.emit("Spanish", {"understood": True, "course": up.to_dict()})
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Onwards!"
+    assert "Spanish at B1: 3. Opinions; 4. The news." in bubble["text"]
+    assert lingo.blueprint.language == blueprint.Language("Spanish", "English", "B1", 3)
+    assert lingo.progress.points == 1284  # his rank stays
+    assert len(lingo.store.cards("spanish")) == 8  # and the words one has
+    # New words are asked for the new level's chapters.
+    assert worker.words_asked[-1]["chapters"] == [{"id": 3, "count": 10}, {"id": 4, "count": 10}]
+    # A course of questions shows its answers, as ever.
+    controller.setCourse("aif-c01")
+    controller.showStats()
+    assert controller.property("bubble")["words"] == {}
+
+
+WORD_LIST = """# Italian
+
+## Food
+
+il conto = the bill
+la mancia = the tip
+  Lasciamo la mancia? = Shall we leave a tip?
+il cucchiaio = the spoon
+la forchetta = the fork
+"""
+
+
+def test_a_list_of_words_is_learned_with_no_brain_at_all(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, worker, _ = make(game, model="none", catalogues=files)
+    files.clipboard = WORD_LIST
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "A new course!"
+    assert bubble["text"] == "Italian: 1 chapter, 4 words. Shall we learn it now?"
+    controller.bubbleAction("learnpasted")
+    assert (game.exam, game.is_language) == ("italian", True)
+    assert game.blueprint.language == blueprint.Language("Italian")
+    controller.dismiss()
+    controller.askNow()
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["term"], bubble["meta"]) == (
+        "meet",
+        "il conto",
+        "Italian · Food",
+    )
+    controller.meetWord(True)  # I know it already
+    assert game.store.card(1).step == 4
+    assert controller.property("bubble")["term"] == "la mancia"
+    controller.meetWord(False)
+    assert controller.property("bubble")["title"] == "2 new words"
+    assert controller.property("bubble")["points"] == "No points yet: I'll ask them in a while."
+    # The same list again, longer: its new words only.
+    controller.dismiss()
+    files.clipboard = WORD_LIST + "il coltello = the knife\n"
+    controller.pasteQuestions()
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Fresh ink!"
+    assert bubble["text"] == (
+        "1 new word on Italian. 4 I already had. I build their questions myself: no brain needed."
+    )
+    assert bubble["buttons"][0] == {"label": "A bout now", "action": "ask", "primary": True}
+    # A word missed: his brain's part goes to one's own assistant.
+    for card in game.store.cards("italian"):
+        assert card.id is not None
+        game.store.move_card(card.id, 2, NOW - 60, NOW - 86400)
+    controller.dismiss()
+    controller.askNow()
+    touch = controller._touch
+    assert touch is not None
+    controller.touchPick((touch.answer + 1) % len(touch.choices))
+    assert controller.property("bubble")["more"] == "Ask your assistant"
+    controller.explainMore()
+    assert controller.property("bubble")["more"] == "copied"
+    assert f'How does one say "{touch.card.meaning}" in Italian?' in files.clipboard
+    # His menu: its words exported, a prompt for more, no quiz to convert; no call to a brain.
+    controller.later()
+    menu = Menu(controller)
+    shelf = menu.property("content")["catalogueList"]
+    assert [x["key"] for x in shelf] == [
+        "paste",
+        "import",
+        "export",
+        "",
+        "prompt:write",
+        "",
+        "format",
+        "format:words",
+    ]
+    assert (shelf[2]["name"], shelf[2]["hint"]) == ("Export my words", "5 on Italian, to share")
+    assert shelf[4]["name"] == "Write words"
+    controller.exportQuestions()
+    name, data = files.written[-1]
+    assert name == "Tagnan – Italian – 5 words.json"
+    assert len(data["words"]) == 5
+    assert (
+        controller.property("bubble")["text"] == "5 words on Italian, in Downloads, ready to share."
+    )
+    controller.copyPrompt("write")
+    assert "word cards for someone who speaks English and learns Italian" in files.clipboard
+    controller.copyWordList()
+    assert files.clipboard == catalogue.WORDS_EXAMPLE
+    assert (worker.requests, worker.words_asked, worker.plans) == ([], [], [])
+    # Words for a course of questions: said so.
+    controller.setCourse("aif-c01")
+    files.clipboard = "# AIF-C01\nla casa = the house\nel perro = the dog\n"
+    controller.pasteQuestions()
+    assert controller.property("bubble")["title"] == "A course of questions"
+
+
+def test_without_a_brain_a_language_is_drawn_up_by_ones_assistant(game: Game) -> None:
+    files = FakeCatalogues()
+    controller, worker, _ = make(game, model="none", catalogues=files)
+    assert "copy the prompt that draws it up" in controller.previewCourse("German")["text"]
+    controller.learnWith("German for work")
+    bubble = controller.property("bubble")
+    assert (bubble["mode"], bubble["find"]) == ("level", False)  # no brain to place one
+    controller.findLevel()
+    assert worker.levels == []
+    controller.setLevel("B1")
+    controller.drawLanguage()
+    assert worker.plans == []
+    assert "to learn German. I speak English, and my level is B1" in files.clipboard
+    assert "Framework of Reference, for work." in files.clipboard
+    bubble = controller.property("bubble")
+    assert bubble["title"] == "Over to your assistant!"
+    assert "the prompt for German at B1 is in your clipboard" in bubble["text"]
+    # Its answer pasted brings the course and its first words.
+    course = blueprint.language_course("German", "English", "B1", [("Work", "meetings")])
+    files.clipboard = json.dumps(
+        {
+            "tagnan": 1,
+            "course": course.to_dict(),
+            "origin": "written",
+            "words": [word_data(0, chapter=1, term="die Besprechung", meaning="the meeting")],
+        }
+    )
+    controller.pasteQuestions()
+    assert controller.property("bubble")["text"] == (
+        "German: 1 chapter, 1 word. Shall we learn it now?"
+    )
+
+
+def test_the_window_draws_a_language_course(lingo: Game) -> None:
+    from PySide6.QtCore import QObject, QUrl, qInstallMessageHandler
+    from PySide6.QtQml import QQmlApplicationEngine
+    from PySide6.QtQuick import QQuickWindow
+
+    from tagnan.ui.__main__ import QML_DIR
+    from tagnan.ui.images import LayerImages
+    from tagnan.ui.placement import Placement
+
+    rested(lingo, {1: 0, 2: 1, 5: 3, 4: 4})
+    controller, _, animator = make(lingo)
+    menu = Menu(controller)
+    warnings: list[str] = []
+    qInstallMessageHandler(lambda _kind, _context, message: warnings.append(message))
+    try:
+        engine = QQmlApplicationEngine()
+        engine.addImageProvider("tagnan", LayerImages())
+        placement = Placement()  # kept: the window holds no reference of its own
+        engine.setInitialProperties(
+            {"controller": controller, "animator": animator, "placement": placement, "menu": menu}
+        )
+        engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
+        window = engine.rootObjects()[0]
+        assert isinstance(window, QQuickWindow)
+        window.show()
+        bubble = next(
+            w for w in window.findChildren(QQuickWindow) if w.title() == "Tagnan — bubble"
+        )
+        heights = {}
+
+        def shown(name: str) -> None:
+            QApplication.processEvents()
+            assert bubble.isVisible()
+            heights[name] = bubble.height()
+
+        controller.askNow()
+        shown("meet")
+        controller.meetWord(False)
+        shown("touch")
+        touch = controller._touch
+        assert touch is not None
+        controller.touchPick(touch.answer)
+        shown("right")
+        controller.nextTouch()
+        shown("gap")
+        touch = controller._touch
+        assert touch is not None
+        controller.touchPick((touch.answer + 1) % len(touch.choices))
+        shown("miss")
+        controller.nextTouch()
+        shown("type")
+        # A word to type: its field's text is what OK sends.
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtQuick import QQuickItem
+        from PySide6.QtTest import QTest
+
+        field = bubble.findChild(QObject, "answer")
+        ok = bubble.findChild(QQuickItem, "answerOk")
+        assert field is not None
+        assert ok is not None
+        field.setProperty("text", "la estación")
+        QApplication.processEvents()
+        centre = ok.mapToScene(ok.boundingRect().center())
+        QTest.mouseClick(
+            bubble, Qt.MouseButton.LeftButton, pos=QPoint(round(centre.x()), round(centre.y()))
+        )
+        QApplication.processEvents()
+        assert controller.property("bubble")["done"] is True
+        assert field.property("text") == "la estación"  # stays to be read
+        controller.nextTouch()
+        shown("bout")
+        assert controller.property("bubble")["mode"] == "bout"
+        controller.dismiss()
+        controller.showStats()
+        shown("stats")
+        controller.learnWith("German")
+        shown("level")
+        assert len(set(heights.values())) > 3  # each its own shape
+        controller.dismiss()
         window.close()
         del engine  # before the objects it shows
     finally:

@@ -452,7 +452,7 @@ def test_a_list_of_words_is_a_language_course_of_its_own() -> None:
     assert found.course.language == blueprint.Language("Spanish")  # no level: a list of one's own
     assert [d.name for d in found.course.domains] == ["Work", "Food"]
     assert (found.typed, found.origin, found.questions) == (True, TYPED, ())
-    assert [(w["chapter"], w["term"], w["meaning"]) for w in found.words] == [
+    assert [(w["domain"], w["term"], w["meaning"]) for w in found.words] == [
         (1, "la reunión", "the meeting"),
         (1, "el plazo", "the deadline"),
         (1, "madrugar", "to get up early"),
@@ -489,7 +489,7 @@ def test_a_deck_exported_as_text_and_a_spreadsheet_of_words() -> None:
     assert isinstance(found.course, Blueprint)
     assert found.course.name == catalogue.UNTITLED_WORDS
     assert [d.name for d in found.course.domains] == ["Work", "Food"]
-    assert [(w["chapter"], w["term"], w["example"]) for w in found.words] == [
+    assert [(w["domain"], w["term"], w["example"]) for w in found.words] == [
         (1, "la reunión", "Tenemos una reunión."),
         (2, "la cuenta", ""),
     ]

@@ -70,6 +70,7 @@ CATALOGUE_COMMANDS = (
     ("prompt:write", "A prompt to write questions", ("prompt", "write questions", "assistant")),
     ("prompt:convert", "A prompt to convert a quiz", ("prompt", "convert", "quiz")),
     ("format", "The plain-text format", ("format", "plain text", "text format", "write my own")),
+    ("format:words", "A list of words", ("format", "list of words", "word list", "vocabulary")),
 )
 
 
@@ -193,7 +194,9 @@ class Menu(QObject):
             "next": f"until {pauses.clock(c.scheduler.paused_until, now)}"
             if paused
             else f"next ~{pauses.clock(c.scheduler.next_at, now)}",
-            "subject": bp.code if subject.whole else subject.name(bp),
+            "subject": (bp.title if bp.language else bp.code)
+            if subject.whole
+            else subject.name(bp),
             "subjectFull": c.game.topic(),
             "pace": pace.name if pace else "Your own",
             "paceKey": pace.key if pace else "",
@@ -236,7 +239,11 @@ class Menu(QObject):
         header (no key) is not a stop."""
         store = self._controller.game.store
         shareable = sum(store.count(bp.key, origin) for origin in ("", WRITTEN, TYPED))
-        return [
+        words = bp.language is not None  # a language course: its words, not questions
+        if words:
+            shareable = len(store.cards(bp.key))
+        things = "words" if words else "questions"
+        rows = [
             {
                 "key": "paste",
                 "name": "Paste questions",
@@ -251,7 +258,7 @@ class Menu(QObject):
             },
             {
                 "key": "export",
-                "name": "Export my questions",
+                "name": f"Export my {things}",
                 "hint": f"{shareable} on {bp.code}, to share"
                 if shareable
                 else "none of my own yet",
@@ -264,7 +271,7 @@ class Menu(QObject):
             },
             {
                 "key": "prompt:write",
-                "name": "Write questions",
+                "name": f"Write {things}",
                 "hint": f"on {bp.code}, {catalogue.BATCH} at a time",
                 "icon": "prompt",
             },
@@ -282,10 +289,18 @@ class Menu(QObject):
             {
                 "key": "format",
                 "name": "The plain-text format",
-                "hint": "an example, copied",
+                "hint": "questions: an example, copied",
+                "icon": "doc",
+            },
+            {
+                "key": "format:words",
+                "name": "A list of words",
+                "hint": "a language: an example, copied",
                 "icon": "doc",
             },
         ]
+        # A quiz converted gives questions: a language course asks words.
+        return [r for r in rows if not (words and r["key"] == "prompt:convert")]
 
     # --- Opening and closing ------------------------------------------------------------------
 
@@ -413,9 +428,17 @@ class Menu(QObject):
                 "export": "to share",
                 "prompt:write": f"on {code}, {catalogue.BATCH} at a time",
                 "prompt:convert": "a PDF, a page, a test",
-                "format": "an example, copied",
+                "format": "questions: an example, copied",
+                "format:words": "a language: an example, copied",
             }
+            wordy = c.game.is_language  # a language course: its words; a quiz gives questions
             for key, label, words in CATALOGUE_COMMANDS:
+                if wordy and key == "prompt:convert":
+                    continue
+                if wordy:
+                    label = label.replace("my questions", "my words").replace(
+                        "write questions", "write words"
+                    )
                 if everything or any(w.startswith(folded) for w in words):
                     add(label, f"catalogues:{key}", subs[key])
         everything = folded in ("model", "models", "brain", "claude", "questions by")
@@ -440,6 +463,8 @@ class Menu(QObject):
             c.copyPrompt(action.removeprefix("prompt:"))
         elif action == "format":
             c.copyFormat()
+        elif action == "format:words":
+            c.copyWordList()
 
     @Slot(str, result=bool)
     def run(self, action: str) -> bool:

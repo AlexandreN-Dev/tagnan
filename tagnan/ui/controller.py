@@ -8,23 +8,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QLocale, QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QCursor
 
-from tagnan import art, catalogue
+from tagnan import art, catalogue, language, words
 from tagnan import blueprint as blueprints
 from tagnan import config as configs
 from tagnan import pause as pauses
 from tagnan import progress as rules
 from tagnan import subject as subjects
 from tagnan.game import Added, Game, Outcome
-from tagnan.model import CONVERTED, TYPED, Question
+from tagnan.model import CONVERTED, TYPED, Card, Question
 from tagnan.scheduler import Scheduler, find_pace
 from tagnan.ui import catalogues, desktop, sheetpdf
 from tagnan.ui import sounds as calls
 from tagnan.ui.animator import Animator
 from tagnan.ui.sounds import Sounds
 from tagnan.ui.worker import BrainWorker
+from tagnan.words import Slot as WordSlot
+from tagnan.words import Touch, Touched
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,25 @@ PROMOTION_REVEAL_MS = 3850
 RESULT_SECONDS = 15  # a right answer's bubble closes by itself, unless hovered
 QUIP_SECONDS = 1.8
 MAX_COURSE_WORDS = 120
-BUSY_MODES = ("question", "thinking", "result", "explanation", "pause")
+# A language course: a call is a bout, a few of its words in a row (tagnan.words).
+ASKING_MODES = ("question", "meet", "touch")  # he waits for an answer: no click elsewhere closes
+BOUT_MODES = ("meet", "touch", "miss")  # a bout under way
+ADVANCE_MS = 1100  # a touch answered right: the next one comes by itself
+SENTENCE_MS = 1900  # a little later when the word's sentence shows
+REMARK_MS = 2600  # or when he has a word to say: an accent, an article
+PLACEMENT_MS = 900  # between two of the questions that place one
+BUSY_MODES = (
+    "question",
+    "thinking",
+    "result",
+    "explanation",
+    "pause",
+    "meet",
+    "touch",
+    "miss",
+    "bout",
+    "level",
+)
 UPDATED_KEY = "updated"  # in his settings, from tagnan/ui/updater.py: what an update changed
 UPDATED_SECONDS = 30
 SHEET_NEWS_SECONDS = 12  # "Signed and sealed!": his study sheet is in Downloads
@@ -63,7 +83,7 @@ CATALOGUE_NEWS_SECONDS = 15  # what became of questions pasted or imported, a pr
 VERDICT_MODES = ("result", "thinking", "explanation")  # where a question's study sheet is offered
 # Minimized (his menu's button beside the moon), he takes his full size for these bubbles only:
 # he grows before the question shows, and goes back to his corner this long after the last.
-FULL_SIZE_MODES = ("question", *VERDICT_MODES)
+FULL_SIZE_MODES = ("question", *VERDICT_MODES, *BOUT_MODES, "bout")
 GROW_MS = 380  # Main.qml grows him in 350 ms
 SHRINK_SECONDS = 3
 THEMES = ("dark", "light")  # chosen in his menu; none: the system's
@@ -72,6 +92,23 @@ THEMES = ("dark", "light")  # chosen in his menu; none: the system's
 def counted(count: int, word: str) -> str:
     """ "1 question", "18 new questions"."""
     return f"{count} {word}{'' if count == 1 else 's'}"
+
+
+def when(due_at: float, now: float) -> str:
+    """When a word comes back, in words: "later today", "tomorrow", "in 3 weeks"."""
+    ahead = due_at - now
+    days = round(ahead / rules.DAY)
+    if ahead < rules.DAY / 2:
+        return "later today"
+    if days <= 1:
+        return "tomorrow"
+    if days < 7:
+        return f"in {days} days"
+    if days < 14:
+        return "in a week"
+    if days < 30:
+        return f"in {days // 7} weeks"
+    return f"in {max(2, round(days / 30))} months"
 
 
 def sheet_written(path: Path) -> dict[str, Any]:
@@ -169,6 +206,25 @@ class Controller(QObject):
         self._pasted_course: blueprints.Blueprint | None = None
         self._last_export: Path | None = None
         self._told_empty = False  # without a brain: "My satchel is empty", once till refilled
+        # A language course's bout under way: its words, the one asked now, what it made of
+        # each (its dots), the answer just given, and whether one has taken part (a word to
+        # type may then take the keyboard).
+        self._bout: list[WordSlot] = []
+        self._bout_at = 0
+        self._marks: list[str] = []
+        self._rows: list[dict[str, str]] = []
+        self._bout_before = game.progress
+        self._touch: Touch | None = None
+        self._touched: Touched | None = None
+        self._engaged = False
+        self._explaining: int | None = None  # the word Tell me more is about, as -its id
+        # A language being set up (the level bubble), the questions that place one in it, and
+        # what waits for the bubble to be free: a language the brain found in one's words, the
+        # placement questions it wrote.
+        self._setup: dict[str, str] | None = None
+        self._placement: dict[str, Any] | None = None
+        self._pending_language = ""
+        self._pending_placement: list[dict[str, Any]] | None = None
         animator.set_stage(self._stage)
         animator.tapped.connect(self._on_tapped)
         worker.batchReady.connect(self._on_batch)
@@ -179,6 +235,10 @@ class Controller(QObject):
         worker.planFailed.connect(self._on_plan_failed)
         worker.sheetWritten.connect(self._on_sheet_written)
         worker.sheetFailed.connect(self._on_sheet_failed)
+        worker.wordsReady.connect(self._on_words)
+        worker.wordsFailed.connect(self._on_batch_failed)
+        worker.levelReady.connect(self._on_level)
+        worker.levelFailed.connect(self._on_level_failed)
         self._tick_timer = self._timer(self._tick, single=False)
         self._mood_timer = self._timer(lambda: self._set_mood("idle"))
         self._hide_timer = self._timer(self._auto_hide)
@@ -187,6 +247,7 @@ class Controller(QObject):
         self._reveal_timer = self._timer(self._reveal)
         self._grow_timer = self._timer(self._grown_ready)
         self._shrink_timer = self._timer(self._shrink)
+        self._advance_timer = self._timer(self._advance)
 
     def _timer(self, slot: Callable[[], None], single: bool = True) -> QTimer:
         timer = QTimer(self)
@@ -196,7 +257,12 @@ class Controller(QObject):
 
     def start(self) -> None:
         self._tick_timer.start(TICK_MS)
-        if not self._tell_updated() and self.game.store.fresh_count(self.game.exam) == 0:
+        nothing = (
+            not self.game.store.cards(self.game.exam)
+            if self.game.is_language
+            else self.game.store.fresh_count(self.game.exam) == 0
+        )
+        if not self._tell_updated() and nothing:
             if self.brainless:
                 self._show(
                     {
@@ -215,7 +281,7 @@ class Controller(QObject):
                     {
                         "mode": "message",
                         "title": "Hello!",
-                        "text": "I'm writing my first questions: give me a few minutes. "
+                        "text": f"I'm writing my first {self._things}: give me a few minutes. "
                         "Poke me meanwhile, if you like.",
                     }
                 )
@@ -336,7 +402,15 @@ class Controller(QObject):
         if self._ask(now):
             self.sounds.play(self._call, self._volume)  # to be heard away from the screen
 
-    def _ask(self, now: float) -> bool:
+    @property
+    def _things(self) -> str:
+        """What he asks, in the course learned now: questions, or a language's words."""
+        return "words" if self.game.is_language else "questions"
+
+    def _ask(self, now: float, asked: bool = False) -> bool:
+        """asked: one asked for it, in his menu or his bubble; else he asks of his own accord."""
+        if self.game.is_language:
+            return self._ask_bout(now, asked)
         question = self.game.next_question(now)
         if question is None:
             self._refill_if_needed(force=True)
@@ -441,13 +515,17 @@ class Controller(QObject):
 
     @Slot()
     def later(self) -> None:
-        if self._bubble["mode"] == "question":
-            self.scheduler.snooze(self._clock())
+        asking = self._bubble["mode"] in ASKING_MODES
         self._close()
+        if asking:
+            self.scheduler.snooze(self._clock())
 
     @Slot()
     def flag(self) -> None:
         """A wrong or badly worded question: never again, and no points either way."""
+        if self._bout and self._touch is not None and self._bubble["mode"] in BOUT_MODES:
+            self._flag_word()
+            return
         question = self._current
         if question is None or question.id is None:
             return
@@ -468,12 +546,18 @@ class Controller(QObject):
 
     @Slot()
     def dismiss(self) -> None:
+        if self._bout and self._bubble["mode"] == "explanation":
+            self.nextTouch()  # Tell me more, about a word missed: the bout goes on
+            return
         self._close()
 
     @Slot()
     def explainMore(self) -> None:
         """Tell me more: his brain explains; without one, the question goes to the clipboard,
         for one's own assistant."""
+        if self._bout and self._bubble["mode"] == "miss":
+            self._explain_word()
+            return
         outcome = self._outcome
         if outcome is None or outcome.question.id is None:
             return
@@ -492,9 +576,17 @@ class Controller(QObject):
 
     @Slot()
     def askNow(self) -> None:
-        if self._bubble["mode"] in ("question", "thinking") or self._pending_question is not None:
+        if (
+            self._bubble["mode"] in (*ASKING_MODES, "thinking", "miss")
+            or self._pending_question is not None
+        ):
             return
-        if not self._ask(self._clock()):
+        if not self._ask(self._clock(), asked=True):
+            resting = self._words_resting()
+            if resting:
+                self._show({"mode": "message", "title": "All quiet", "text": resting})
+                self._hide_timer.start(8000)
+                return
             if self.brainless:
                 self._told_empty = True
                 self._show(self._satchel_empty())
@@ -504,14 +596,38 @@ class Controller(QObject):
                 {
                     "mode": "message",
                     "title": "Not yet",
-                    "text": "My brain is writing questions on "
+                    "text": f"My brain is writing {self._things} on "
                     f"{self.subject}. Come back in a few minutes.",
                 }
             )
             self._hide_timer.start(6000)
 
+    def _words_resting(self) -> str:
+        """A language course with nothing to ask now, though it has words: when the next is."""
+        if not self.game.is_language:
+            return ""
+        now = self._clock()
+        ahead = [c.due_at for c in self.game.words() if rules.NEW < c.step < rules.KNOWN]
+        if not ahead:
+            return ""
+        return (
+            "Nothing to ask right now: your words are resting. The next one is due "
+            f"{when(min(ahead), now)}."
+        )
+
     def _satchel_empty(self) -> dict[str, Any]:
         """Without a brain, every question of his catalogues asked: the reviews go on."""
+        if self.game.is_language:
+            return {
+                "mode": "message",
+                "title": "My satchel is empty",
+                "text": f"I've shown you every word of your lists on {self.subject}. They come"
+                " back as planned; for new words, paste or import another list.",
+                "buttons": [
+                    {"label": "Copy the prompt", "action": "prompt:write", "primary": True},
+                    {"label": "Got it", "action": "dismiss"},
+                ],
+            }
         reviews = self.game.store.reviews_pending(self.game.exam)
         come = "comes" if reviews == 1 else "come"
         then = (
@@ -539,12 +655,39 @@ class Controller(QObject):
         )
         now = self._clock()
         if self.scheduler.paused_until > now:
-            when = f"On a break until {pauses.clock(self.scheduler.paused_until, now)}."
+            next_at = f"On a break until {pauses.clock(self.scheduler.paused_until, now)}."
         else:
-            when = f"Next question around {pauses.clock(self.scheduler.next_at, now)}."
+            what = "bout" if self.game.is_language else "question"
+            next_at = f"Next {what} around {pauses.clock(self.scheduler.next_at, now)}."
+        counts = self.game.word_counts(now) if self.game.is_language else None
+        up = self.game.level_up(now) if counts and not self.brainless else ""
+        level = self.game.blueprint.language.level if self.game.blueprint.language else ""
         self._show(
             {
                 "mode": "stats",
+                # A language course: its words, where a course of questions shows its answers.
+                "words": {}
+                if counts is None
+                else {
+                    "course": " · ".join(x for x in (self.game.blueprint.name, level) if x),
+                    "known": counts["known"],
+                    "climbing": counts["climbing"],
+                    "fresh": counts["fresh"],
+                    "chapters": [
+                        {
+                            "name": f"{c['id']}. {c['name']}",
+                            "rate": c["known"] / c["of"] if c["of"] else 0.0,
+                            "count": f"{c['known']}/{c['of']}",
+                        }
+                        for c in counts["chapters"]
+                    ],
+                    "news": f"You hold {level} well: nine right in ten this week. {up} whenever"
+                    " you like."
+                    if up
+                    else "",
+                    "up": up,
+                    "bank": f"{counted(counts['due'], 'word')} due today. {next_at}",
+                },
                 "title": rules.GRADES[s["grade"]].name,
                 "points": s["points"],
                 "next": f"{band_end} for {s['next_name']}"
@@ -562,7 +705,7 @@ class Controller(QObject):
                     for i, d in enumerate(s["domains"])
                 ],
                 "bank": f"{s['topic']}: {s['fresh']} new questions in store, "
-                f"{s['reviews']} to review in all. {when}",
+                f"{s['reviews']} to review in all. {next_at}",
             }
         )
 
@@ -650,8 +793,9 @@ class Controller(QObject):
                 },
                 "within": f"Within {bp.name}:",
                 "choices": choices,
-                # Without a brain, nothing writes questions on a subject in one's own words.
-                "noWords": self.brainless,
+                # Without a brain, nothing writes questions on a subject in one's own words; a
+                # language course keeps to its chapters.
+                "noWords": self.brainless or self.game.is_language,
                 "current": self.game.subject.key,
                 "status": f"Now: {self.subject}."
                 + (f" I'm drawing up a course on {planning}." if planning else ""),
@@ -664,11 +808,22 @@ class Controller(QObject):
         said = " ".join(text.split())
         if not said:
             return {"ok": False, "text": ""}
-        known = self.game.find_course(said)
+        known = self._known_course(said)
         if known is not None:
             return {"ok": True, "text": f"Back to {known.name}."}
         if len(said) > MAX_COURSE_WORDS:
             return {"ok": False, "text": f"Shorter, please: {MAX_COURSE_WORDS} characters at most."}
+        spoken = language.find(said)
+        if spoken is not None:
+            then = (
+                "copy the prompt that draws it up, for your assistant"
+                if self.brainless
+                else "draw up its chapters"
+            )
+            return {
+                "ok": True,
+                "text": f"{spoken.name}: a language. I'll ask your level, then {then}.",
+            }
         if self.brainless:
             return {
                 "ok": True,
@@ -677,6 +832,14 @@ class Controller(QObject):
             }
         return {"ok": True, "text": "I'll draw up a course on it: a minute or two."}
 
+    def _known_course(self, said: str) -> blueprints.Blueprint | None:
+        """A course one has, named as it is, or as the language it teaches ("learn Spanish")."""
+        known = self.game.find_course(said)
+        spoken = language.find(said)
+        if known is None and spoken is not None:
+            known = self.game.find_course(spoken.name)
+        return known
+
     @Slot(str, result=bool)
     def learnWith(self, text: str) -> bool:
         """Learn something else: a course learned before at once, anything else once the brain
@@ -684,9 +847,13 @@ class Controller(QObject):
         said = " ".join(text.split()).strip(" .!?")
         if not self.previewCourse(said)["ok"]:
             return False
-        known = self.game.find_course(said)
+        known = self._known_course(said)
         if known is not None:
             self._change_course(known)
+            return True
+        spoken = language.find(said)
+        if spoken is not None:  # a language: one's level and the language one speaks, first
+            self._show_level(spoken)
             return True
         if self.brainless:
             self.catalogue_files.copy(catalogue.course_prompt(said))
@@ -754,8 +921,12 @@ class Controller(QObject):
             text += f" Here I'm {grade}."
             if not self.game.fresh_count():
                 text += (
-                    " Bring me questions on it: my menu, Catalogues."
+                    f" Bring me {self._things} on it: my menu, Catalogues."
                     if self.brainless
+                    else " Your first words in a minute or two."
+                    if self.game.is_language and not self.game.store.cards(bp.key)
+                    else ""
+                    if self.game.is_language
                     else " Give me a few minutes to write the questions."
                 )
             self._refill_if_needed(force=True)
@@ -969,7 +1140,7 @@ class Controller(QObject):
     def closes_on_outside(self) -> bool:
         """Every bubble but a question closes when one clicks elsewhere: a question stays until
         it is answered or put off, lest a click in another window lose it."""
-        return self._bubble["mode"] not in ("hidden", "question")
+        return self._bubble["mode"] not in ("hidden", *ASKING_MODES, "miss")
 
     @Slot(bool)
     def hold(self, held: bool) -> None:
@@ -1199,6 +1370,7 @@ class Controller(QObject):
             return
         new = False
         questions: Sequence[Mapping[str, Any]] = found.questions
+        cards: Sequence[Mapping[str, Any]] = found.words
         if isinstance(found.course, str):
             try:
                 bp = self.game.course(found.course)
@@ -1217,10 +1389,20 @@ class Controller(QObject):
             else:
                 if found.typed:  # a note pasted again, longer: its new chapters join the course
                     merged, questions = catalogue.merge(bp, found.course, found.questions)
+                    merged, cards = catalogue.merge(merged, found.course, found.words)
                     if merged != bp:
                         self.game.keep_course(merged)
                         bp = merged
+        if cards and bp.language is None:
+            self._say_catalogue(
+                "A course of questions",
+                f"These are words, and {bp.name} is a course of questions: give your list"
+                " another title.",
+            )
+            return
         added = self.game.add_questions(bp, questions, self._clock(), found.origin, found.subject)
+        if cards:  # a language course's words: what became of them is what he says
+            added = self.game.add_cards(bp, cards, self._clock(), found.origin)
         logger.info(
             "catalogue on %r: %d kept, %d known, %d set aside %s%s",
             bp.key,
@@ -1252,28 +1434,29 @@ class Controller(QObject):
         """What became of a catalogue's questions, said plainly."""
         kept, known, aside = len(added.ids), added.known, added.rejected
         current = bp.key == self.game.exam
+        what = "word" if found.words else "question"
         lines = []
         if new and kept:
             title = "A new course!"
             lines.append(
-                f"{bp.name}: {counted(len(bp.domains), 'chapter')}, {counted(kept, 'question')}."
+                f"{bp.name}: {counted(len(bp.domains), 'chapter')}, {counted(kept, what)}."
             )
         elif kept:
             title = "Cut short!" if found.cut else "Fresh ink, mostly" if aside else "Fresh ink!"
-            said = f"{counted(kept, 'new question')} on {bp.name}"
+            said = f"{counted(kept, f'new {what}')} on {bp.name}"
             if found.origin == CONVERTED:
                 said += ", converted from your quiz: they stay with you, never exported"
             lines.append(said + ".")
         elif aside:
             title = "Set aside"
-            lines.append(f"None of these questions holds up for {bp.name}.")
+            lines.append(f"None of these {what}s holds up for {bp.name}.")
         else:
             title = "Nothing new"
             lines.append(f"I already had {'it' if known == 1 else f'all {known}'}, in {bp.name}.")
         if known and kept:
             lines.append(f"{known} I already had.")
         if aside:
-            reasons = "; ".join(f"question {n}: {catalogue.reason(why)}" for n, why in aside[:3])
+            reasons = "; ".join(f"{what} {n}: {catalogue.reason(why)}" for n, why in aside[:3])
             more = f"; and {len(aside) - 3} more" if len(aside) > 3 else ""
             lines.append(f"{len(aside)} set aside: {reasons}{more}.")
         if found.left_out:
@@ -1283,7 +1466,7 @@ class Controller(QObject):
             lines.append(f"Your assistant left {len(found.left_out)} out: {left}.")
         if found.cut and kept:
             lines.append(
-                "Your assistant's answer breaks off: I kept the whole questions before the"
+                f"Your assistant's answer breaks off: I kept the whole {what}s before the"
                 " break. For the rest, tell it “next”, then paste its answer again."
             )
         if kept and not current:
@@ -1297,8 +1480,14 @@ class Controller(QObject):
                 {"label": "Later", "action": "dismiss"},
             ]
         elif kept:
+            if found.words and found.typed:
+                lines.append("I build their questions myself: no brain needed.")
             buttons = [
-                {"label": "A question now", "action": "ask", "primary": True},
+                {
+                    "label": "A bout now" if found.words else "A question now",
+                    "action": "ask",
+                    "primary": True,
+                },
                 {"label": "Got it", "action": "dismiss"},
             ]
         else:
@@ -1310,7 +1499,13 @@ class Controller(QObject):
         """A prompt for one's own assistant, in the clipboard: to write questions on what he
         asks about now ("write"), or to convert a quiz one has ("convert")."""
         bp = self.game.blueprint
-        if kind == "convert":
+        if bp.language is not None:  # a language course: words, as his brain would write them
+            prompt = catalogue.words_prompt(bp, self.game.words_request(catalogue.BATCH))
+            text = (
+                "The prompt is in your clipboard. Paste it into ChatGPT, Gemini or Copilot, then"
+                " copy its whole answer and bring it to me: Paste questions."
+            )
+        elif kind == "convert":
             prompt = catalogue.convert_prompt(bp)
             text = (
                 "The prompt is in your clipboard. Paste it into your assistant, then your quiz:"
@@ -1350,6 +1545,27 @@ class Controller(QObject):
         )
         self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
 
+    @Slot()
+    def copyWordList(self) -> None:
+        """A list of words as he reads it, in the clipboard: an example to write after."""
+        self.catalogue_files.copy(catalogue.WORDS_EXAMPLE)
+        logger.info("word list example copied")
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "Your quill, sir!",
+                "text": "A list of words is in your clipboard: an example to follow. The word,"
+                " “=”, its meaning; under it, if you like, a sentence it lives in. Then Paste"
+                " questions or Import a file…",
+                "buttons": [
+                    {"label": "Paste questions", "action": "paste", "primary": True},
+                    {"label": "Got it", "action": "dismiss"},
+                ],
+            }
+        )
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+
     def _show_catalogue_prompt(self, text: str) -> None:
         self._set_mood("idle")
         self._show(
@@ -1370,6 +1586,9 @@ class Controller(QObject):
         """The course learned now and the questions one may share, as a catalogue in Downloads:
         a colleague imports both. Those converted from a quiz stay with one."""
         bp = self.game.blueprint
+        if bp.language is not None:
+            self._export_words(bp)
+            return
         shared = self.game.store.shareable(bp.key)
         converted = self.game.store.count(bp.key, CONVERTED)
         stay = (
@@ -1410,16 +1629,750 @@ class Controller(QObject):
         )
         self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
 
+    def _export_words(self, bp: blueprints.Blueprint) -> None:
+        """A language course and its words, as a catalogue in Downloads: where one stands on
+        each is one's own, a colleague starts them from the foot of the ladder."""
+        cards = self.game.store.cards(bp.key)
+        if not cards:
+            self._say_catalogue("Nothing to share yet", f"I hold no words on {bp.name} yet.")
+            return
+        try:
+            path = self.catalogue_files.write(
+                catalogue.export(bp, [], cards), catalogue.file_name(bp, len(cards), "word")
+            )
+        except OSError as error:
+            logger.warning("catalogue not written: %s", error)
+            self._say_catalogue("My quill broke", f"I couldn't write the catalogue: {error}.")
+            return
+        logger.info("catalogue exported: %s", path)
+        self._last_export = path
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "Signed and sealed!",
+                "text": f"{counted(len(cards), 'word')} on {bp.name}, in Downloads, ready to"
+                " share.",
+                "file": path.name,
+                "buttons": [
+                    {"label": "Show in folder", "action": "showexport", "primary": True},
+                    {"label": "Got it", "action": "dismiss"},
+                ],
+            }
+        )
+        self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+
     def _say_catalogue(self, title: str, text: str) -> None:
         self._set_mood("idle")
         self._show({"mode": "message", "title": title, "text": text})
         self._hide_timer.start(CATALOGUE_NEWS_SECONDS * 1000)
+
+    # --- A language course: a bout ----------------------------------------------------------
+
+    def _ask_bout(self, now: float, asked: bool) -> bool:
+        """A call in a language course: a few of its words in a row, each a touch."""
+        slots = self.game.next_bout(now)
+        if not slots:
+            self._refill_if_needed(force=True)
+            self.scheduler.postpone(now, NO_QUESTION_RETRY_MINUTES)
+            return False
+        self._current, self._outcome = None, None
+        self._bout, self._bout_at = slots, 0
+        self._marks, self._rows = [""] * len(slots), []
+        self._bout_before = self.game.progress
+        self._engaged = asked
+        self._show_touch(first=True)
+        self._set_mood("ask")
+        return True
+
+    def _show_touch(self, first: bool = False) -> None:
+        """The bout's word whose turn it is, as it stands now; its end after the last."""
+        touch = None
+        while self._bout_at < len(self._bout) and touch is None:
+            try:
+                touch = self.game.touch(self._bout[self._bout_at])
+            except KeyError:  # a word gone meanwhile
+                self._bout_at += 1
+        if touch is None:
+            self._end_bout()
+            return
+        self._touch, self._touched = touch, None
+        content = (
+            self._meet_content(touch) if touch.kind == words.MEET else self._touch_content(touch)
+        )
+        if first:
+            self._show_question(content)
+        else:
+            self._show(content)
+            self._set_mood("ask")
+        self._unanswered_timer.start(UNANSWERED_MINUTES * 60_000)
+
+    def _dots(self) -> list[str]:
+        """The bout's touches, one each: seen, good, bad, the one asked now, those to come."""
+        return [m or ("now" if i == self._bout_at else "") for i, m in enumerate(self._marks)]
+
+    def _word_meta(self, card: Card) -> str:
+        bp = self.game.blueprint
+        try:
+            return f"{bp.title} · {bp.domain(card.domain).name}"
+        except KeyError:
+            return bp.title
+
+    def _meet_content(self, touch: Touch) -> dict[str, Any]:
+        card = touch.card
+        return {
+            "mode": "meet",
+            "title": "A new word",
+            "dots": self._dots(),
+            "meta": self._word_meta(card),
+            "term": card.term,
+            "meaning": card.meaning,
+            "example": card.example,
+            "translation": card.translation,
+            "note": card.note,
+        }
+
+    def _touch_content(self, touch: Touch) -> dict[str, Any]:
+        """How a word is asked: its meaning picked, the word picked, the word in its sentence,
+        or typed, with the letters a plain keyboard may lack."""
+        card = touch.card
+        spoken = self.game.blueprint.language
+        learned = spoken.learned if spoken else self.game.blueprint.name
+        gap = card.gap
+        typing = touch.kind in words.TYPED
+        sentence = ""
+        if gap and touch.kind in (words.GAP, words.TYPE_GAP):
+            sentence = f"{gap[0]}____{gap[2]}"
+        if touch.kind == words.MEANING:
+            term, ask = card.term, "What does it mean?"
+        elif sentence:
+            term, ask = "", "Type the missing word:" if typing else "Which word goes there?"
+        else:
+            term, ask = card.meaning, f"In {learned}:" if typing else f"In {learned}?"
+        return {
+            "mode": "touch",
+            "title": self._rng.choice(ASKS),
+            "dots": self._dots(),
+            "meta": self._word_meta(card),
+            "term": term,
+            "plain": touch.kind != words.MEANING,  # a meaning: said, not a word to look at
+            "sentence": sentence,
+            "translation": card.translation if sentence else "",
+            "ask": ask,
+            "choices": [{"letter": LETTERS[i], "text": c} for i, c in enumerate(touch.choices)],
+            "long": any(len(c) > 24 for c in touch.choices),
+            "typing": typing,
+            # The letters of the course's words and sentences: of this word alone, they would
+            # give it away.
+            "letters": language.letters(
+                f"{c.term} {c.sentence}" for c in self.game.store.cards(self.game.exam)
+            )
+            if typing
+            else [],
+            # A word to type takes the keyboard only once one has taken part in the bout.
+            "focus": typing and self._engaged,
+            "typed": "",
+            "done": False,
+            "good": -1,
+            "bad": -1,
+            "verdict": "",
+            "tone": "",
+            "other": "I don't know" if typing else "Wrong word? Report it",
+            "placement": False,
+        }
+
+    @Slot(bool)
+    def meetWord(self, known: bool) -> None:
+        """A new word shown: Got it, or I know it already (straight to where it is typed)."""
+        touch = self._touch
+        if touch is None or self._bubble["mode"] != "meet":
+            return
+        self.game.meet(touch.card, self._clock(), known)
+        self._marks[self._bout_at] = "seen"
+        self._rows.append(
+            {
+                "term": touch.card.term,
+                "mark": "seen",
+                "next": "known already · typed later today" if known else "met · asked later today",
+            }
+        )
+        self._engaged = True
+        self._bout_at += 1
+        self._show_touch()
+
+    @Slot(int)
+    def touchPick(self, index: int) -> None:
+        """A choice picked: of a word's touch, or of a question that places one."""
+        if self._placement is not None:
+            self._placed(index)
+            return
+        touch = self._touch
+        if (
+            touch is None
+            or self._bubble["mode"] != "touch"
+            or self._touched is not None
+            or touch.kind in words.TYPED
+            or not 0 <= index < len(touch.choices)
+        ):
+            return
+        self._answered(self.game.answer_touch(touch, self._clock(), picked=index))
+
+    @Slot(str)
+    def touchType(self, text: str) -> None:
+        """A word typed; nothing typed is no answer yet."""
+        touch = self._touch
+        if (
+            touch is None
+            or self._bubble["mode"] != "touch"
+            or self._touched is not None
+            or touch.kind not in words.TYPED
+            or not text.strip()
+        ):
+            return
+        self._answered(self.game.answer_touch(touch, self._clock(), typed=text))
+
+    @Slot()
+    def touchSkip(self) -> None:
+        """I don't know: a miss, and the word shown."""
+        touch = self._touch
+        if (
+            touch is None
+            or self._bubble["mode"] != "touch"
+            or self._touched is not None
+            or touch.kind not in words.TYPED
+        ):
+            return
+        self._answered(self.game.answer_touch(touch, self._clock(), typed=""))
+
+    def _answered(self, done: Touched) -> None:
+        """Right: the touch says so and the next comes by itself. A miss stops the bout until
+        Next: the word, its meaning, its sentence."""
+        now = self._clock()
+        self._unanswered_timer.stop()
+        self._touched = done
+        self._engaged = True
+        card = done.touch.card
+        self._marks[self._bout_at] = "good" if done.correct else "bad"
+        self._rows.append(
+            {
+                "term": card.term,
+                "mark": "good" if done.correct else "bad",
+                "next": self._whereabouts(done, now),
+            }
+        )
+        self.statusChanged.emit()
+        if not done.correct:
+            self._set_mood("angry", MOOD_SECONDS["angry"])
+            self._show(self._miss_content(done))
+            self._unanswered_timer.start(UNANSWERED_MINUTES * 60_000)
+            return
+        verdict, tone, wait = self._praise(done)
+        self._set_mood("happy", wait / 1000)
+        self._show(
+            {
+                **self._bubble,
+                "dots": self._dots(),
+                "good": done.touch.answer,
+                "verdict": verdict,
+                "tone": tone,
+                "typed": done.typed,
+                "done": True,
+                "focus": False,
+            }
+        )
+        self._advance_timer.start(wait)
+
+    def _praise(self, done: Touched) -> tuple[str, str, int]:
+        """His word on a right touch, its tone, and how long it stays."""
+        card = done.touch.card
+        if done.remark == language.ACCENT:
+            return f"Touché, all but the accent: **{done.touch.expected}**.", "gold", REMARK_MS
+        if done.remark == language.ARTICLE:
+            return f"Touché! With its article: **{card.term}**.", "gold", REMARK_MS
+        if done.remark == language.ALSO:
+            return f"Touché! I had **{card.term}** in mind: both are right.", "gold", REMARK_MS
+        cheer = self._rng.choice(CHEERS)
+        if card.example and done.touch.kind not in (words.GAP, words.TYPE_GAP):
+            return f"{cheer} «{card.example}»", "good", SENTENCE_MS
+        return cheer, "good", ADVANCE_MS
+
+    def _whereabouts(self, done: Touched, now: float) -> str:
+        """Where a word goes on the ladder, and when it comes back: a row of the bout's end."""
+        back = when(done.due_at, now)
+        if not done.correct:
+            fell = done.step < done.touch.card.step
+            return f"{'back to ' if fell else ''}step {done.step} · {back}"
+        if not done.moved:
+            return f"still step {done.step} · {back}"
+        if done.step >= rules.KNOWN:
+            return f"known · {back}"
+        return f"step {done.step} · {back}"
+
+    def _miss_content(self, done: Touched) -> dict[str, Any]:
+        touch = done.touch
+        card = touch.card
+        chosen = ""
+        if touch.kind in words.TYPED:
+            if done.typed.strip():
+                chosen = f"You wrote **{done.typed.strip()}**."
+        elif done.picked is not None and 0 <= done.picked < len(touch.behind):
+            other = touch.behind[done.picked]  # a word of his too: he says what it is
+            chosen = f"You picked **{touch.choices[done.picked]}**: " + (
+                f"that is **{other.term}**." if touch.kind == words.MEANING else f"{other.meaning}."
+            )
+        return {
+            "mode": "miss",
+            "title": self._rng.choice(SCOLDS),
+            "tone": "bad",
+            "dots": self._dots(),
+            "right": f"**{card.term}**: {card.meaning}.",
+            "chosen": chosen,
+            "example": card.example,
+            "translation": card.translation,
+            "note": card.note,
+            "news": ("One step down: it" if done.step < card.step else "It")
+            + f" comes back {when(done.due_at, self._clock())}.",
+            "more": "Ask your assistant" if self.brainless else "Tell me more",
+        }
+
+    @Slot()
+    def nextTouch(self) -> None:
+        """The bout's next word, once this one is answered; its end after the last."""
+        if self._placement is not None:
+            self._advance()
+            return
+        if not self._bout or self._touched is None:
+            return
+        if self._bubble["mode"] not in ("touch", "miss", "explanation"):
+            return
+        self._advance_timer.stop()
+        self._bout_at += 1
+        self._show_touch()
+
+    def _advance(self) -> None:
+        """A right touch has been read, or a question that places one answered: the next."""
+        if self._placement is not None:
+            self._next_placement()
+        elif self._bout and self._bubble["mode"] == "touch" and self._touched is not None:
+            self.nextTouch()
+
+    def _flag_word(self) -> None:
+        """A wrong or badly worded word: never again; the bout goes on."""
+        touch = self._touch
+        if touch is None or touch.card.id is None:
+            return
+        self.game.store.flag_card(touch.card.id)
+        logger.info("word %s flagged", touch.card.id)
+        self._advance_timer.stop()
+        if not self._marks[self._bout_at]:
+            self._marks[self._bout_at] = "gone"
+        self._bout_at += 1
+        self._show_touch()
+
+    def _explain_word(self) -> None:
+        """Tell me more, about a word missed: his brain explains; without one, the question
+        goes to the clipboard, for one's own assistant."""
+        done = self._touched
+        if done is None or done.touch.card.id is None:
+            return
+        bp = self.game.blueprint
+        learned = bp.language.learned if bp.language else bp.name
+        question, chosen = words.as_question(done.touch, done.picked, done.typed, learned)
+        if self.brainless:
+            self.catalogue_files.copy(catalogue.explain_prompt(bp, question, chosen))
+            self._show({**self._bubble, "more": "copied"})
+            return
+        if self._bubble.get("more") == "thinking":
+            return
+        self._explaining = -done.touch.card.id
+        self._show({**self._bubble, "more": "thinking"})
+        self.worker.explain(
+            self._explaining,
+            {
+                "exam": self.game.exam,
+                "course": bp.to_dict(),
+                "question": question,
+                "chosen": chosen,
+            },
+        )
+
+    def _end_bout(self) -> None:
+        """The bout's last word answered: where each goes on the ladder, the points, and his
+        promotion if the bout took him over the line."""
+        now = self._clock()
+        before, after = self._bout_before, self.game.progress
+        rows, marks = self._rows, [m for m in self._marks if m != "gone"]
+        self._bout, self._touch, self._touched = [], None, None
+        self._marks, self._rows = [], []
+        self._unanswered_timer.stop()
+        self._advance_timer.stop()
+        self.scheduler.asked(now)
+        asked = [r for r in rows if r["mark"] != "seen"]
+        delta = after.points - before.points
+        promoted = after.grade > before.grade
+        if not rows:  # every word of it reported
+            self._close()
+            return
+        if not asked:
+            title = "A new word" if len(rows) == 1 else f"{len(rows)} new words"
+            points = (
+                "No points yet: I'll ask " + ("it" if len(rows) == 1 else "them") + " in a while."
+            )
+        else:
+            good = sum(1 for r in asked if r["mark"] == "good")
+            title = (
+                self._rng.choice(CHEERS)
+                if good == len(asked)
+                else "Well fought!"
+                if good
+                else self._rng.choice(SCOLDS)
+            )
+            if delta > 0:
+                points = f"+{delta} points · {after.points} in all"
+            elif delta < 0:
+                points = f"\u2212{-delta} points · {after.points} in all"
+            else:
+                points = f"{after.points} points"
+        if promoted:
+            grade = rules.GRADES[after.grade]
+            news = f"Promotion! Tagnan is now a {grade.name}: {grade.look}."
+        elif after.grade < before.grade:
+            news = f"Tagnan falls back to {rules.GRADES[after.grade].name}."
+        else:
+            news = ""
+        clean = bool(asked) and all(r["mark"] == "good" for r in asked)
+        self._set_mood("happy" if clean or not asked else "idle", MOOD_SECONDS["happy"])
+        self._show(
+            {
+                "mode": "bout",
+                "title": title,
+                "tone": "good" if clean else "",
+                "dots": marks,
+                "rows": rows,
+                "points": points,
+                "news": news,
+                "promoted": promoted,
+                "rank": rules.GRADES[after.grade].name if promoted else "",
+            }
+        )
+        if promoted and not self.animator.reduced_motion():
+            self._promote(self._stage, after.grade)
+        elif after.grade != self._stage:
+            self._set_stage(after.grade)
+        if not promoted:
+            self._hide_timer.start(RESULT_SECONDS * 1000)
+        self.statusChanged.emit()
+        self._refill_if_needed()
+
+    # --- A language course: its level, and the language one speaks -------------------------
+
+    def _speaks(self, learned: str) -> str:
+        """The language one speaks, as last chosen; else the system's, else English: but not
+        the one learned."""
+        kept = str(self.settings.get("speaks", ""))
+        found = kept or language.by_locale(QLocale.system().name()) or "English"
+        if found == learned:
+            found = "French" if learned == "English" else "English"
+        return found
+
+    def _show_level(self, found: language.Found, status: str = "") -> None:
+        """The level bubble: one's level, and the language one speaks, before the course."""
+        self._setup = {
+            "learned": found.name,
+            "level": found.level,
+            "speaks": self._speaks(found.name),
+            "purpose": found.purpose,
+        }
+        self._set_mood("happy", MOOD_SECONDS["happy"])
+        self._show(self._level_content(status))
+
+    def _level_content(self, status: str = "") -> dict[str, Any]:
+        setup = self._setup or {}
+        learned, speaks = setup.get("learned", ""), setup.get("speaks", "English")
+        offered = list(dict.fromkeys(["English", "French", speaks]))
+        return {
+            "mode": "level",
+            "title": "A language!",
+            "text": f"{learned}: I'll ask you its words, in {learned}. Two things before I draw"
+            " up the course.",
+            "levels": [{"key": key, "label": f"{key} · {name}"} for key, name in language.LEVELS],
+            "level": setup.get("level", ""),
+            "speaks": [
+                {"key": name, "label": language.own_name(name)}
+                for name in offered
+                if name != learned
+            ],
+            "speak": speaks,
+            # Finding one's level takes a brain to write the questions.
+            "find": not self.brainless,
+            "status": status,
+        }
+
+    @Slot(str)
+    def setLevel(self, key: str) -> None:
+        if self._setup is None or key not in language.LEVEL_KEYS:
+            return
+        self._setup["level"] = key
+        self._show(self._level_content())
+
+    @Slot(str)
+    def setSpeaks(self, name: str) -> None:
+        """The language one speaks: one offered, or typed (any of its names)."""
+        said = language.named(name)
+        if self._setup is None or not said or said == self._setup["learned"]:
+            return
+        self._setup["speaks"] = said
+        self._show(self._level_content())
+
+    @Slot()
+    def drawLanguage(self) -> None:
+        """Draw up the course: the brain writes its chapters; without one, the prompt for
+        one's assistant, which draws it up and writes its first words."""
+        setup = self._setup
+        if setup is None or setup["level"] not in language.LEVEL_KEYS:
+            return
+        self._setup = None
+        self.settings.set("speaks", setup["speaks"])
+        learned, level = setup["learned"], setup["level"]
+        if self.brainless:
+            self.catalogue_files.copy(
+                catalogue.language_prompt(learned, level, setup["speaks"], setup["purpose"])
+            )
+            logger.info("language prompt copied: %r %s", learned, level)
+            self._show_catalogue_prompt(
+                f"No brain here to draw up a course: the prompt for {learned} at {level} is in"
+                " your clipboard. Paste it into your assistant, then bring me its answer: Paste"
+                " questions."
+            )
+            return
+        if self.worker.planning:
+            title = "One at a time!"
+            line = f"I'm still drawing up a course on {self.worker.planning}."
+        else:
+            self.worker.plan(learned, language=setup)
+            logger.info("language asked for: %r %s", learned, level)
+            title = "Let me think…"
+            line = (
+                f"{learned} at {level}: I'm drawing up its chapters, give me a minute or two."
+                " I'll tell you when it's ready."
+            )
+        self._set_mood("idle")
+        self._show({"mode": "message", "title": title, "text": line})
+        self._hide_timer.start(8000)
+
+    @Slot()
+    def moveUp(self) -> None:
+        """The next level, once he offers it (his progress): new chapters after the course's
+        own, whose words stay."""
+        bp = self.game.blueprint
+        up = self.game.level_up(self._clock())
+        if bp.language is None or not up or self.brainless:
+            return
+        if self.worker.planning:
+            self._tell_if_free(
+                "One at a time!", f"I'm still drawing up a course on {self.worker.planning}."
+            )
+            return
+        spoken = {**bp.language.to_dict(), "level": up}
+        self.worker.plan(bp.language.learned, language=spoken, course=bp.to_dict())
+        logger.info("level asked for: %r %s", bp.key, up)
+        self._set_mood("happy", MOOD_SECONDS["happy"])
+        self._show(
+            {
+                "mode": "message",
+                "title": f"{up} it is!",
+                "text": f"I'm drawing up the chapters of {bp.name} at {up}: a minute or two."
+                " The words you know stay known.",
+            }
+        )
+        self._hide_timer.start(8000)
+
+    def _raise_level(self, bp: blueprints.Blueprint) -> None:
+        """The course learned now, a level up: its new chapters, and words for them."""
+        self.game.keep_course(bp)
+        level = bp.language.level if bp.language else ""
+        first = bp.language.first if bp.language else 1
+        chapters = "; ".join(f"{d.id}. {d.name}" for d in bp.domains if d.id >= first)
+        logger.info("level: %r %s", bp.key, level)
+        self.prefsChanged.emit()
+        self.statusChanged.emit()
+        self._refill_if_needed(force=True)
+        self._set_mood("happy", MOOD_SECONDS["happy"])
+        self._show(
+            {
+                "mode": "message",
+                "title": "Onwards!",
+                "text": f"{bp.name} at {level}: {chapters}. Their first words in a minute or two;"
+                " the ones you are learning go on.",
+            }
+        )
+        self._hide_timer.start(9000)
+
+    # --- A language course: where one stands -----------------------------------------------
+
+    @Slot()
+    def findLevel(self) -> None:
+        """Find my level: the brain writes a few questions that climb; they place one."""
+        setup = self._setup
+        if setup is None or self.brainless:
+            return
+        if self.worker.levelling:
+            self._show(self._level_content(f"I'm writing them, for {self.worker.levelling}…"))
+            return
+        if not self.worker.level(setup["learned"], setup["speaks"]):
+            return
+        logger.info("placement asked for: %r", setup["learned"])
+        self._set_mood("idle")
+        self._show(
+            {
+                "mode": "message",
+                "title": "Let me think…",
+                "text": f"A few questions to find your level in {setup['learned']}: give me a"
+                " minute. They come as soon as they are written.",
+            }
+        )
+        self._hide_timer.start(8000)
+
+    def _on_level(self, learned: str, answer: object) -> None:
+        questions = answer.get("questions") if isinstance(answer, dict) else None
+        if not isinstance(questions, list) or not questions:
+            self._on_level_failed(learned, "no questions came")
+            return
+        if self._setup is None or self._setup["learned"] != learned:
+            return  # one has moved on meanwhile
+        placed = []
+        for q in questions:  # their choices shuffled: models favour B and C
+            order = list(range(len(q["choices"])))
+            self._rng.shuffle(order)
+            placed.append(
+                {
+                    "level": q["level"],
+                    "sentence": q["sentence"],
+                    "choices": [q["choices"][i] for i in order],
+                    "answer": order.index(q["answer"]),
+                }
+            )
+        if self._bubble["mode"] in BUSY_MODES:
+            self._pending_placement = placed  # not over a question or a verdict
+            return
+        self._start_placement(placed)
+
+    def _on_level_failed(self, learned: str, error: str) -> None:
+        waiting = self._setup is not None and self._setup["learned"] == learned
+        if waiting and self._bubble["mode"] in ("hidden", "message", "quip"):
+            self._show(
+                self._level_content(f"I couldn't write the questions ({error}): pick a level.")
+            )
+
+    def _start_placement(self, questions: list[dict[str, Any]]) -> None:
+        self._placement = {"questions": questions, "at": 0, "marks": [""] * len(questions)}
+        self._show_placement(first=True)
+        self._set_mood("ask")
+
+    def _show_placement(self, first: bool = False) -> None:
+        placement = self._placement
+        if placement is None:
+            return
+        at = placement["at"]
+        question = placement["questions"][at]
+        setup = self._setup or {}
+        content = {
+            "mode": "touch",
+            "title": "Where do you stand?",
+            "dots": [m or ("now" if i == at else "") for i, m in enumerate(placement["marks"])],
+            "meta": f"{setup.get('learned', '')} · your level",
+            "term": "",
+            "plain": False,
+            "sentence": question["sentence"],
+            "translation": "",
+            "ask": "Which one fits?",
+            "choices": [
+                {"letter": LETTERS[i], "text": c} for i, c in enumerate(question["choices"])
+            ],
+            "long": any(len(c) > 24 for c in question["choices"]),
+            "typing": False,
+            "letters": [],
+            "focus": False,
+            "typed": "",
+            "done": False,
+            "good": -1,
+            "bad": -1,
+            "verdict": "",
+            "tone": "",
+            "other": "",
+            "placement": True,
+        }
+        if first:
+            self._show_question(content)
+        else:
+            self._show(content)
+        self._unanswered_timer.start(UNANSWERED_MINUTES * 60_000)
+
+    def _placed(self, index: int) -> None:
+        """A question that places one, answered: no points; the right choice shows."""
+        placement = self._placement
+        if placement is None or self._bubble["mode"] != "touch" or self._bubble.get("done"):
+            return
+        at = placement["at"]
+        question = placement["questions"][at]
+        right = index == question["answer"]
+        placement["marks"][at] = "good" if right else "bad"
+        self._unanswered_timer.stop()
+        self._show(
+            {
+                **self._bubble,
+                "dots": list(placement["marks"]),
+                "good": question["answer"],
+                "bad": -1 if right else index,
+                "done": True,
+            }
+        )
+        self._advance_timer.start(PLACEMENT_MS)
+
+    def _next_placement(self) -> None:
+        """The next question that places one; after the last, or two misses in a row, one's
+        level: that of the last question answered right."""
+        placement = self._placement
+        if placement is None:
+            return
+        self._advance_timer.stop()
+        marks = placement["marks"]
+        at = placement["at"]
+        missed_twice = at >= 1 and marks[at] == "bad" and marks[at - 1] == "bad"
+        if at + 1 < len(placement["questions"]) and not missed_twice:
+            placement["at"] = at + 1
+            self._show_placement()
+            return
+        reached = [
+            q["level"] for q, m in zip(placement["questions"], marks, strict=True) if m == "good"
+        ]
+        level = reached[-1] if reached else language.LEVEL_KEYS[0]
+        self._placement = None
+        self._unanswered_timer.stop()
+        if self._setup is None:
+            self._close()
+            return
+        self._setup["level"] = level
+        name = dict(language.LEVELS)[level]
+        logger.info("placed: %s", level)
+        self._set_mood("happy", MOOD_SECONDS["happy"])
+        self._show(self._level_content(f"I'd say {level}, {name}. Change it if you like."))
 
     # --- Brain ------------------------------------------------------------------------------
 
     def _refill_if_needed(self, force: bool = False) -> None:
         now = self._clock()
         if self.brainless or self.worker.generating or (not force and now < self._refill_after):
+            return
+        if self.game.is_language:
+            spoken = self.game.blueprint.language
+            # A list of one's own (no level) is one's own: the brain adds nothing to it.
+            if spoken is not None and spoken.level and self.game.needs_words():
+                logger.info("asking the brain for words")
+                asked = self.game.words_request()
+                if self._model:
+                    asked["model"] = self._model
+                self.worker.words(asked)
             return
         if self.game.needs_questions():
             logger.info("asking the brain for a batch")
@@ -1450,6 +2403,38 @@ class Controller(QObject):
                 self._hide_timer.start(8000)
         self._refill_if_needed()  # written for a subject left meanwhile: one for the new one
 
+    def _on_words(self, answer: object) -> None:
+        """A language course's words, written by the brain: kept in the course they are for."""
+        data = answer if isinstance(answer, dict) else {}
+        try:
+            bp = self.game.course(str(data.get("course") or self.game.exam))
+        except (KeyError, ValueError):
+            logger.warning("words for an unknown course: %r", data.get("course"))
+            return
+        added = self.game.add_cards(bp, data.get("words") or [], self._clock())
+        logger.info(
+            "words on %r: %d kept, %d known, %d dropped %s",
+            bp.key,
+            len(added.ids),
+            added.known,
+            len(added.rejected),
+            added.rejected[:3],
+        )
+        if self._first_run and added.ids and bp.key == self.game.exam:
+            self._first_run = False
+            self.scheduler.next_at = self._clock() + FIRST_QUESTION_DELAY
+            if self._bubble["mode"] == "message":
+                self._show(
+                    {
+                        "mode": "message",
+                        "title": "Ready!",
+                        "text": "My words are written. En garde, the first ones are coming.",
+                    }
+                )
+                self._hide_timer.start(8000)
+        self.statusChanged.emit()
+        self._refill_if_needed()  # written for a course left meanwhile: some for this one
+
     def _on_batch_failed(self, error: str) -> None:
         self._refill_after = self._clock() + REFILL_BACKOFF
         if self.game.fresh_count() == 0 and self._bubble["mode"] in (
@@ -1460,12 +2445,21 @@ class Controller(QObject):
                 {
                     "mode": "message",
                     "title": "My brain stalls",
-                    "text": f"I couldn't write questions: {error}. I'll try again in ten minutes.",
+                    "text": f"I couldn't write {self._things}: {error}. I'll try again in ten"
+                    " minutes.",
                 }
             )
 
     def _on_planned(self, words: str, answer: object) -> None:
         data = answer if isinstance(answer, dict) else {}
+        asked = str(data.get("language") or "") if data.get("understood") else ""
+        if asked and not data.get("course"):
+            # The words name a language he did not know by name: its level comes first.
+            if self._bubble["mode"] in BUSY_MODES:
+                self._pending_language = asked
+            else:
+                self._show_level(language.Found(asked))
+            return
         try:
             if not data.get("understood"):
                 raise ValueError(str(data.get("message") or "I don't know how to teach that."))
@@ -1473,8 +2467,18 @@ class Controller(QObject):
         except ValueError as error:
             self._tell_if_free("Hmm…", f"A course on {words}? {error}")
             return
+        mine = self.game.blueprint
+        if (
+            bp.language
+            and mine.language
+            and bp.key == mine.key
+            and len(bp.domains) > len(mine.domains)
+        ):
+            self._raise_level(bp)  # the course learned now, a level up
+            return
         chapters = "; ".join(f"{d.id}. {d.name}" for d in bp.domains)
-        intro = f"Your course is ready: {bp.name}. {chapters}."
+        level = f", {bp.language.level}" if bp.language and bp.language.level else ""
+        intro = f"Your course is ready: {bp.name}{level}. {chapters}."
         if self._bubble["mode"] in BUSY_MODES:
             self._pending_course = (bp, intro)  # not over a question or a verdict
             return
@@ -1490,6 +2494,11 @@ class Controller(QObject):
             self._hide_timer.start(9000)
 
     def _on_explained(self, question_id: int, text: str) -> None:
+        if self._bubble["mode"] == "miss" and self._explaining == question_id:
+            # About a word missed in a bout: Got it goes on to its next word.
+            self._explaining = None
+            self._show({"mode": "explanation", "title": "Listen well", "text": text, "sheet": ""})
+            return
         if (
             self._bubble["mode"] == "thinking"
             and self._outcome
@@ -1505,6 +2514,16 @@ class Controller(QObject):
             )
 
     def _on_explain_failed(self, question_id: int, error: str) -> None:
+        if self._bubble["mode"] == "miss" and self._explaining == question_id:
+            self._explaining = None
+            self._show(
+                {
+                    **self._bubble,
+                    "more": "Tell me more",
+                    "news": f"No more explanation: {error}",
+                }
+            )
+            return
         if self._bubble["mode"] == "thinking":
             self._show({**self._bubble, "mode": "result", "news": f"No more explanation: {error}"})
 
@@ -1624,6 +2643,17 @@ class Controller(QObject):
         closed = self._bubble["mode"]
         if closed == "question":
             self._current = None
+        if self._bout or self._placement is not None:
+            # A bout left before its end: the words not asked stay due. Once one has taken
+            # part in it, it counts as his call.
+            took_part = any(self._marks)
+            self._bout, self._touch, self._touched, self._placement = [], None, None, None
+            self._marks, self._rows = [], []
+            self._advance_timer.stop()
+            if took_part:
+                self.scheduler.asked(self._clock())
+        if closed == "level":
+            self._setup = None
         self._show({"mode": "hidden"})
         if self.animator.mood_name() == "ask":
             self._set_mood("idle")
@@ -1638,8 +2668,16 @@ class Controller(QObject):
             self._pending_course = None
             self._change_course(bp, intro)
             return
+        if self._pending_language:  # a language found in one's words while he was busy
+            asked, self._pending_language = self._pending_language, ""
+            self._show_level(language.Found(asked))
+            return
+        if self._pending_placement is not None and self._setup is not None:
+            placed, self._pending_placement = self._pending_placement, None
+            self._start_placement(placed)
+            return
         if (
-            closed in VERDICT_MODES
+            closed in (*VERDICT_MODES, "bout")
             and self.brainless
             and not self._told_empty
             and self.game.fresh_count() == 0
@@ -1652,11 +2690,11 @@ class Controller(QObject):
         if self._held:
             self._hide_timer.start(2000)
             return
-        if self._bubble["mode"] in ("result", "message", "quip"):
+        if self._bubble["mode"] in ("result", "message", "quip", "bout"):
             self._close()
 
     def _unanswered(self) -> None:
-        if self._bubble["mode"] == "question":
+        if self._bubble["mode"] in (*ASKING_MODES, "miss"):
             logger.info("question left unanswered: put off")
             self.scheduler.missed(self._clock())
             self._close()

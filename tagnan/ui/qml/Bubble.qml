@@ -1,6 +1,7 @@
 // Tagnan's speech bubble: the question and its choices, his verdict, a longer explanation,
-// his progress, a break, the subject, a quip when tapped. What it shows comes from the controller
-// (content.mode). Tagnan speaks English.
+// his progress, a break, the subject, a quip when tapped; in a language course, a word shown, a
+// touch (a word picked or typed), a word missed, the bout's end, and the level one learns it at.
+// What it shows comes from the controller (content.mode). Tagnan speaks English.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Shapes
@@ -21,6 +22,16 @@ Item {
     property var preview: ({ ok: false, text: "" })
     property var subjectPreview: ({ ok: false, text: "" })
     property var coursePreview: ({ ok: false, text: "" })
+    // A language course. A word to type takes the keyboard once one has taken part in the bout
+    // (content.focus) or clicked its field (engaged); the level bubble, for a language typed.
+    readonly property bool verdict: mode === "result" || mode === "thinking"
+    readonly property var words: content.words || ({})
+    readonly property bool wordStats: mode === "stats" && words.course !== undefined
+    readonly property bool typingTouch: mode === "touch" && content.typing === true && content.done !== true
+    property bool engaged: false
+    property bool speaking: false
+    readonly property bool wantsKeys: mode === "pause" || mode === "subject" || (mode === "level" && speaking)
+                                      || (typingTouch && (content.focus === true || engaged))
 
     width: quip ? Math.min(260, quipText.implicitWidth + 28) : 400
     height: quip ? quipText.implicitHeight + 20 : Math.min(maxHeight, column.implicitHeight + 28)
@@ -33,6 +44,24 @@ Item {
         subjectField.text = ""
         coursePreview = { ok: false, text: "" }
         courseField.text = ""
+        engaged = false
+        speaking = false
+        speakField.text = ""
+        answerField.text = content.typed || ""
+    }
+
+    // A sentence of the language learned: **its word** in ink, ____ a gap to fill.
+    function escaped(text) {
+        return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    }
+    function styled(text) {
+        const ink = '<font color="' + bubble.theme.ink + '">'
+        return escaped(text).replace(/\*\*(.+?)\*\*/g, "<b>" + ink + "$1</font></b>")
+                            .replace(/_{3,}/g, ink + "<b>________</b></font>")
+    }
+    // His own words, with **a word** in bold.
+    function strong(text) {
+        return escaped(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
     }
 
     // The break typed so far: what he understood, said before it is confirmed.
@@ -53,6 +82,10 @@ Item {
     function focusField() {
         if (mode === "subject")
             courseField.forceActiveFocus()
+        else if (mode === "touch")
+            answerField.forceActiveFocus()
+        else if (mode === "level")
+            speakField.forceActiveFocus()
         else
             breakField.forceActiveFocus()
     }
@@ -227,10 +260,13 @@ Item {
                 height: Math.max(title.implicitHeight, chip.height)
                 Text {
                     id: title
-                    width: parent.width - (chip.visible ? chip.width + 8 : 0)
+                    width: parent.width - (chip.visible ? chip.width + 8 : boutDots.visible ? boutDots.width + 8 : 0)
                     text: bubble.content.title || ""
                     wrapMode: Text.Wrap
                     color: bubble.mode === "result" ? (bubble.content.correct ? bubble.theme.good : bubble.theme.bad)
+                         : bubble.mode !== "miss" && bubble.mode !== "bout" ? bubble.theme.text
+                         : bubble.content.tone === "good" ? bubble.theme.good
+                         : bubble.content.tone === "bad" ? bubble.theme.bad
                          : bubble.theme.text
                     font.family: bubble.theme.display
                     font.pixelSize: 19
@@ -256,11 +292,44 @@ Item {
                         font.weight: Font.DemiBold
                     }
                 }
+                // A bout's touches, a dot each: a word shown, right, missed, the one asked now.
+                Row {
+                    id: boutDots
+                    visible: (bubble.content.dots || []).length > 0
+                    anchors.right: parent.right
+                    anchors.verticalCenter: title.verticalCenter
+                    spacing: 5
+                    Repeater {
+                        model: bubble.content.dots || []
+                        Rectangle {
+                            required property var modelData
+                            width: 10
+                            height: 10
+                            radius: 5
+                            color: modelData === "good" ? bubble.theme.good : modelData === "bad" ? bubble.theme.bad
+                                 : modelData === "seen" ? bubble.theme.ink
+                                 : modelData === "now" ? bubble.theme.panel : bubble.theme.choice
+                            border.width: 1.5
+                            border.color: modelData === "good" ? bubble.theme.good : modelData === "bad" ? bubble.theme.bad
+                                        : modelData === "seen" || modelData === "now" ? bubble.theme.ink
+                                        : bubble.theme.line
+                            Rectangle {
+                                visible: parent.modelData === "now"
+                                z: -1
+                                anchors.centerIn: parent
+                                width: 15
+                                height: 15
+                                radius: 7.5
+                                color: bubble.theme.choiceOn
+                            }
+                        }
+                    }
+                }
             }
 
             // --- Question -----------------------------------------------------------------
             Text {
-                visible: bubble.mode === "question"
+                visible: bubble.mode === "question" || bubble.mode === "meet" || bubble.mode === "touch"
                 width: column.width
                 text: (bubble.content.meta || "").toUpperCase()
                 elide: Text.ElideRight
@@ -348,6 +417,447 @@ Item {
                 }
             }
 
+            // --- A language course: a new word shown (controller.meetWord) ----------------
+            Rectangle {
+                visible: bubble.mode === "meet"
+                width: column.width
+                height: meetColumn.implicitHeight + 25
+                radius: 9
+                color: bubble.theme.choice
+                Column {
+                    id: meetColumn
+                    x: 13
+                    y: 12
+                    width: parent.width - 26
+                    spacing: 7
+                    Text {
+                        width: parent.width
+                        text: bubble.content.term || ""
+                        wrapMode: Text.Wrap
+                        color: bubble.theme.text
+                        font.family: bubble.theme.display
+                        font.pixelSize: 24
+                        font.bold: true
+                    }
+                    Text {
+                        width: parent.width
+                        text: bubble.content.meaning || ""
+                        wrapMode: Text.Wrap
+                        color: bubble.theme.text
+                        font.family: bubble.theme.body
+                        font.pixelSize: 14
+                    }
+                    Rectangle {
+                        visible: (bubble.content.example || "") !== ""
+                        width: parent.width
+                        height: 1
+                        color: bubble.theme.line
+                    }
+                    Text {
+                        visible: (bubble.content.example || "") !== ""
+                        width: parent.width
+                        text: bubble.styled(bubble.content.example)
+                        textFormat: Text.StyledText
+                        wrapMode: Text.Wrap
+                        color: bubble.theme.text
+                        font.family: bubble.theme.body
+                        font.pixelSize: 15
+                        lineHeight: 1.15
+                    }
+                    Text {
+                        visible: (bubble.content.translation || "") !== ""
+                        width: parent.width
+                        text: bubble.content.translation || ""
+                        wrapMode: Text.Wrap
+                        color: bubble.theme.muted
+                        font.family: bubble.theme.body
+                        font.pixelSize: 12
+                        font.italic: true
+                    }
+                }
+            }
+            Para {
+                visible: (bubble.mode === "meet" || bubble.mode === "miss") && (bubble.content.note || "") !== ""
+                text: bubble.content.note || ""
+                color: bubble.theme.muted
+                font.pixelSize: 12
+            }
+            Item {
+                visible: bubble.mode === "meet"
+                width: column.width
+                height: 30
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 14
+                    Link { text: "Later"; onActivated: bubble.controller.later() }
+                    Link { text: "I know it already"; onActivated: bubble.controller.meetWord(true) }
+                }
+                Action {
+                    anchors.right: parent.right
+                    label: "Got it"
+                    primary: true
+                    onActivated: bubble.controller.meetWord(false)
+                }
+            }
+
+            // --- A language course: a touch (controller.touchPick, touchType) -------------
+            Text {
+                visible: bubble.mode === "touch" && (bubble.content.term || "") !== ""
+                width: column.width
+                text: bubble.content.term || ""
+                wrapMode: Text.Wrap
+                color: bubble.theme.text
+                font.family: bubble.content.plain ? bubble.theme.body : bubble.theme.display
+                font.pixelSize: bubble.content.plain ? 19 : 24
+                font.weight: bubble.content.plain ? Font.DemiBold : Font.Bold
+            }
+            Para {
+                visible: bubble.mode === "touch" && (bubble.content.sentence || "") !== ""
+                text: bubble.styled(bubble.content.sentence)
+                textFormat: Text.StyledText
+                font.pixelSize: 15
+            }
+            Para {
+                visible: bubble.mode === "touch" && (bubble.content.translation || "") !== ""
+                text: bubble.content.translation || ""
+                color: bubble.theme.muted
+                font.pixelSize: 12
+                font.italic: true
+            }
+            Para {
+                visible: bubble.mode === "touch"
+                text: bubble.content.ask || ""
+                color: bubble.theme.muted
+                font.pixelSize: 12
+            }
+            // The choices, two to a row when they are short; the one picked right turns green,
+            // and a click then goes on without waiting.
+            Flow {
+                visible: bubble.mode === "touch" && (bubble.content.choices || []).length > 0
+                width: column.width
+                spacing: 6
+                Repeater {
+                    model: bubble.mode === "touch" ? (bubble.content.choices || []) : []
+                    Rectangle {
+                        id: wordChoice
+                        required property var modelData
+                        required property int index
+                        readonly property bool done: bubble.content.done === true
+                        readonly property bool good: bubble.content.good === index && done
+                        readonly property bool bad: bubble.content.bad === index
+                        width: bubble.content.long ? column.width : (column.width - 6) / 2
+                        height: wordChoiceText.implicitHeight + 14
+                        radius: 7
+                        opacity: done && !good && !bad ? 0.5 : 1
+                        color: good ? Qt.tint(bubble.theme.panel, Qt.rgba(bubble.theme.good.r, bubble.theme.good.g, bubble.theme.good.b, 0.16))
+                             : bad ? bubble.theme.badSoft
+                             : (!done && wordChoiceHover.containsMouse ? bubble.theme.choiceHover : bubble.theme.choice)
+                        border.color: good ? bubble.theme.good : bad ? bubble.theme.bad
+                                    : (!done && wordChoiceHover.containsMouse ? bubble.theme.ink : "transparent")
+                        Text {
+                            x: 10
+                            y: 7
+                            text: wordChoice.modelData.letter
+                            color: wordChoice.good ? bubble.theme.good : wordChoice.bad ? bubble.theme.bad : bubble.theme.ink
+                            font.family: bubble.theme.body
+                            font.pixelSize: 13
+                            font.bold: true
+                        }
+                        Text {
+                            id: wordChoiceText
+                            x: 30
+                            y: 7
+                            width: parent.width - 40
+                            text: wordChoice.modelData.text
+                            wrapMode: Text.Wrap
+                            color: bubble.theme.text
+                            font.family: bubble.theme.body
+                            font.pixelSize: 13
+                        }
+                        MouseArea {
+                            id: wordChoiceHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: wordChoice.done ? bubble.controller.nextTouch()
+                                                       : bubble.controller.touchPick(wordChoice.index)
+                        }
+                    }
+                }
+            }
+            // A word to type. The bubble never takes the keyboard of its own accord: until one
+            // has taken part in the bout, a click on the field asks for it.
+            Item {
+                visible: bubble.mode === "touch" && bubble.content.typing === true
+                width: column.width
+                height: 32
+                TextField {
+                    id: answerField
+                    objectName: "answer"
+                    width: parent.width - answerOk.width - 8
+                    height: 32
+                    placeholderText: "Type it…"
+                    readOnly: bubble.content.done === true
+                    color: bubble.theme.text
+                    placeholderTextColor: bubble.theme.muted
+                    font.family: bubble.theme.body
+                    font.pixelSize: 13
+                    leftPadding: 10
+                    background: Rectangle {
+                        radius: 6
+                        color: bubble.theme.choice
+                        border.color: answerField.activeFocus ? bubble.theme.ink : bubble.theme.line
+                    }
+                    onAccepted: bubble.controller.touchType(text)
+                    Keys.onEscapePressed: bubble.controller.later()
+                }
+                MouseArea {
+                    anchors.fill: answerField
+                    visible: bubble.typingTouch && !bubble.wantsKeys
+                    cursorShape: Qt.IBeamCursor
+                    onClicked: bubble.engaged = true
+                }
+                Action {
+                    id: answerOk
+                    objectName: "answerOk"
+                    anchors.right: parent.right
+                    label: "OK"
+                    primary: true
+                    ready: bubble.typingTouch && answerField.text.trim() !== ""
+                    onActivated: bubble.controller.touchType(answerField.text)
+                }
+            }
+            // The letters of the language a plain keyboard may lack.
+            Flow {
+                visible: bubble.typingTouch && (bubble.content.letters || []).length > 0
+                width: column.width
+                spacing: 4
+                Repeater {
+                    model: bubble.mode === "touch" ? (bubble.content.letters || []) : []
+                    Rectangle {
+                        id: letterKey
+                        required property var modelData
+                        width: 26
+                        height: 26
+                        radius: 5
+                        color: letterHover.containsMouse ? bubble.theme.choiceHover : bubble.theme.choice
+                        Text {
+                            anchors.centerIn: parent
+                            text: letterKey.modelData
+                            color: bubble.theme.text
+                            font.family: bubble.theme.body
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                        }
+                        MouseArea {
+                            id: letterHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                answerField.insert(answerField.cursorPosition, letterKey.modelData)
+                                bubble.engaged = true
+                                answerField.forceActiveFocus()
+                            }
+                        }
+                    }
+                }
+            }
+            Para {
+                visible: bubble.mode === "touch" && (bubble.content.verdict || "") !== ""
+                text: bubble.strong(bubble.content.verdict)
+                textFormat: Text.StyledText
+                color: bubble.content.tone === "gold" ? bubble.theme.gold : bubble.theme.good
+                font.weight: Font.DemiBold
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bubble.controller.nextTouch()
+                }
+            }
+            Item {
+                visible: bubble.mode === "touch"
+                width: column.width
+                height: 30
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 14
+                    Link { text: "Later"; onActivated: bubble.controller.later() }
+                    Link {
+                        visible: (bubble.content.other || "") !== ""
+                        text: bubble.content.other || ""
+                        onActivated: bubble.content.typing ? bubble.controller.touchSkip() : bubble.controller.flag()
+                    }
+                }
+            }
+
+            // --- A language course: a word missed (controller.nextTouch) ------------------
+            Para {
+                visible: bubble.mode === "miss"
+                text: bubble.strong(bubble.content.right)
+                textFormat: Text.StyledText
+                font.pixelSize: 14
+            }
+            Para {
+                visible: bubble.mode === "miss" && (bubble.content.chosen || "") !== ""
+                text: bubble.strong(bubble.content.chosen)
+                textFormat: Text.StyledText
+            }
+            Rectangle {
+                visible: bubble.mode === "miss" && (bubble.content.example || "") !== ""
+                width: column.width
+                height: missColumn.implicitHeight + 25
+                radius: 9
+                color: bubble.theme.choice
+                Column {
+                    id: missColumn
+                    x: 13
+                    y: 12
+                    width: parent.width - 26
+                    spacing: 4
+                    Text {
+                        width: parent.width
+                        text: bubble.styled(bubble.content.example)
+                        textFormat: Text.StyledText
+                        wrapMode: Text.Wrap
+                        color: bubble.theme.text
+                        font.family: bubble.theme.body
+                        font.pixelSize: 15
+                        lineHeight: 1.15
+                    }
+                    Text {
+                        visible: (bubble.content.translation || "") !== ""
+                        width: parent.width
+                        text: bubble.content.translation || ""
+                        wrapMode: Text.Wrap
+                        color: bubble.theme.muted
+                        font.family: bubble.theme.body
+                        font.pixelSize: 12
+                        font.italic: true
+                    }
+                }
+            }
+            Para {
+                visible: bubble.mode === "miss" && (bubble.content.news || "") !== ""
+                text: bubble.content.news || ""
+                color: bubble.theme.gold
+                font.weight: Font.DemiBold
+            }
+            Item {
+                visible: bubble.mode === "miss"
+                width: column.width
+                height: 30
+                Row {
+                    spacing: 8
+                    Action {
+                        label: "Next"
+                        primary: true
+                        onActivated: bubble.controller.nextTouch()
+                    }
+                    Action {
+                        visible: bubble.content.more !== "copied" && bubble.content.more !== "thinking"
+                        label: bubble.content.more || "Tell me more"
+                        onActivated: bubble.controller.explainMore()
+                    }
+                    Text {
+                        visible: bubble.content.more === "copied" || bubble.content.more === "thinking"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: bubble.content.more === "copied" ? "Copied: paste it into your assistant"
+                                                               : "Tagnan is thinking" + ".".repeat(1 + Math.floor(missDots.step % 3))
+                        color: bubble.theme.muted
+                        font.family: bubble.theme.body
+                        font.pixelSize: 13
+                        font.italic: true
+                        Timer {
+                            id: missDots
+                            property int step: 0
+                            interval: 400
+                            repeat: true
+                            running: bubble.mode === "miss" && bubble.content.more === "thinking"
+                            onTriggered: step++
+                        }
+                    }
+                }
+                Link {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Report"
+                    onActivated: bubble.controller.flag()
+                }
+            }
+
+            // --- A language course: the bout's end, a row a word ---------------------------
+            Column {
+                visible: bubble.mode === "bout"
+                width: column.width
+                Repeater {
+                    model: bubble.mode === "bout" ? (bubble.content.rows || []) : []
+                    Item {
+                        id: boutRow
+                        required property var modelData
+                        required property int index
+                        width: column.width
+                        height: 31
+                        Rectangle {
+                            visible: boutRow.index > 0
+                            width: parent.width
+                            height: 1
+                            color: bubble.theme.line
+                        }
+                        Rectangle {
+                            id: boutMark
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 18
+                            height: 18
+                            radius: 9
+                            color: boutRow.modelData.mark === "good" ? bubble.theme.good
+                                 : boutRow.modelData.mark === "bad" ? bubble.theme.bad : bubble.theme.ink
+                            Shape {
+                                anchors.centerIn: parent
+                                width: 24
+                                height: 24
+                                scale: 0.5
+                                preferredRendererType: Shape.CurveRenderer
+                                ShapePath {
+                                    strokeColor: bubble.theme.panel
+                                    strokeWidth: 3
+                                    fillColor: "transparent"
+                                    capStyle: ShapePath.RoundCap
+                                    joinStyle: ShapePath.RoundJoin
+                                    PathSvg {
+                                        path: boutRow.modelData.mark === "good" ? "M5 12.5l4.5 4.5L19 7"
+                                            : boutRow.modelData.mark === "bad" ? "M6 6l12 12M18 6L6 18"
+                                            : "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"
+                                    }
+                                }
+                            }
+                        }
+                        Text {
+                            id: boutNext
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: boutRow.modelData.next
+                            color: bubble.theme.muted
+                            font.family: bubble.theme.body
+                            font.pixelSize: 12
+                        }
+                        Text {
+                            anchors.left: boutMark.right
+                            anchors.leftMargin: 8
+                            anchors.right: boutNext.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: boutRow.modelData.term
+                            elide: Text.ElideRight
+                            color: bubble.theme.text
+                            font.family: bubble.theme.body
+                            font.pixelSize: 13
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+
             // --- Verdict ------------------------------------------------------------------
             Repeater {
                 model: bubble.mode === "result" || bubble.mode === "thinking" ? bubble.content.chosen : []
@@ -371,7 +881,7 @@ Item {
                 font.italic: true
             }
             Para {
-                visible: (bubble.mode === "result" || bubble.mode === "thinking") && (bubble.content.news || "") !== ""
+                visible: (bubble.verdict || bubble.mode === "bout") && (bubble.content.news || "") !== ""
                          && !bubble.content.promoted
                 text: bubble.content.news || ""
                 color: bubble.theme.gold
@@ -379,14 +889,14 @@ Item {
             }
             // A promotion: a word of surprise while he evolves, then his new rank, large.
             Para {
-                visible: (bubble.mode === "result" || bubble.mode === "thinking") && !!bubble.content.promoted
+                visible: (bubble.verdict || bubble.mode === "bout") && !!bubble.content.promoted
                          && bubble.evolving
                 text: "What? Tagnan is changing!"
                 color: bubble.theme.gold
                 font.weight: Font.DemiBold
             }
             Column {
-                visible: (bubble.mode === "result" || bubble.mode === "thinking") && !!bubble.content.promoted
+                visible: (bubble.verdict || bubble.mode === "bout") && !!bubble.content.promoted
                          && !bubble.evolving
                 width: column.width
                 spacing: 2
@@ -418,10 +928,20 @@ Item {
                 }
             }
             Para {
-                visible: bubble.mode === "result" || bubble.mode === "thinking"
+                visible: bubble.verdict || bubble.mode === "bout"
                 text: bubble.content.points || ""
                 color: bubble.theme.muted
                 font.pixelSize: 12
+            }
+            Row {
+                visible: bubble.mode === "bout"
+                spacing: 8
+                Action {
+                    label: "Got it"
+                    primary: true
+                    onActivated: bubble.controller.dismiss()
+                }
+                Action { label: "Another bout"; onActivated: bubble.controller.askNow() }
             }
             Item {
                 visible: bubble.mode === "result" || bubble.mode === "thinking"
@@ -840,6 +1360,129 @@ Item {
                 onActivated: bubble.controller.dismiss()
             }
 
+            // --- A language to learn: one's level, and the language one speaks -------------
+            Para {
+                visible: bubble.mode === "level"
+                text: bubble.content.text || ""
+                font.pixelSize: 14
+            }
+            Para {
+                visible: bubble.mode === "level"
+                text: "Your level:"
+                font.weight: Font.DemiBold
+                font.pixelSize: 12
+            }
+            Flow {
+                visible: bubble.mode === "level"
+                width: column.width
+                spacing: 6
+                Repeater {
+                    model: bubble.mode === "level" ? (bubble.content.levels || []) : []
+                    Action {
+                        required property var modelData
+                        label: modelData.label
+                        primary: modelData.key === bubble.content.level
+                        onActivated: bubble.controller.setLevel(modelData.key)
+                    }
+                }
+            }
+            Para {
+                visible: bubble.mode === "level" && bubble.content.find === true
+                text: 'Not sure? <a href="find">Find my level: a few questions</a>'
+                textFormat: Text.StyledText
+                color: bubble.theme.muted
+                linkColor: bubble.theme.text
+                font.pixelSize: 12
+                onLinkActivated: bubble.controller.findLevel()
+                HoverHandler {
+                    cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor
+                }
+            }
+            Rectangle {
+                visible: bubble.mode === "level"
+                width: column.width
+                height: 1
+                color: bubble.theme.line
+            }
+            Para {
+                visible: bubble.mode === "level"
+                text: "You speak:"
+                font.weight: Font.DemiBold
+                font.pixelSize: 12
+            }
+            Flow {
+                visible: bubble.mode === "level"
+                width: column.width
+                spacing: 6
+                Repeater {
+                    model: bubble.mode === "level" ? (bubble.content.speaks || []) : []
+                    Action {
+                        required property var modelData
+                        label: modelData.label
+                        primary: modelData.key === bubble.content.speak
+                        onActivated: bubble.controller.setSpeaks(modelData.key)
+                    }
+                }
+                Action {
+                    label: "Another…"
+                    onActivated: bubble.speaking = true
+                }
+            }
+            Item {
+                visible: bubble.mode === "level" && bubble.speaking
+                width: column.width
+                height: 32
+                TextField {
+                    id: speakField
+                    width: parent.width - speakOk.width - 8
+                    height: 32
+                    placeholderText: "The language you speak…"
+                    color: bubble.theme.text
+                    placeholderTextColor: bubble.theme.muted
+                    font.family: bubble.theme.body
+                    font.pixelSize: 13
+                    leftPadding: 10
+                    background: Rectangle {
+                        radius: 6
+                        color: bubble.theme.choice
+                        border.color: speakField.activeFocus ? bubble.theme.ink : bubble.theme.line
+                    }
+                    onAccepted: bubble.controller.setSpeaks(text)
+                    Keys.onEscapePressed: bubble.speaking = false
+                }
+                Action {
+                    id: speakOk
+                    anchors.right: parent.right
+                    label: "OK"
+                    primary: true
+                    ready: speakField.text.trim() !== ""
+                    onActivated: bubble.controller.setSpeaks(speakField.text)
+                }
+            }
+            Para {
+                visible: bubble.mode === "level"
+                text: "Meanings and explanations come in it. My own words stay English."
+                color: bubble.theme.muted
+                font.pixelSize: 12
+            }
+            Para {
+                visible: bubble.mode === "level" && (bubble.content.status || "") !== ""
+                text: bubble.content.status || ""
+                color: bubble.theme.gold
+                font.weight: Font.DemiBold
+            }
+            Row {
+                visible: bubble.mode === "level"
+                spacing: 8
+                Action {
+                    label: "Draw up the course"
+                    primary: true
+                    ready: (bubble.content.level || "") !== ""
+                    onActivated: bubble.controller.drawLanguage()
+                }
+                Action { label: "Cancel"; onActivated: bubble.controller.dismiss() }
+            }
+
             // --- Progress -----------------------------------------------------------------
             Para {
                 visible: bubble.mode === "stats"
@@ -860,13 +1503,70 @@ Item {
                 }
             }
             Para {
-                visible: bubble.mode === "stats"
+                visible: bubble.mode === "stats" && !bubble.wordStats
                 text: (bubble.content.streak || "") + " · " + (bubble.content.answers || "")
                 color: bubble.theme.muted
                 font.pixelSize: 12
             }
+            // A language course: its words known, on the ladder, new in store.
+            Para {
+                visible: bubble.wordStats
+                text: bubble.words.course || ""
+                font.weight: Font.DemiBold
+                font.pixelSize: 12
+            }
+            Row {
+                visible: bubble.wordStats
+                width: column.width
+                height: 8
+                spacing: 2
+                Repeater {
+                    model: bubble.wordStats ? [
+                        { count: bubble.words.known, color: bubble.theme.good },
+                        { count: bubble.words.climbing, color: bubble.theme.ink },
+                        { count: bubble.words.fresh, color: bubble.theme.line },
+                    ] : []
+                    Rectangle {
+                        required property var modelData
+                        readonly property int total: Math.max(1, bubble.words.known + bubble.words.climbing + bubble.words.fresh)
+                        visible: modelData.count > 0
+                        width: (column.width - 4) * modelData.count / total
+                        height: 8
+                        radius: 2
+                        color: modelData.color
+                    }
+                }
+            }
+            Row {
+                visible: bubble.wordStats
+                spacing: 14
+                Repeater {
+                    model: bubble.wordStats ? [
+                        { text: bubble.words.known + " known", color: bubble.theme.good },
+                        { text: bubble.words.climbing + " on the ladder", color: bubble.theme.ink },
+                        { text: bubble.words.fresh + " new in store", color: bubble.theme.line },
+                    ] : []
+                    Row {
+                        required property var modelData
+                        spacing: 5
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 8
+                            height: 8
+                            radius: 2
+                            color: parent.modelData.color
+                        }
+                        Text {
+                            text: parent.modelData.text
+                            color: bubble.theme.muted
+                            font.family: bubble.theme.body
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+            }
             Repeater {
-                model: bubble.mode === "stats" ? bubble.content.domains : []
+                model: bubble.mode !== "stats" ? [] : bubble.wordStats ? bubble.words.chapters : bubble.content.domains
                 Item {
                     required property var modelData
                     width: column.width
@@ -896,22 +1596,41 @@ Item {
                             width: modelData.rate < 0 ? 0 : parent.width * modelData.rate
                             height: parent.height
                             radius: 2.5
-                            color: modelData.rate >= 0.7 ? bubble.theme.good : modelData.rate >= 0.5 ? bubble.theme.gold : bubble.theme.bad
+                            // A chapter's words known: all green; a domain's right answers: by rate.
+                            color: bubble.wordStats || modelData.rate >= 0.7 ? bubble.theme.good
+                                 : modelData.rate >= 0.5 ? bubble.theme.gold : bubble.theme.bad
                         }
                     }
                 }
             }
             Para {
+                visible: bubble.wordStats && (bubble.words.news || "") !== ""
+                text: bubble.words.news || ""
+                color: bubble.theme.gold
+                font.weight: Font.DemiBold
+            }
+            Para {
                 visible: bubble.mode === "stats"
-                text: bubble.content.bank || ""
+                text: bubble.wordStats ? (bubble.words.bank || "") : (bubble.content.bank || "")
                 color: bubble.theme.muted
                 font.pixelSize: 12
             }
             Row {
                 visible: bubble.mode === "stats"
                 spacing: 8
-                Action { label: "A question"; primary: true; onActivated: bubble.controller.askNow() }
                 Action {
+                    label: bubble.wordStats ? "A bout" : "A question"
+                    primary: true
+                    onActivated: bubble.controller.askNow()
+                }
+                // The next level, once he offers it.
+                Action {
+                    visible: bubble.wordStats && (bubble.words.up || "") !== ""
+                    label: "Move up to " + (bubble.words.up || "")
+                    onActivated: bubble.controller.moveUp()
+                }
+                Action {
+                    visible: !(bubble.wordStats && (bubble.words.up || "") !== "")
                     label: bubble.controller.paused ? "Resume" : "A break…"
                     onActivated: bubble.controller.paused ? bubble.controller.resume() : bubble.controller.showPause()
                 }

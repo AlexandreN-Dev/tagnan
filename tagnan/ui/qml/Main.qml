@@ -188,9 +188,10 @@ Window {
         width: bubble.width + 26
         height: bubble.height + 14
         color: "transparent"
-        // It never takes the keyboard, but for a break or a subject typed in words.
+        // It never takes the keyboard, but for a break or a subject typed in words, or a
+        // word to type once one has taken part in the bout (Bubble.qml's wantsKeys).
         flags: win.kind | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.NoDropShadowWindowHint
-               | (bubble.mode === "pause" || bubble.mode === "subject" ? 0 : Qt.WindowDoesNotAcceptFocus)
+               | (bubble.wantsKeys ? 0 : Qt.WindowDoesNotAcceptFocus)
         title: "Tagnan — bubble"
 
         Bubble {
@@ -208,13 +209,17 @@ Window {
 
         Connections {
             target: bubble
-            function onModeChanged() {
-                if (bubble.mode === "pause" || bubble.mode === "subject")
+            function takeKeys() {
+                if (bubble.wantsKeys)
                     Qt.callLater(function() {
+                        if (!bubble.wantsKeys)
+                            return  // answered meanwhile
                         bubbleWindow.requestActivate()
                         bubble.focusField()
                     })
             }
+            function onWantsKeysChanged() { takeKeys() }
+            function onContentChanged() { takeKeys() }  // the next word to type
         }
     }
 

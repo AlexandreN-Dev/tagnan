@@ -75,8 +75,29 @@ class BrainClient:
         """A study sheet's words (tagnan.studysheet.clean's shape)."""
         return self.call("sheet", request, timeout)
 
-    def plan(self, words: str, timeout: float = 630.0) -> dict[str, Any]:
-        return self.call("plan", {"words": words}, timeout)
+    def plan(
+        self,
+        words: str,
+        language: Mapping[str, Any] | None = None,
+        course: Mapping[str, Any] | None = None,
+        timeout: float = 630.0,
+    ) -> dict[str, Any]:
+        """A course from one's words; with `language` ({"learned", "speaks", "level"}), a
+        language course's chapters; with `course` too, that course a level up."""
+        request: dict[str, Any] = {"words": words}
+        if language is not None:
+            request["language"] = dict(language)
+        if course is not None:
+            request["course"] = dict(course)
+        return self.call("plan", request, timeout)
+
+    def words(self, request: Mapping[str, Any], timeout: float = 630.0) -> dict[str, Any]:
+        """A language course's words: {"words": [...], "rejected": [...], "course": key}."""
+        return self.call("words", request, timeout)
+
+    def level(self, request: Mapping[str, Any], timeout: float = 270.0) -> dict[str, Any]:
+        """Questions that place a learner: {"questions": [...]}."""
+        return self.call("level", request, timeout)
 
     def account(self, timeout: float = 45.0) -> dict[str, Any]:
         """Whose Claude login the brain writes with: {"signedIn", "email", "org", "plan"}."""

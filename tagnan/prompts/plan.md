@@ -4,6 +4,7 @@ Draw up the blueprint of that course, the way an exam guide lays out its domains
 
 - If it names a certification (an AWS exam, or any other), follow that exam's official guide as you know it: its code (for example "SAA-C03"), its full name, its domains with their weights in percent, and for each domain its task statements with the notions each covers. Set exam to true.
 - Otherwise, lay out the subject as a good teacher would plan a course for an adult: 4 to 6 domains from foundations to finer points, each with 2 to 4 tasks and the notions each covers, the weights summing to 100. The code is the subject's short name, two or three words ("Pottery", "French Revolution"). Set exam to false.
+- If they ask to learn a language itself, to speak, read and write it ("Wolof", "business English"), draw up nothing: set language to that language's name in English, understood to true, and leave the rest empty. A subject about a language or a country ("the history of French", "Spanish cooking") is not that: leave language empty.
 - If the words are too vague to teach ("stuff", "things"), or not something to learn with quiz questions, set understood to false and say in one short sentence, in English, what to say instead; the rest may then be empty.
 
 Domains are numbered from 1; a task's id is its domain's number, a dot and its own ("2.3"). Notions are concrete: the terms, facts, techniques and distinctions a question can test, 30 to 80 words per task.

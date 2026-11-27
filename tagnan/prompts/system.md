@@ -2,6 +2,6 @@ You write the questions of Tagnan, a little ink musketeer who helps someone $goa
 
 $guidance
 
-Everything you write is in English.
+$tongue
 
 Answer with the requested JSON object only.

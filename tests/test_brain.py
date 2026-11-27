@@ -9,7 +9,14 @@ import pytest
 from tagnan import blueprint, brain, config
 from tagnan.blueprint import Blueprint
 from tagnan.brain_client import BrainClient, BrainError, decode
-from tests.conftest import pottery_data, pottery_question, question_data, sheet_data
+from tests.conftest import (
+    pottery_data,
+    pottery_question,
+    question_data,
+    sheet_data,
+    spanish,
+    word_data,
+)
 
 FAKE_CLAUDE = """#!/usr/bin/env python3
 import json, os, sys
@@ -364,3 +371,173 @@ def test_a_course_is_drawn_up_from_words(fake_claude: Path) -> None:
         brain.plan({"words": "pottery"}, config.Config())
     with pytest.raises(brain.BrainError, match="without words"):
         brain.plan({"words": " "}, config.Config())
+
+
+# --- A language course -------------------------------------------------------------------------
+
+
+def test_words_are_written_in_the_language_and_explained_in_ones_own(fake_claude: Path) -> None:
+    course = spanish()
+    good = word_data(4)
+    answer(fake_claude, {"words": [good, word_data(0, chapter=9), word_data(1, meaning="")]})
+    request = {
+        "course": {**course.to_dict(), "language": {"learned": "Spanish", "speaks": "French"}},
+        "chapters": [{"id": 2, "count": 12}, {"id": 1, "count": 8}],
+        "avoid": ["la cuchara", "el cuento"],
+    }
+    result = brain.words(request, config.Config())
+    assert result["words"] == [good]
+    assert result["course"] == "spanish"
+    assert result["rejected"] == ["word 2 : unknown chapter: 9", "word 3 : meaning: empty"]
+    call = call_log(fake_claude)
+    argv = call["argv"]
+    assert isinstance(argv, list)
+    system = argv[argv.index("--system-prompt") + 1]
+    assert "helps someone learn Spanish" in system
+    assert "sentences of the language are in Spanish" in system
+    assert "is in French" in system
+    assert "Everything you write is in English" not in system
+    assert json.loads(argv[argv.index("--json-schema") + 1]) == brain.WORDS_SCHEMA
+    prompt = str(call["stdin"])
+    assert "Write 20 word cards for someone who speaks French and learns Spanish" in prompt
+    assert "- 12 for chapter 2, Food and eating out: meals, the restaurant, the market" in prompt
+    assert "- 8 for chapter 1, Everyday life" in prompt
+    assert "already has these words: write others.\nla cuchara, el cuento" in prompt
+    assert "$" not in prompt
+    # The level, when the course has one; the model chosen in his menu.
+    answer(fake_claude, {"words": [good]})
+    brain.words(
+        {**request, "course": course.to_dict(), "model": "claude-sonnet-5-5"}, config.Config()
+    )
+    call = call_log(fake_claude)
+    assert "learns Spanish, at level A2 of the Common European Framework" in str(call["stdin"])
+    argv = call["argv"]
+    assert isinstance(argv, list)
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"
+    assert "learn Spanish, at level A2" in argv[argv.index("--system-prompt") + 1]
+
+
+def test_words_need_a_language_course_and_usable_cards(fake_claude: Path, bp: Blueprint) -> None:
+    answer(fake_claude, {"words": [word_data(0, chapter=9)]})
+    request = {"course": spanish().to_dict(), "chapters": [{"id": 1, "count": 10}]}
+    with pytest.raises(brain.BrainError, match="no usable word: word 1 : unknown chapter"):
+        brain.words(request, config.Config())
+    with pytest.raises(brain.BrainError, match="not a language course"):
+        brain.words({**request, "course": bp.to_dict()}, config.Config())
+    with pytest.raises(brain.BrainError, match="1 to 40 words"):
+        brain.words({**request, "chapters": [{"id": 1, "count": 90}]}, config.Config())
+    with pytest.raises(brain.BrainError, match="odd chapters"):
+        brain.words({**request, "chapters": [{"id": 7, "count": 5}]}, config.Config())
+
+
+def test_a_language_course_is_drawn_up_at_ones_level(fake_claude: Path) -> None:
+    chapters = [
+        {"name": " Everyday  life ", "words": "the day's routine"},
+        {"name": "Food and eating out", "words": "meals, the restaurant"},
+    ]
+    answer(fake_claude, {"understood": True, "message": "", "chapters": chapters})
+    spoken = {"learned": "Spanish", "speaks": "French", "level": "A2", "purpose": "for work"}
+    result = brain.plan({"words": "spanish", "language": spoken}, config.Config())
+    course = blueprint.from_dict(result["course"])
+    assert (course.key, course.name, course.title, course.exam) == (
+        "spanish",
+        "Spanish",
+        "Spanish A2",
+        False,
+    )
+    assert course.language == blueprint.Language("Spanish", "French", "A2", 1)
+    assert [(d.id, d.name, d.tasks[0].notions) for d in course.domains] == [
+        (1, "Everyday life", "the day's routine"),
+        (2, "Food and eating out", "meals, the restaurant"),
+    ]
+    call = call_log(fake_claude)
+    prompt = str(call["stdin"])
+    assert "speaks French and wants to learn Spanish, at level A2" in prompt
+    assert "Framework of Reference, for work." in prompt
+    assert "$" not in prompt
+    argv = call["argv"]
+    assert isinstance(argv, list)
+    assert json.loads(argv[argv.index("--json-schema") + 1]) == brain.LANGUAGE_PLAN_SCHEMA
+    # A level up: the course one has comes along, its new chapters go after its own.
+    answer(
+        fake_claude,
+        {"understood": True, "message": "", "chapters": [{"name": "Opinions", "words": "doubt"}]},
+    )
+    up = brain.plan(
+        {"words": "spanish", "language": {**spoken, "level": "B1"}, "course": course.to_dict()},
+        config.Config(),
+    )
+    raised = blueprint.from_dict(up["course"])
+    assert [d.name for d in raised.domains] == ["Everyday life", "Food and eating out", "Opinions"]
+    assert raised.language == blueprint.Language("Spanish", "French", "B1", 3)
+    assert "already has these chapters" in str(call_log(fake_claude)["stdin"])
+    assert "Everyday life; Food and eating out." in str(call_log(fake_claude)["stdin"])
+    answer(fake_claude, {"understood": False, "message": "Klingon has no A2.", "chapters": []})
+    assert brain.plan({"language": spoken}, config.Config()) == {
+        "understood": False,
+        "message": "Klingon has no A2.",
+    }
+    answer(fake_claude, {"understood": True, "message": "", "chapters": []})
+    with pytest.raises(brain.BrainError, match="no chapters"):
+        brain.plan({"language": spoken}, config.Config())
+    with pytest.raises(brain.BrainError, match="a level from A1 to C1"):
+        brain.plan({"language": {**spoken, "level": "Z9"}}, config.Config())
+
+
+def test_words_that_ask_for_a_language_get_its_name_first(fake_claude: Path) -> None:
+    structured = {
+        "understood": True,
+        "message": "",
+        "exam": False,
+        "code": "",
+        "name": "",
+        "guidance": "",
+        "reference": "",
+        "services": [],
+        "multiple": False,
+        "language": "wolof",
+        "domains": [],
+    }
+    answer(fake_claude, structured)
+    assert brain.plan({"words": "business wolof"}, config.Config()) == {
+        "understood": True,
+        "language": "Wolof",
+    }
+    assert "to learn a language itself" in str(call_log(fake_claude)["stdin"])
+
+
+def test_questions_that_place_a_learner_come_sorted_and_checked(fake_claude: Path) -> None:
+    def placed(level: str, **changes: object) -> dict[str, object]:
+        return {
+            "level": level,
+            "sentence": f"Yo ____ {level}.",
+            "choices": ["soy", "eres", "es", "somos"],
+            "answer": 0,
+            **changes,
+        }
+
+    answer(
+        fake_claude,
+        {
+            "questions": [
+                placed("B1"),
+                placed("A1"),
+                placed("C1"),
+                placed("A2", answer=4),  # no such choice
+                placed("A2", choices=["soy", "Soy", "es", "somos"]),  # the same twice
+                placed("B2", sentence="No gap here."),
+                placed("A2"),
+                placed("B2"),
+            ]
+        },
+    )
+    result = brain.level({"learned": "Spanish", "speaks": "French"}, config.Config())
+    assert [q["level"] for q in result["questions"]] == ["A1", "A2", "B1", "B2", "C1"]
+    prompt = str(call_log(fake_claude)["stdin"])
+    assert "speaks French and wants to learn Spanish" in prompt
+    assert "$" not in prompt
+    answer(fake_claude, {"questions": [placed("A1")]})
+    with pytest.raises(brain.BrainError, match="no usable placement"):
+        brain.level({"learned": "Spanish"}, config.Config())
+    with pytest.raises(brain.BrainError, match="without a language"):
+        brain.level({}, config.Config())

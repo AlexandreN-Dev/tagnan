@@ -4,6 +4,8 @@
     scripts/brain explain < request.json    # {"course", "question": {...}, "chosen": [...]}
     scripts/brain sheet < request.json      # {"course", "question": {...}}: a study sheet's words
     scripts/brain plan < request.json       # {"words": "pottery"}: a new course's blueprint
+    scripts/brain words < request.json      # {"course", "chapters", "avoid"}: a language's words
+    scripts/brain level < request.json      # {"learned", "speaks"}: questions that place one
     scripts/brain check                     # one tiny call with the configured model
     scripts/brain account                   # whose Claude login it writes with
 
@@ -29,9 +31,10 @@ from typing import Any
 
 from tagnan import blueprint as blueprints
 from tagnan import config as configs
+from tagnan import language as languages
 from tagnan import studysheet
 from tagnan.blueprint import Blueprint
-from tagnan.model import parse_question
+from tagnan.model import parse_card, parse_question
 from tagnan.paths import PROMPTS_DIR, config_file
 from tagnan.subject import from_key
 
@@ -55,6 +58,8 @@ SHEET_TIMEOUT = 360.0
 ACCOUNT_TIMEOUT = 30.0
 MAX_WORDS = 120
 DIFFICULTIES = ("easy", "medium", "hard")
+LANGUAGE_CHAPTERS = 5  # the chapters of a language course, at each level
+MAX_CARDS = 40  # the words of one call, at most
 
 QUESTION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -114,6 +119,7 @@ PLAN_SCHEMA: dict[str, Any] = {
         "reference": {"type": "string"},
         "services": {"type": "array", "items": {"type": "string"}},
         "multiple": {"type": "boolean"},
+        "language": {"type": "string"},
         "domains": {
             "type": "array",
             "items": {
@@ -139,8 +145,74 @@ PLAN_SCHEMA: dict[str, Any] = {
         "reference",
         "services",
         "multiple",
+        "language",
         "domains",
     ],
+    "additionalProperties": False,
+}
+# A language course: its chapters at a level, its words, and the questions that place one.
+LANGUAGE_PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "understood": {"type": "boolean"},
+        "message": {"type": "string"},
+        "chapters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "words": {"type": "string"}},
+                "required": ["name", "words"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["understood", "message", "chapters"],
+    "additionalProperties": False,
+}
+CARD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "chapter": {"type": "integer"},
+        "term": {"type": "string"},
+        "meaning": {"type": "string"},
+        "example": {"type": "string"},
+        "translation": {"type": "string"},
+        "note": {"type": "string"},
+        "also": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["chapter", "term", "meaning", "example", "translation", "note", "also"],
+    "additionalProperties": False,
+}
+WORDS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"words": {"type": "array", "items": CARD_SCHEMA}},
+    "required": ["words"],
+    "additionalProperties": False,
+}
+LEVEL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "level": {"type": "string", "enum": list(languages.LEVEL_KEYS)},
+                    "sentence": {"type": "string"},
+                    "choices": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 4,
+                        "maxItems": 4,
+                    },
+                    "answer": {"type": "integer"},
+                },
+                "required": ["level", "sentence", "choices", "answer"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["questions"],
     "additionalProperties": False,
 }
 CHECK_SCHEMA: dict[str, Any] = {
@@ -253,11 +325,52 @@ def course(request: Mapping[str, Any], cfg: configs.Config) -> Blueprint:
 
 def goal(bp: Blueprint) -> str:
     """What the learner is after, as the prompts say it."""
+    if bp.language and bp.language.level:
+        return f"learn {bp.language.learned}, at level {bp.language.level}"
     return f"prepare for the {bp.name} ({bp.code}) certification" if bp.exam else f"learn {bp.name}"
 
 
+def tongue(bp: Blueprint) -> str:
+    """What the brain writes in: English, as Tagnan speaks; for a language course, the language
+    learned for its words and sentences, the one the learner speaks for the rest."""
+    if bp.language is None:
+        return "Everything you write is in English."
+    speaks = bp.language.speaks or "English"
+    return (
+        f"The words and the sentences of the language are in {bp.language.learned}; everything"
+        f" else you write (meanings, translations, notes, explanations) is in {speaks}."
+    )
+
+
 def system_prompt(bp: Blueprint) -> str:
-    return _template("system.md", goal=goal(bp), guidance=bp.guidance)
+    return _template("system.md", goal=goal(bp), guidance=bp.guidance, tongue=tongue(bp))
+
+
+def words_prompt(bp: Blueprint, chapters: Sequence[Mapping[str, Any]], avoid: Sequence[str]) -> str:
+    """Word cards for a language course: so many for each chapter asked, none he has."""
+    if bp.language is None:
+        raise BrainError("not a language course")
+    lines = []
+    for chapter in chapters:
+        domain = bp.domain(int(chapter["id"]))
+        about = domain.tasks[0].notions
+        lines.append(
+            f"- {int(chapter['count'])} for chapter {domain.id}, {domain.name}"
+            + (f": {about}" if about and about != domain.name else "")
+        )
+    avoid_text = (
+        "The learner already has these words: write others.\n" + ", ".join(avoid) if avoid else ""
+    )
+    level = bp.language.level
+    return _template(
+        "words.md",
+        count=sum(int(c["count"]) for c in chapters),
+        speaks=bp.language.speaks or "English",
+        learned=bp.language.learned,
+        level=f", at level {level} of the Common European Framework of Reference" if level else "",
+        chapters="\n".join(lines),
+        avoid=avoid_text,
+    )
 
 
 def generate_prompt(
@@ -427,9 +540,144 @@ def sheet(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
         raise BrainError(f"no usable sheet: {error}") from None
 
 
+def words(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
+    """A language course's words (tagnan.model's cards): {"words", "rejected", "course"}."""
+    bp = course(request, cfg)
+    chapters = [c for c in request.get("chapters") or [] if isinstance(c, Mapping)]
+    try:
+        asked = sum(int(c["count"]) for c in chapters)
+        prompt = words_prompt(bp, chapters, [str(w) for w in request.get("avoid") or []])
+    except (KeyError, TypeError, ValueError) as error:
+        raise BrainError(f"request with odd chapters ({error})") from None
+    if not 0 < asked <= MAX_CARDS:
+        raise BrainError(f"1 to {MAX_CARDS} words at a time")
+    model, effort = cfg.brain.model, cfg.brain.effort
+    if request.get("model"):
+        chosen = configs.find_model(str(request["model"]))
+        if chosen is None:
+            raise BrainError(f"unknown model: {request['model']}")
+        model, effort = chosen.model, chosen.effort
+    structured = run_claude(
+        prompt,
+        system=system_prompt(bp),
+        schema=WORDS_SCHEMA,
+        model=model,
+        effort=effort,
+        timeout=GENERATE_TIMEOUT,
+    )
+    cards, rejected = [], []
+    for i, data in enumerate(structured.get("words", []), 1):
+        try:
+            parse_card(data, bp)
+        except ValueError as error:
+            rejected.append(f"word {i} : {error}")
+            continue
+        cards.append(data)
+    if not cards:
+        raise BrainError("no usable word: " + "; ".join(rejected[:3]))
+    return {"words": cards, "rejected": rejected, "course": bp.key}
+
+
+def level(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
+    """Questions that place a learner, the easiest first: {"questions": [{"level",
+    "sentence", "choices", "answer"}]}."""
+    learned = " ".join(str(request.get("learned") or "").split())[:40]
+    speaks = " ".join(str(request.get("speaks") or "English").split())[:40]
+    if not learned:
+        raise BrainError("request without a language")
+    structured = run_claude(
+        _template("level.md", learned=learned, speaks=speaks),
+        system="You write the placement questions of Tagnan, a little ink musketeer who helps"
+        f" someone learn {learned}. Answer with the requested JSON object only.",
+        schema=LEVEL_SCHEMA,
+        model=cfg.brain.model,
+        effort=cfg.brain.effort,
+        timeout=EXPLAIN_TIMEOUT,
+    )
+    questions = []
+    for data in structured.get("questions", []):
+        choices = [" ".join(str(c).split()) for c in data.get("choices") or []]
+        answer = data.get("answer")
+        sentence = " ".join(str(data.get("sentence") or "").split())
+        if (
+            data.get("level") in languages.LEVEL_KEYS
+            and len(choices) == 4
+            and len({c.casefold() for c in choices}) == 4
+            and all(choices)
+            and isinstance(answer, int)
+            and 0 <= answer < 4
+            and "___" in sentence
+        ):
+            questions.append(
+                {"level": data["level"], "sentence": sentence, "choices": choices, "answer": answer}
+            )
+    if len(questions) < 5:
+        raise BrainError("no usable placement questions")
+    questions.sort(key=lambda q: languages.LEVEL_KEYS.index(q["level"]))
+    return {"questions": questions}
+
+
+def plan_language(
+    request: Mapping[str, Any], spoken: Mapping[str, Any], cfg: configs.Config
+) -> dict[str, Any]:
+    """A language course's chapters at a level: a new course, or, when the request brings the
+    course one has ("course"), the same a level up, its new chapters after its own."""
+    learned = " ".join(str(spoken.get("learned") or "").split())[:40]
+    speaks = " ".join(str(spoken.get("speaks") or "English").split())[:40]
+    wanted = str(spoken.get("level") or "")
+    if not learned or wanted not in languages.LEVEL_KEYS:
+        raise BrainError("a language and a level from A1 to C1 are needed")
+    purpose = " ".join(str(spoken.get("purpose") or "").split())[:60]
+    known = (
+        blueprints.from_dict(request["course"], where="course") if request.get("course") else None
+    )
+    have = "; ".join(d.name for d in known.domains) if known else ""
+    structured = run_claude(
+        _template(
+            "plan-language.md",
+            learned=learned,
+            speaks=speaks,
+            level=wanted,
+            purpose=f", {purpose}" if purpose else "",
+            count=LANGUAGE_CHAPTERS,
+            have=f" The course already has these chapters, from the levels before: {have}."
+            " Choose other themes, or one of these a level deeper under another name."
+            if have
+            else "",
+        ),
+        system="You draw up the language courses of Tagnan, a little ink musketeer who asks"
+        " someone the words of the language they learn. You know how good textbooks lay out each"
+        " level. Answer with the requested JSON object only.",
+        schema=LANGUAGE_PLAN_SCHEMA,
+        model=cfg.brain.model,
+        effort=cfg.brain.effort,
+        timeout=PLAN_TIMEOUT,
+    )
+    if not structured.get("understood"):
+        message = " ".join(str(structured.get("message") or "").split())
+        return {"understood": False, "message": message or "I don't know how to teach that."}
+    chapters = [
+        (str(c.get("name") or ""), str(c.get("words") or ""))
+        for c in structured.get("chapters") or []
+        if isinstance(c, Mapping) and str(c.get("name") or "").strip()
+    ][: LANGUAGE_CHAPTERS + 1]
+    if not chapters:
+        raise BrainError("a language course with no chapters")
+    if known is not None:
+        bp = blueprints.raise_level(known, wanted, chapters)
+    else:
+        bp = blueprints.language_course(learned, speaks, wanted, chapters)
+    return {"understood": True, "course": bp.to_dict()}
+
+
 def plan(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     """A new course from the learner's words: {"understood": true, "course": blueprint}, or
-    {"understood": false, "message": what to say instead}."""
+    {"understood": false, "message": what to say instead}. With "language" ({"learned",
+    "speaks", "level"}), a language course's chapters at that level; words that ask for a
+    language without one get {"understood": true, "language": its name}: the level comes first."""
+    spoken = request.get("language")
+    if isinstance(spoken, Mapping):
+        return plan_language(request, spoken, cfg)
     words = " ".join(str(request.get("words") or "").split())
     if not words:
         raise BrainError("request without words")
@@ -448,8 +696,11 @@ def plan(request: Mapping[str, Any], cfg: configs.Config) -> dict[str, Any]:
     if not structured.get("understood"):
         message = " ".join(str(structured.get("message") or "").split())
         return {"understood": False, "message": message or "I don't know how to teach that."}
+    asked = " ".join(str(structured.get("language") or "").split())
+    if asked:
+        return {"understood": True, "language": languages.named(asked)}
     data = {
-        **structured,
+        **{k: v for k, v in structured.items() if k != "language"},
         "kinds": ["single", "multiple"] if structured.get("multiple") else ["single"],
     }
     bp = blueprints.from_dict(data, blueprints.slug(str(structured.get("code") or "")))
@@ -514,7 +765,8 @@ def account() -> dict[str, Any]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brain", description="Tagnan's brain")
     parser.add_argument(
-        "action", choices=["generate", "explain", "sheet", "plan", "check", "account"]
+        "action",
+        choices=["generate", "explain", "sheet", "plan", "words", "level", "check", "account"],
     )
     parser.add_argument("--config", type=Path, default=config_file())
     args = parser.parse_args(argv)
@@ -527,7 +779,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = check(cfg)
         else:
             request = json.loads(sys.stdin.read() or "{}")
-            actions = {"generate": generate, "explain": explain, "sheet": sheet, "plan": plan}
+            actions = {
+                "generate": generate,
+                "explain": explain,
+                "sheet": sheet,
+                "plan": plan,
+                "words": words,
+                "level": level,
+            }
             result = actions[args.action](request, cfg)
     except (BrainError, ValueError, KeyError) as error:
         print(f"brain: {error}", file=sys.stderr)

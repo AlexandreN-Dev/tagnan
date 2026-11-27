@@ -2636,12 +2636,15 @@ def test_the_window_draws_a_language_course(lingo: Game) -> None:
         assert field is not None
         assert ok is not None
         field.setProperty("text", "la estación")
-        QApplication.processEvents()
-        centre = ok.mapToScene(ok.boundingRect().center())
-        QTest.mouseClick(
-            bubble, Qt.MouseButton.LeftButton, pos=QPoint(round(centre.x()), round(centre.y()))
-        )
-        QApplication.processEvents()
+        for _ in range(5):  # the window takes the keyboard meanwhile: a click may come too soon
+            QTest.qWait(60)
+            centre = ok.mapToScene(ok.boundingRect().center())
+            QTest.mouseClick(
+                bubble, Qt.MouseButton.LeftButton, pos=QPoint(round(centre.x()), round(centre.y()))
+            )
+            QApplication.processEvents()
+            if controller.property("bubble")["done"]:
+                break
         assert controller.property("bubble")["done"] is True
         assert field.property("text") == "la estación"  # stays to be read
         controller.nextTouch()

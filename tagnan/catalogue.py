@@ -9,11 +9,13 @@ A catalogue is one JSON object, his format:
      "origin": "written",          or "converted" from a quiz: kept for oneself, never exported
      "subject": "RAG",             optional: the subject, in one's own words, they are about
      "left_out": [{"number": 7, "why": "..."}],   optional: what an assistant could not convert
-     "questions": [...]}           as his brain writes them (tagnan.brain's QUESTION_SCHEMA)
+     "questions": [...],           as his brain writes them (tagnan.brain's QUESTION_SCHEMA)
+     "words": [...]}               a language course's words (tagnan.brain's CARD_SCHEMA)
 
 Or questions typed by hand, in plain text (a note, a text file) or a spreadsheet saved as CSV,
 read here with no assistant: a course of their own, its chapters their headings, checked lighter
-(tagnan.model's parse_question). FORMAT_EXAMPLE is their shape.
+(tagnan.model's parse_question). FORMAT_EXAMPLE is their shape. A list of words, "word = meaning"
+a line, is a language course of its own (WORDS_EXAMPLE): he builds its exercises himself.
 
 Standard library only, as the game.
 """
@@ -29,9 +31,9 @@ from string import Template
 from typing import Any
 
 from tagnan import blueprint as blueprints
-from tagnan import brain
+from tagnan import brain, language
 from tagnan.blueprint import Blueprint
-from tagnan.model import CONVERTED, TYPED, WRITTEN, Question
+from tagnan.model import CONVERTED, TYPED, WRITTEN, Card, Question
 from tagnan.paths import PROMPTS_DIR
 from tagnan.studysheet import free_path
 from tagnan.subject import from_key
@@ -44,8 +46,8 @@ MAX_QUESTIONS = 5000  # in one catalogue: years of questions, exported at once
 MAX_CHARS = 20_000_000
 
 # Where his object starts, among the words and the code block's fences around it.
-_START = re.compile(r'\{\s*"(?:tagnan|course|origin|subject|left_out|questions)"\s*:')
-_QUESTIONS = re.compile(r'"questions"\s*:\s*\[')
+_START = re.compile(r'\{\s*"(?:tagnan|course|origin|subject|left_out|questions|words)"\s*:')
+_ITEMS = re.compile(r'"(questions|words)"\s*:\s*\[')
 _DECODER = json.JSONDecoder()
 # Characters Windows refuses in a file name, and those no file name should hold.
 _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
@@ -61,12 +63,17 @@ COURSE_SHAPE = (
     ' "kinds": ["single"], "domains": [{"id": 1, "name": "…", "weight": 25,'
     ' "tasks": [{"id": "1.1", "title": "…", "notions": "…"}]}]}'
 )
+WORD_SHAPE = (
+    '{"chapter": 1, "term": "…", "meaning": "…", "example": "… **…** …", "translation": "…",'
+    ' "note": "", "also": []}'
+)
 
 
 @dataclass(frozen=True)
 class Catalogue:
     course: Blueprint | str  # a whole course, or the key of one he knows
     questions: tuple[Mapping[str, Any], ...]  # as written: checked once their course is known
+    words: tuple[Mapping[str, Any], ...] = ()  # a language course's words, as written
     origin: str = WRITTEN
     subject: str = ""
     left_out: tuple[tuple[int, str], ...] = ()  # their number in the quiz, and why
@@ -96,7 +103,7 @@ def _salvage(text: str, start: int) -> tuple[dict[str, Any], bool]:
     """An object that breaks off (an answer too long for an assistant, or garbled): what comes
     before its questions, its questions up to the first that cannot be read, and whether they
     break off there."""
-    found = _QUESTIONS.search(text, start)
+    found = _ITEMS.search(text, start)
     if found is None:
         raise ValueError("it breaks off before its questions")
     try:
@@ -115,7 +122,7 @@ def _salvage(text: str, start: int) -> tuple[dict[str, Any], bool]:
         except json.JSONDecodeError:
             break
         questions.append(question)
-    data["questions"] = questions
+    data[found[1]] = questions  # its questions, or its words
     return data, not text.startswith("]", at)
 
 
@@ -126,7 +133,9 @@ def _catalogue(data: object, cut: bool) -> Catalogue:
         raise ValueError("it is written for a newer Tagnan: update me first")
     raw = data.get("questions")
     questions = tuple(q for q in raw if isinstance(q, Mapping)) if isinstance(raw, list) else ()
-    if not questions:
+    raw = data.get("words")
+    words = tuple(w for w in raw if isinstance(w, Mapping)) if isinstance(raw, list) else ()
+    if not questions and not words:
         raise ValueError(
             "it breaks off before its first question" if cut else "it holds no questions"
         )
@@ -143,6 +152,7 @@ def _catalogue(data: object, cut: bool) -> Catalogue:
     return Catalogue(
         course=found,
         questions=questions[:MAX_QUESTIONS],
+        words=words[:MAX_QUESTIONS],
         origin=origin if isinstance(origin, str) and origin in ORIGINS else WRITTEN,
         subject=" ".join(str(data.get("subject") or "").split())[:80],
         left_out=tuple(
@@ -223,7 +233,11 @@ class _Typed:
 
 def read_typed(text: str, name: str = "") -> Catalogue:
     """Questions typed by hand: a spreadsheet saved as CSV, or plain text in FORMAT_EXAMPLE's
-    shape and its usual variants. A course of their own, named by the # title, else by `name`."""
+    shape and its usual variants. A course of their own, named by the # title, else by `name`.
+    A list of words, with no question in it, is a language course of its own (read_words)."""
+    listed = None if _looks_csv(text) or _asks(text) else read_words(text, name)
+    if listed is not None:
+        return listed
     found = _read_csv(text) if _looks_csv(text) else _read_plain(text)
     if found is None:
         raise ValueError("I find no questions in it")
@@ -365,6 +379,150 @@ def _read_csv(text: str) -> tuple[str, list[_Typed]] | None:
     return "", typed
 
 
+# --- A list of words ---------------------------------------------------------------------------
+
+WORDS_EXAMPLE = """# The language
+## A chapter
+
+la cuenta = the bill
+madrugar = to get up early
+  Mañana tengo que madrugar.
+el plazo = the deadline
+  El plazo termina el viernes. = The deadline is on Friday."""
+UNTITLED_WORDS = "My words"  # a list pasted with no # title
+
+# What stands between a word and its meaning: the first of these on the line.
+_BETWEEN = re.compile(r"\s*(?:=>|->|=|→|\t|;)\s*|\s+[-–—:]\s+")
+_EXAMPLE = re.compile(r"^(?:example|exemple|ejemplo|ex|e\.g\.)\s*[:.]?\s+(.+)$", re.IGNORECASE)
+_SETTING = re.compile(r"^#\S+:")  # a flashcard app's export says how it is laid out: not words
+_TAG = re.compile(r"<[^>]+>")
+_WORD_COLUMNS = {
+    "term": ("word", "words", "term", "mot", "mots", "front", "expression"),
+    "meaning": ("meaning", "translation", "sens", "traduction", "back", "definition", "définition"),
+    "example": ("example", "exemple", "sentence", "phrase"),
+    "translation": ("example translation", "sentence translation", "traduction de l'exemple"),
+    "chapter": ("chapter", "chapitre", "theme", "thème", "topic"),
+    "note": ("note", "notes", "remark", "remarque"),
+}
+
+
+def _asks(text: str) -> bool:
+    """It holds questions, as one types them: a Question or an Answer line."""
+    for raw in text.splitlines():
+        line = raw.strip()
+        said = _FIELD.match(line)
+        if _QUESTION.match(line) or (said and said[1].casefold() not in _NOT_ANSWERS):
+            return True
+    return False
+
+
+_NOT_ANSWERS = frozenset(
+    {
+        "explanation",
+        "explication",
+        "why",
+        "pourquoi",
+        "source",
+        "read again",
+        "reference",
+        "référence",
+        "à relire",
+        "a relire",
+    }
+)
+
+
+def _clean(text: str) -> str:
+    """A cell of a flashcard app's export: its HTML and quotes aside."""
+    return " ".join(_TAG.sub(" ", text).replace("&nbsp;", " ").split()).strip('"')
+
+
+def read_words(text: str, name: str = "") -> Catalogue | None:
+    """A list of words typed by hand, or exported from a spreadsheet or a flashcard app: the
+    word, what stands between ("=", an arrow, a tab, a dash), its meaning; under it, if one
+    likes, a sentence it lives in, and that sentence's meaning after "=". A language course of
+    its own, named by the # title, else by `name`; its ## headings are its chapters. None when
+    the text is no such list."""
+    found = _word_table(text) or _word_lines(text)
+    if found is None:
+        return None
+    title, listed = found
+    title = " ".join((title or name or UNTITLED_WORDS).split())[:80]
+    names = list(dict.fromkeys(w["chapter"] or title for w in listed))
+    course = blueprints.language_course(title, "", "", [(n, n) for n in names])
+    words = tuple({**w, "chapter": names.index(w["chapter"] or title) + 1} for w in listed)
+    return Catalogue(course=course, questions=(), words=words, origin=TYPED, typed=True)
+
+
+def _word_lines(text: str) -> tuple[str, list[dict[str, Any]]] | None:
+    title, chapter = "", ""
+    listed: list[dict[str, Any]] = []
+    stray = 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or _SETTING.match(line):
+            continue
+        heading = _HEADING.match(line)
+        if heading:
+            if len(heading[1]) == 1:
+                title = title or heading[2]
+            else:
+                chapter = heading[2]
+            continue
+        said = _EXAMPLE.match(line)
+        under = raw[:1] in " \t" or bool(said)
+        parts = _BETWEEN.split(said[1] if said else line, maxsplit=2)
+        if under and listed:  # a sentence under its word, and what it means
+            listed[-1]["example"] = _clean(parts[0])
+            listed[-1]["translation"] = _clean(parts[1]) if len(parts) > 1 else ""
+            continue
+        if len(parts) < 2 or not _clean(parts[0]) or not _clean(parts[1]):
+            if listed and not listed[-1]["example"] and len(parts) == 1:
+                listed[-1]["example"] = _clean(line)  # a sentence under its word, not indented
+            else:
+                stray += 1
+            continue
+        word = {"chapter": chapter, "term": _clean(parts[0]), "meaning": _clean(parts[1])}
+        third = _clean(parts[2]) if len(parts) > 2 else ""
+        # A third cell is a sentence if the word is in it; else a flashcard app's tags.
+        holds = third and language.without_article(word["term"]) in language.fold(third)
+        listed.append({**word, "example": third if holds else "", "translation": "", "note": ""})
+    enough = 1 if title else 2
+    if len(listed) < enough or stray > len(listed):
+        return None
+    return title, listed
+
+
+def _word_table(text: str) -> tuple[str, list[dict[str, Any]]] | None:
+    """A spreadsheet saved as CSV whose first row names a word column and a meaning column."""
+    lines = text.strip().splitlines()
+    if len(lines) < 2:
+        return None
+    first = [h.strip().strip('"').casefold() for h in re.split(r"[;,\t]", lines[0])]
+    if not (set(first) & set(_WORD_COLUMNS["term"]) and set(first) & set(_WORD_COLUMNS["meaning"])):
+        return None
+    try:
+        dialect: Any = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    rows = list(csv.reader(io.StringIO(text.strip()), dialect))
+    header = [h.strip().casefold() for h in rows[0]]
+    where = {
+        key: next((i for i, h in enumerate(header) if h in names), None)
+        for key, names in _WORD_COLUMNS.items()
+    }
+    listed = []
+    for row in rows[1:]:
+
+        def cell(key: str, row: list[str] = row) -> str:
+            at = where[key]
+            return _clean(row[at]) if at is not None and at < len(row) else ""
+
+        if cell("term") and cell("meaning"):
+            listed.append({key: cell(key) for key in _WORD_COLUMNS})
+    return ("", listed) if listed else None
+
+
 def _answers(q: _Typed) -> list[int] | str:
     """The right choices' indices, or why none is found."""
     said = q.answer.strip()
@@ -461,6 +619,9 @@ _REASONS = {
     "why_wrong: one text per choice": "it does not say why each choice is wrong",
     "explanation: empty": "it does not say why its answer is right",
     "stem: empty": "it has no question",
+    "term: empty": "it has no word",
+    "meaning: empty": "it does not say what the word means",
+    "its meaning is the word itself": "its meaning is the word itself",
 }
 
 
@@ -468,6 +629,8 @@ def reason(error: str) -> str:
     """A check's message, said plainly."""
     if error.startswith("unknown domain"):
         return "its domain is not one of the course's"
+    if error.startswith("unknown chapter"):
+        return "its chapter is not one of the course's"
     if " is not in domain " in error:
         return "its task is not one of its domain's"
     return _REASONS.get(error, error)
@@ -476,8 +639,12 @@ def reason(error: str) -> str:
 # --- Sharing ---------------------------------------------------------------------------------
 
 
-def export(bp: Blueprint, questions: Sequence[Question]) -> dict[str, Any]:
-    """A course and the questions one may share, as a catalogue: a colleague imports both."""
+def export(
+    bp: Blueprint, questions: Sequence[Question], cards: Sequence[Card] = ()
+) -> dict[str, Any]:
+    """A course and the questions one may share, as a catalogue: a colleague imports both. A
+    language course brings its words, each to start again from the foot of the ladder."""
+    words = {"words": [c.to_dict() for c in cards]} if cards else {}
     return {
         "tagnan": FORMAT,
         "course": bp.to_dict(),
@@ -487,13 +654,14 @@ def export(bp: Blueprint, questions: Sequence[Question]) -> dict[str, Any]:
             {**q.to_dict(), "origin": TYPED} if q.origin == TYPED else q.to_dict()
             for q in questions
         ],
+        **words,
     }
 
 
-def file_name(bp: Blueprint, count: int) -> str:
+def file_name(bp: Blueprint, count: int, what: str = "question") -> str:
     """The file an export is written to: "Tagnan – AIF-C01 – 120 questions.json"."""
     safe = " ".join(_UNSAFE.sub(" ", bp.code).split()).strip(" .")[:60].strip(" .")
-    return f"Tagnan – {safe or 'Catalogue'} – {count} question{'' if count == 1 else 's'}.json"
+    return f"Tagnan – {safe or 'Catalogue'} – {count} {what}{'' if count == 1 else 's'}.json"
 
 
 def write(data: Mapping[str, Any], folder: Path, name: str) -> Path:
@@ -552,15 +720,59 @@ def course_prompt(words: str) -> str:
     )
 
 
+def words_prompt(bp: Blueprint, request: Mapping[str, Any]) -> str:
+    """Words written as his brain writes them (tagnan.game's words_request), then his format."""
+    text = "\n\n".join(
+        (
+            brain.system_prompt(bp),
+            brain.words_prompt(bp, request["chapters"], request.get("avoid") or []),
+            answer_format(bp.key, WRITTEN, words=True),
+        )
+    )
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def language_prompt(learned: str, level: str, speaks: str, purpose: str = "") -> str:
+    """A new language course drawn up, as his brain would, with its first words."""
+    course = (
+        '{"code": '
+        + json.dumps(learned)
+        + ', "name": '
+        + json.dumps(learned)
+        + ', "exam": false, "language": '
+        + json.dumps({"learned": learned, "speaks": speaks, "level": level}, ensure_ascii=False)
+        + ', "domains": [{"id": 1, "name": "…", "weight": 1,'
+        ' "tasks": [{"id": "1.1", "title": "…", "notions": "…"}]}]}'
+    )
+    shape = (
+        '{"tagnan": 1, "course": '
+        + course
+        + ', "origin": "written", "words": [\n  '
+        + WORD_SHAPE
+        + ",\n  …\n]}"
+    )
+    return _template(
+        "catalogue-language.md",
+        learned=learned,
+        speaks=speaks,
+        level=level,
+        purpose=f", {purpose}" if purpose else "",
+        chapters=brain.LANGUAGE_CHAPTERS,
+        count=BATCH,
+        format=_template("catalogue-words-format.md", shape=shape),
+    )
+
+
 def explain_prompt(bp: Blueprint, question: Question, chosen: Sequence[int]) -> str:
     """In place of Tell me more: what his brain would be asked."""
     return brain.explain_prompt(bp, question.to_dict(), chosen)
 
 
 def answer_format(
-    course: str | None, origin: str, subject: str = "", left_out: bool = False
+    course: str | None, origin: str, subject: str = "", left_out: bool = False, words: bool = False
 ) -> str:
-    """How an assistant answers: his object, for a course he knows (its key) or a new one."""
+    """How an assistant answers: his object, for a course he knows (its key) or a new one;
+    `words`: a language course's words, not questions."""
     head = [
         '"tagnan": 1',
         f'"course": {json.dumps(course) if course else COURSE_SHAPE}',
@@ -570,6 +782,9 @@ def answer_format(
         head.append(f'"subject": {json.dumps(subject, ensure_ascii=False)}')
     if left_out:
         head.append('"left_out": [{"number": 7, "why": "…"}]')
+    if words:
+        shape = "{" + ", ".join(head) + ', "words": [\n  ' + WORD_SHAPE + ",\n  …\n]}"
+        return _template("catalogue-words-format.md", shape=shape)
     shape = "{" + ", ".join(head) + ', "questions": [\n  ' + QUESTION_SHAPE + ",\n  …\n]}"
     return _template("catalogue-format.md", shape=shape)
 

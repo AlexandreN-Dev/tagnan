@@ -10,7 +10,7 @@ from tagnan.blueprint import Blueprint
 from tagnan.game import Game
 from tagnan.model import CONVERTED, TYPED, WRITTEN
 from tagnan.store import Store
-from tests.conftest import pottery_data, pottery_question, question_data
+from tests.conftest import pottery_data, pottery_question, question_data, word_data
 
 NOW = 1_800_000_000.0
 
@@ -423,3 +423,150 @@ def test_the_format_example_reads_as_it_says() -> None:
     assert isinstance(found.course, Blueprint)
     assert found.course.name == "The course's name"
     assert [q.get("answers") for q in found.questions] == [[1], [0, 2]]
+
+
+# --- A list of words ---------------------------------------------------------------------------
+
+WORD_LIST = """# Spanish
+
+## Work
+
+la reunión = the meeting
+el plazo = the deadline
+  El plazo termina el viernes. = The deadline is on Friday.
+madrugar = to get up early
+Mañana tengo que madrugar.
+
+## Food
+
+la cuenta - the bill
+la propina → the tip
+Example: ¿Dejamos propina?
+"""
+
+
+def test_a_list_of_words_is_a_language_course_of_its_own() -> None:
+    found = catalogue.read(WORD_LIST)
+    assert isinstance(found.course, Blueprint)
+    assert (found.course.key, found.course.name) == ("spanish", "Spanish")
+    assert found.course.language == blueprint.Language("Spanish")  # no level: a list of one's own
+    assert [d.name for d in found.course.domains] == ["Work", "Food"]
+    assert (found.typed, found.origin, found.questions) == (True, TYPED, ())
+    assert [(w["chapter"], w["term"], w["meaning"]) for w in found.words] == [
+        (1, "la reunión", "the meeting"),
+        (1, "el plazo", "the deadline"),
+        (1, "madrugar", "to get up early"),
+        (2, "la cuenta", "the bill"),
+        (2, "la propina", "the tip"),
+    ]
+    # A sentence under its word, indented or not, and what it means after "=".
+    assert [(w["example"], w["translation"]) for w in found.words[1:3]] == [
+        ("El plazo termina el viernes.", "The deadline is on Friday."),
+        ("Mañana tengo que madrugar.", ""),
+    ]
+    assert found.words[4]["example"] == "¿Dejamos propina?"
+    assert catalogue.read(catalogue.WORDS_EXAMPLE).course != found.course  # his example reads too
+    assert len(catalogue.read(catalogue.WORDS_EXAMPLE).words) == 3
+
+
+def test_a_deck_exported_as_text_and_a_spreadsheet_of_words() -> None:
+    deck = (
+        "#separator:tab\n#html:true\n#tags column:3\n"
+        "la casa\tthe <b>house</b>\tvocab::home\nel perro\tthe dog\tEl perro ladra.\n"
+    )
+    found = catalogue.read(deck, "Spanish deck")
+    assert isinstance(found.course, Blueprint)
+    assert found.course.name == "Spanish deck"  # no title: the file's name
+    assert [(w["term"], w["meaning"], w["example"]) for w in found.words] == [
+        ("la casa", "the house", ""),  # its tags are not a sentence
+        ("el perro", "the dog", "El perro ladra."),
+    ]
+    sheet = (
+        "chapter;word;meaning;example\n"
+        "Work;la reunión;the meeting;Tenemos una reunión.\nFood;la cuenta;the bill;\n"
+    )
+    found = catalogue.read(sheet)
+    assert isinstance(found.course, Blueprint)
+    assert found.course.name == catalogue.UNTITLED_WORDS
+    assert [d.name for d in found.course.domains] == ["Work", "Food"]
+    assert [(w["chapter"], w["term"], w["example"]) for w in found.words] == [
+        (1, "la reunión", "Tenemos una reunión."),
+        (2, "la cuenta", ""),
+    ]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["just one line = here", "hello world\nno words here", "a = b\nplain\nwords\nwith\nno marks"],
+)
+def test_what_is_no_list_of_words_is_not_read_as_one(text: str) -> None:
+    with pytest.raises(ValueError, match="I find no questions"):
+        catalogue.read(text)
+
+
+def test_questions_with_an_equals_sign_stay_questions() -> None:
+    found = catalogue.read("Question: 2 + 2 = ?\nA. 3\nB. 4\nAnswer: B\n")
+    assert (len(found.questions), found.words) == (1, ())
+
+
+def test_words_come_in_his_format_too_and_survive_a_cut(lingo: Game) -> None:
+    data = {
+        "tagnan": 1,
+        "course": "spanish",
+        "origin": "written",
+        "words": [word_data(0, term="el piso", meaning="the flat"), word_data(1, term="el ático")],
+    }
+    text = "Here you are:\n```json\n" + json.dumps(data, ensure_ascii=False) + "\n```"
+    found = catalogue.read(text)
+    assert (found.course, found.questions, len(found.words), found.cut) == ("spanish", (), 2, False)
+    cut = catalogue.read(text[: text.index('"el ático"')])
+    assert (len(cut.words), cut.cut) == (1, True)
+    added = lingo.add_cards(lingo.blueprint, found.words, 0.0, found.origin)
+    assert len(added.ids) == 2
+    assert lingo.store.card(added.ids[0]).origin == "written"
+
+
+def test_a_language_course_is_exported_with_its_words(lingo: Game) -> None:
+    lingo.store.move_card(1, 3, 99.0, 9.0)  # where one stands is one's own: not exported
+    cards = lingo.store.cards("spanish")
+    data = catalogue.export(lingo.blueprint, [], cards)
+    assert data["course"]["language"] == {
+        "learned": "Spanish",
+        "speaks": "English",
+        "level": "A2",
+        "first": 1,
+    }
+    assert data["questions"] == []
+    assert data["words"][0] == {
+        "domain": 1,
+        "term": "madrugar",
+        "meaning": "to get up early",
+        "example": "Mañana tengo que **madrugar**.",
+        "translation": "I must rise early.",
+        "note": "",
+        "also": [],
+    }
+    assert catalogue.file_name(lingo.blueprint, 8, "word") == "Tagnan – Spanish – 8 words.json"
+    back = catalogue.read(json.dumps(data, ensure_ascii=False))
+    assert isinstance(back.course, Blueprint)
+    assert back.course == lingo.blueprint
+    assert len(back.words) == 8
+    assert "words" not in catalogue.export(lingo.blueprint, [])
+
+
+def test_the_prompts_for_a_language_ask_as_his_brain_does(lingo: Game) -> None:
+    prompt = catalogue.words_prompt(lingo.blueprint, lingo.words_request())
+    assert "helps someone learn Spanish, at level A2" in prompt
+    assert "Write 20 word cards for someone who speaks English and learns Spanish" in prompt
+    assert "- 10 for chapter 1, Everyday life" in prompt
+    assert "madrugar" in prompt  # the words he has: write others
+    assert '"course": "spanish", "origin": "written", "words": [' in prompt
+    assert '"example": "… **…** …"' in prompt
+    assert "\n\n\n" not in prompt
+    assert "$" not in prompt
+    new = catalogue.language_prompt("German", "B1", "French", "for work")
+    assert "to learn German. I speak French, and my level is B1" in new
+    assert "Framework of Reference, for work. Draw up" in new
+    assert '"language": {"learned": "German", "speaks": "French", "level": "B1"}' in new
+    assert "its first 20 word cards" in new
+    assert "$" not in new

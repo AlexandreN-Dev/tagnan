@@ -947,7 +947,15 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 .lg-term.is-plain > b { font: 600 19px/1.25 var(--tg-body); }
 .lg-say { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--tg-choice); display: grid; place-items: center; cursor: pointer; }
 .lg-say.is-big { width: 54px; height: 54px; background: var(--tg-ink); }
-.lg-hear { display: flex; align-items: center; gap: 12px; flex: none; }
+.lg-say.is-rec { background: var(--tg-bad); box-shadow: 0 0 0 5px var(--tg-badSoft); }
+.lg-hear { display: flex; align-items: center; gap: 14px; flex: none; }
+.lg-stress { margin-top: -5px; font: 13px/1.3 var(--tg-body); letter-spacing: .4px; color: var(--tg-muted); }
+.lg-stress b { color: var(--tg-gold); font-weight: 700; }
+.lg-echo { display: grid; gap: 6px; flex: none; }
+.lg-play { display: grid; grid-template-columns: 14px 54px 1fr auto; align-items: center; column-gap: 9px; height: 34px; padding: 0 11px; border-radius: 7px; background: var(--tg-choice); font: 13px/1 var(--tg-body); color: var(--tg-text); cursor: pointer; }
+.lg-play b { font-weight: 600; }
+.lg-play span { font-size: 12px; color: var(--tg-muted); font-variant-numeric: tabular-nums; }
+.lg-wave { width: 100%; height: 20px; fill: var(--tg-ink); opacity: .7; }
 .lg-mean { font: 14px/1.4 var(--tg-body); color: var(--tg-text); }
 .lg-sentence { font: 15px/1.5 var(--tg-body); color: var(--tg-text); overflow-wrap: anywhere; }
 .lg-sentence b { font-weight: 700; color: var(--tg-ink); }
@@ -3856,6 +3864,20 @@ function lgChoices(c, u) {
   const state = i => u.good === i ? ' is-good' : u.bad === i ? ' is-bad' : u.good !== undefined ? ' is-dim' : u.hover === i ? ' is-hover' : '';
   return `<div class="${c.long ? 'lg-list' : 'lg-grid'}">${c.choices.map((x, i) => `<div class="b-choice${state(i)}"><b>${esc(x.letter)}</b><span>${esc(x.text)}</span></div>`).join('')}</div>`;
 }
+// Icons this proposal adds: a microphone.
+PICONS.mic = 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3M9 21h6';
+function lgMic(on) {
+  return `<span class="lg-say is-big${on ? ' is-rec' : ''}" role="button" aria-label="${on ? 'Stop' : 'Speak'}">${glyph('mic', 'var(--tg-panel)', 26)}</span>`;
+}
+// A recording, as bars: the same for the same seed.
+function lgWave(seed) {
+  let bars = '';
+  for (let i = 0; i < 46; i++) {
+    const h = 3 + Math.abs(Math.sin(i * 0.61 + seed) * Math.sin(i * 0.23 + seed * 2.1)) * 15 * Math.sin(Math.PI * (i + 0.5) / 46);
+    bars += `<rect x="${i * 4}" y="${(10 - h / 2).toFixed(1)}" width="2" height="${h.toFixed(1)}" rx="1"/>`;
+  }
+  return `<svg class="lg-wave" viewBox="0 0 184 20" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>`;
+}
 const lgKeys = keys => `<div class="lg-keys" aria-label="The language's letters">${keys.split(' ').map(k => `<span>${esc(k)}</span>`).join('')}</div>`;
 const lgExample = c => `<div class="lg-sentence">${lgSentence(c.example)}</div>${c.translation ? `<div class="lg-trans">${esc(c.translation)}</div>` : ''}`;
 
@@ -3881,15 +3903,21 @@ function langBubble(c, u = {}) {
     if (c.note) P.push(`<div class="b-para b-note">${esc(c.note)}</div>`);
     P.push(`<div class="b-bar"><div class="b-links">${link('Later')}${link('I know it already')}</div>${action('Got it', { primary: true })}</div>`);
   } else if (m === 'touch') {
-    if (c.listen) P.push(`<div class="lg-hear">${lgSay(true)}<span class="b-para b-note">Hear it again</span></div>`);
+    if (c.about) P.push(`<div class="b-para b-note">${esc(c.about)}</div>`);
+    if (c.listen) P.push(`<div class="lg-hear">${lgSay(true)}<span class="b-links">${link('Hear it again')}${c.slow ? link('Slower') : ''}</span></div>`);
     if (c.term) P.push(`<div class="lg-term${c.plain ? ' is-plain' : ''}"><b>${esc(c.term)}</b>${c.voice ? lgSay() : ''}</div>`);
+    if (c.stress) P.push(`<div class="lg-stress">${lgSentence(c.stress)}</div>`);
     if (c.sentence) P.push(`<div class="lg-sentence">${lgSentence(c.sentence)}</div>`);
     if (c.translation) P.push(`<div class="lg-trans">${esc(c.translation)}</div>`);
     P.push(`<div class="b-para b-note">${esc(c.ask)}</div>`);
+    if (c.mic) P.push(`<div class="lg-hear">${lgMic(u.recording)}<span class="b-para b-note">${u.recording ? 'I’m listening… click when you have said it.' : 'Click, say it aloud, click again.'}</span></div>`);
+    if (c.echo) P.push(`<div class="lg-echo">${c.echo.map((x, i) => `<div class="lg-play">${glyph('resume', 'var(--tg-ink)', 13)}<b>${esc(x.who)}</b>${lgWave(i * 1.7 + 0.4)}<span>${esc(x.len)}</span></div>`).join('')}</div>`);
+    if (c.heard) P.push(`<div class="lg-card"><div class="lg-sentence">${lgSentence(c.heard)}</div></div>`);
     if (c.choices) P.push(lgChoices(c, u));
     if (c.keys) P.push(fieldRow(c.placeholder, { value: u.typed, focus: true, ok: !!u.typed }), lgKeys(c.keys));
     if (c.verdict) P.push(`<div class="b-para lg-verdict is-${c.verdict.kind}">${lgSentence(c.verdict.text)}</div>`);
-    P.push(`<div class="b-bar" data-m="bar"><div class="b-links">${link('Later')}${link(c.keys ? 'I don’t know' : 'Wrong word? Report it')}</div></div>`);
+    const links = `<div class="b-links">${link('Later')}${link(c.other || (c.keys ? 'I don’t know' : 'Wrong word? Report it'))}</div>`;
+    P.push(`<div class="b-bar" data-m="bar">${c.buttons ? `<div class="b-row8">${c.buttons.map((x, i) => action(x, { primary: i === 0 })).join('')}</div>` : ''}${links}</div>`);
   } else if (m === 'miss') {
     P.push(`<div class="b-para b-14">${lgSentence(c.right)}</div>`);
     if (c.chosen) P.push(`<div class="b-para">${lgSentence(c.chosen)}</div>`);
@@ -3984,9 +4012,40 @@ const LG_END = {
   points: '+4 points · 1288 in all',
 };
 const LG_LISTEN = {
-  mode: 'touch', title: 'Listen well!', dots: 'gn..', meta: 'Spanish A2 · Everyday life', listen: true, ask: 'What did I say?', long: true,
+  mode: 'touch', title: 'Listen well!', dots: 'gn..', meta: 'Spanish A2 · Everyday life', listen: true, slow: true, ask: 'What did I say?', long: true,
   choices: ch('I haven’t eaten yet.', 'I have already eaten.', 'I never eat at noon.', 'I’m not eating today.'),
 };
+const LG_PAIR = {
+  mode: 'touch', title: 'Listen well!', dots: 'ggn.', meta: 'Spanish A2 · Sounds', listen: true, slow: true, ask: 'Which one did I say?',
+  choices: ch('pero · but', 'perro · dog'),
+};
+const LG_DICTATION = {
+  mode: 'touch', title: 'Listen well!', dots: 'gggn', meta: 'Spanish A2 · Everyday life', listen: true, slow: true, ask: 'Type what you hear:',
+  placeholder: 'Type it…', keys: LG_KEYS,
+};
+const LG_SCENE = {
+  mode: 'touch', title: 'Listen well!', tag: 'A scene', meta: 'Spanish A2 · Food and eating out', about: 'At the restaurant · two voices · 14 s', listen: true, slow: true,
+  ask: 'What does the customer ask for?', choices: ch('the bill', 'a table for two', 'the menu', 'a glass of water'), other: 'Show its text',
+};
+const LG_SAY = {
+  mode: 'touch', title: 'Your turn, musketeer!', dots: 'gn..', meta: 'Spanish A2 · Everyday life', term: 'madrugar', voice: true, stress: 'ma · dru · **GAR**',
+  ask: 'Say it aloud:', mic: true, other: 'Not aloud now',
+};
+const LG_ECHO = {
+  ...LG_SAY, mic: false, ask: 'Mine, then yours. How close were you?', echo: [{ who: 'Tagnan', len: '0:01' }, { who: 'You', len: '0:01' }],
+  buttons: ['Close enough', 'Again'],
+};
+const LG_HEARD = { ...LG_ECHO, verdict: { kind: 'good', text: 'I understood you: **madrugar**.' } };
+const LG_SPEAK = {
+  mode: 'touch', title: 'Your turn to speak', tag: 'Once a day', meta: 'Spanish A2 · In your own words', listen: true, sentence: '¿Qué hiciste ayer?',
+  translation: 'What did you do yesterday?', ask: 'Answer aloud, a sentence or two:', mic: true, other: 'Type it instead',
+};
+const LG_SPOKEN = {
+  ...LG_SPEAK, listen: false, mic: false, ask: 'I heard:', heard: '«Ayer fui al cine con mi hermano y hemos visto una película.»',
+  buttons: ['Send it', 'Say it again'],
+};
+const MSG_NO_EAR = { mode: 'message', title: 'I can’t hear Spanish', buttons: [{ label: 'Open the settings', primary: true }, { label: 'Not now' }],
+  text: 'This PC understands French, not Spanish: Windows offers it in Settings, Time & language, Speech. Until then you say it, I play you back, and your own ear is the judge.' };
 const LG_SENT = {
   mode: 'question', title: 'Your turn, musketeer!', meta: 'Spanish A2 · Talking about the past', tag: 'Sentence',
   stem: 'Ayer ____ al mercado con mi hermana.', choices: ch('fui', 'iba', 'voy', 'he ido'), need: 1, hint: '',
@@ -4074,7 +4133,7 @@ function langWhyDoc() {
     + row('Topics asked lately are avoided', 'game.AVOID_TOPICS: the brain is told not to come back to them.',
       'The same word, from several sides.', 'Cards, not questions', 'A word is kept with its meaning and an example; he asks it in five ways.')
     + row('One shape: pick among four', 'model.KINDS: single, multiple.',
-      'Recognising a word, then finding it oneself; hearing it.', 'Pick, fill the gap, type', 'And listen, with his voice. Harder at each step.')
+      'Recognising a word, then finding it oneself; hearing it.', 'Pick, fill the gap, type', 'Then by ear, and aloud: listening and speaking (lot 2). Harder at each step.')
     + row('One question at each call', 'Twenty a day at the starting pace.',
       'Many short exposures: a word takes five seconds, not forty.', 'A bout', 'Four touches at each call: about ten new words a day.')
     + row('His rank sets the level', 'game.DIFFICULTY_BY_GRADE: easy in the inkwell, whoever one is.',
@@ -4086,13 +4145,13 @@ function langWhyDoc() {
     + '<li><b>Catalogues.</b> A word list is the simplest one there is, and he needs no brain to ask it: a language is what he teaches best without Claude.</li>'
     + '<li><b>A lighter brain.</b> One call writes twenty words, some hundred and twenty touches; ten questions today.</li>'
     + '</ul></div><div><h3>What is left out</h3><ul class="dl">'
-    + '<li><b>Speaking aloud.</b> An open-plan office, and speech recognition is a heavy dependency.</li>'
+    + '<li><b>Marking one’s accent.</b> A score for each sound needs a cloud service or a model of several hundred megabytes: one says it, hears oneself, and Windows says whether it understood.</li>'
     + '<li><b>Lessons.</b> He stays a companion of thirty seconds: grammar comes one sentence at a time, and its study sheet explains the rule.</li>'
     + '<li><b>Typing other alphabets.</b> Japanese, Arabic, Russian: choices only, at first.</li>'
     + '</ul></div></div>'
     + `<div class="lg-lots">${[
       lot('Lot 1', 'Words', 'The language course, its level and the language one speaks; cards, the ladder, the bout, typed answers; word lists in his catalogues. No dependency; works without Claude.'),
-      lot('Lot 2', 'Sentences, and his voice', 'The brain’s questions written in the language, for grammar and usage. Listening with the system’s voices, once heard on Windows.'),
+      lot('Lot 2', 'Sentences, listening, speaking', 'The brain’s questions written in the language, for grammar and usage. Listening with the system’s voices: by ear, dictation, short scenes. Speaking: say it, hear oneself, be understood. To try on Windows first.'),
       lot('Lot 3', 'One’s own words', 'A sentence of one’s own a day, set right by the brain; a word kept from what one reads.'),
     ].join('')}</div>`
     + '<div class="src"><span>tagnan/model.py: a card beside a question</span><span>tagnan/progress.py: the ladder</span><span>tagnan/game.py: a bout, its exercises</span>'
@@ -4104,7 +4163,7 @@ function langChoicesDoc() {
     + `<div class="cat-opt is-pick"><b>A · ${a[0]}<span class="pick">recommended</span></b><span>${a[1]}</span></div>`
     + `<div class="cat-opt"><b>B · ${b[0]}</b><span>${b[1]}</span></div></div>`;
   return '<div class="eyebrow">Languages · Proposal · Choices</div><h2>What to decide</h2>'
-    + '<p class="lead">Six things are open. A is what the frames of this page draw; each B is the lighter road.</p>'
+    + '<p class="lead">Seven things are open. A is what the frames of this page draw; each B is the other road.</p>'
     + dec('1', 'What a language course is made of',
       ['Words on a ladder, and the brain’s sentences', 'The brain writes cards, twenty at a time; he builds the exercises himself and brings each word back until it stays. Grammar and usage stay the brain’s questions, written in the language.'],
       ['A better prompt only', 'Questions in the language, at one’s level: a day’s work. Still pick-among-four, asked once: nothing comes back, nothing is typed.'])
@@ -4117,14 +4176,19 @@ function langChoicesDoc() {
     + dec('4', 'How strict on what is typed',
       ['Lenient, and he says so', 'Capitals and punctuation aside; a missing accent is accepted and shown; the article may be left out. The language’s letters sit under the field, for a keyboard that lacks them.'],
       ['To the letter', 'As a dictation: fair at C1, discouraging at A2 on a keyboard without ñ.'])
-    + dec('5', 'His voice (lot 2)',
+    + dec('5', 'Listening: his voice (lot 2)',
       ['The system’s voices', 'No dependency, nothing leaves the computer: Windows speaks the sentence to a file and he plays it as he plays his calls (tried here: 0.6 s a sentence). The language’s voice must be installed: this PC has French and English only. To hear before deciding.'],
       ['No voice', 'Nothing to install; no listening, and one never hears a word. A neural voice online would sound better: a network service, against his rules.'])
     + dec('6', 'One’s own sentences (lot 3)',
       ['Once a day, set right by the brain', 'A question in the language, a sentence typed back: the brain corrects it, gives the rule, and the words one lacked join the ladder. One call each, on the quick model.'],
-      ['Not at all', 'Words and sentences only: no call, but nothing one writes oneself.']);
+      ['Not at all', 'Words and sentences only: no call, but nothing one writes oneself.'])
+    + dec('7', 'Speaking (lot 2)',
+      ['Say it, hear oneself, be understood', 'He says the word, one says it back into the microphone, he plays both: one’s own ear judges. Where Windows understands the language, he adds what he heard, and takes a spoken answer for the brain to set right. Nothing leaves the computer. Off until one turns it on: an office is not always the place.'],
+      ['A mark for one’s accent', 'A score for each sound, as language apps give: a cloud service, so one’s voice leaves the computer, or a speech model of several hundred megabytes to install. Against his rules, both.']);
 }
 // --- end of the languages -------------------------------------------------------------------------
+
+
 
 
 
@@ -4630,10 +4694,10 @@ const PAGES = [
   // end of the catalogues
   // Languages (proposal).
   {
-    id: 'languages', name: 'Languages (proposal)', blurb: 'Learning a language with him: words that come back until they stay, asked in ways that get harder, four at each call; typed answers, his voice, sentences in the language.',
+    id: 'languages', name: 'Languages (proposal)', blurb: 'Learning a language with him: words that come back until they stay, asked in ways that get harder, four at each call; typed answers, listening and speaking, sentences in the language.',
     desc: 'A proposal: nothing here is built. Spanish at A2, learned by someone who speaks English.',
     rows: [
-      [{ id: 's-lang-why', name: 'Languages · the idea, and what to decide', desc: 'Why he teaches a certification well and a language poorly, what a language course would be, in three lots, and the six things to decide.', frames: [
+      [{ id: 's-lang-why', name: 'Languages · the idea, and what to decide', desc: 'Why he teaches a certification well and a language poorly, what a language course would be, in three lots, and the seven things to decide.', frames: [
         docFrame('lang-why', 'A language is not a certification', langWhyDoc, { w: 1240, kind: 'Documentation', cls: 'pdoc', src: SRC_LANG }),
         docFrame('lang-choices', 'What to decide', langChoicesDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: SRC_LANG }),
       ] }],
@@ -4674,12 +4738,37 @@ const PAGES = [
           notes: ['Today a question answered right is never asked again: only the missed ones are reviewed.', 'In a language course every word climbs, right or wrong; the way he asks follows the step.', 'About six touches to know a word: twenty words, one call to the brain, are some hundred and twenty touches.'],
           cap: 'New, five steps, known: the gaps are those of his reviews today.' },
       ] }],
-      [{ id: 's-lang-voice', name: 'His voice · lot 2', desc: 'The system’s own voices say the words: no dependency, nothing leaves the computer. To be heard on Windows before it is decided.', frames: [
+      [{ id: 's-lang-voice', name: 'Listening · lot 2', desc: 'The system’s own voices say the words, the sentences and short scenes: no dependency, nothing leaves the computer. To be heard on Windows before it is decided.', frames: [
         shot('lv-listen', 'Step 3 · by ear', LG_LISTEN, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble,
           cap: 'He has just said: «Todavía no he comido.»',
           notes: ['He says a card’s sentence as the bubble opens; the button says it again.', 'Only when his sound is on: Silent, and he asks the gap instead.', 'Windows speaks the sentence to a WAV file once, kept in his state folder; he plays it with winsound, as his calls. On a Mac, say.'] }),
+        shot('lv-pair', 'Two sounds apart', LG_PAIR, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble,
+          cap: 'He has just said: «perro».',
+          notes: ['Two words one sound apart, from a list the brain writes for the language and the one spoken: pero and perro in Spanish, ship and sheep in English.', 'The ear first: hearing two sounds apart comes before saying them apart.', 'Slower says it again at three quarters of the speed.'] }),
+        shot('lv-dictation', 'Steps 4 and 5 · dictation', LG_DICTATION, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble, ui: { typed: 'Todavia no he comido' },
+          cap: 'He has just said: «Todavía no he comido.»',
+          notes: ['The typed steps, by ear: what one hears, written.', 'Checked as any typed answer: the accent missing is accepted and shown.'] }),
+        shot('lv-scene', 'A scene', LG_SCENE, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble,
+          cap: 'Three or four lines between two people, then a question on what was said.',
+          notes: ['Listening as an exam asks it: a short scene written by the brain at one’s level, with the words one is learning, then one question.', 'Two voices when the system has two for the language; one otherwise.', 'Show its text, once answered: the scene written out, to read what one missed.', 'One call in four may be a scene instead of a sentence; ten are one call to the brain.'] }),
         shot('lv-none', 'No voice for the language', MSG_LANG.noVoice, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'annoyed',
           notes: ['Checked on this PC on 27 November: French and English voices only.', 'Said once, when the course starts; the speaker and the touches by ear stay away until a voice is there.', 'Adding a voice may need rights one lacks on a company PC.'] }),
+      ] }],
+      [{ id: 's-lang-speak', name: 'Speaking · lot 2', desc: 'Saying it aloud: he says the word, one says it back, he plays both and one’s own ear judges. Where Windows understands the language, he says what he heard, and takes a spoken answer. No mark for one’s accent: that would need a service or a heavy model. Off until one turns it on.', frames: [
+        shot('sp-say', 'Say it', LG_SAY, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble,
+          notes: ['A touch of its own, when Aloud is on in his Sound list: off at first, and Not aloud now puts it off for the day.', 'The word, his voice, and where its stress falls.', 'The microphone through Windows’ own sound library, as his calls are played: no dependency. Not tried yet: nothing was recorded for this proposal.', 'On a Mac the system has no recorder to call: to be seen.'] }),
+        shot('sp-rec', 'Listening', LG_SAY, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'idle', tokens: TK.result, ui: { recording: true },
+          notes: ['A click starts, a click stops; five seconds at most for a word.', 'The recording is kept for the comparison, then deleted: it never leaves the computer.'] }),
+        shot('sp-echo', 'His voice, then one’s own', LG_ECHO, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'wink', tokens: TK.bubble,
+          notes: ['He plays his voice, then the recording, once; each row plays again.', 'One’s own ear is the judge: Close enough moves on, Again records once more.', 'No points either way: nothing here can be marked fairly.'] }),
+        shot('sp-heard', 'Where Windows understands the language', LG_HEARD, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'happy',
+          notes: ['Windows’ own recognizer, given the word and the ones that look like it, says which it heard: offline, no dependency.', 'It says one was understood, not how well one said it: a recognizer is built to forgive accents.', 'Checked on this PC on 27 November: it understands French and Japanese only. Spanish needs its speech pack, as its voice does.'] }),
+        shot('sp-none', 'No ear for the language', MSG_NO_EAR, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'annoyed',
+          notes: ['Said once. Without the recognizer, speaking stays what the three frames before show: say it, hear oneself.'] }),
+        shot('sp-speak', 'Your turn to speak', LG_SPEAK, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble,
+          notes: ['Speaking as an exam asks it: he asks a question aloud, one answers aloud.', 'Only where Windows understands the language; Type it instead is always there.', 'The part most to be tried before it is promised: how well the recognizer follows a learner’s accent.'] }),
+        shot('sp-spoken', 'What he heard', LG_SPOKEN, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'idle', tokens: TK.bubble,
+          notes: ['What the recognizer wrote down, to check before it goes: a word it misheard is not a mistake of one’s own.', 'Sent, it is set right by the brain as a written sentence is: see Set right, beside.'] }),
       ] },
       { id: 's-lang-sentences', name: 'Sentences · lots 2 and 3', desc: 'Grammar and usage: the brain’s questions as today, written in the language. And once a day, a sentence of one’s own, set right by the brain.', frames: [
         shot('ls-ask', 'A sentence', LG_SENT, { src: SRC_LANG, expr: 'ask',

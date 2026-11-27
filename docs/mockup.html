@@ -935,6 +935,85 @@ input.tg-field::placeholder { color: var(--tg-muted); opacity: 1; }
 .pdoc .rtab.tx-understands td:first-child { width: 28%; }
 /* end of plain text */
 /* end of the catalogues */
+/* Languages (proposal): a bout's touches, the word he shows, the ladder. */
+.lg-dots { display: flex; align-items: center; gap: 5px; flex: none; }
+.lg-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--tg-choice); border: 1.5px solid var(--tg-line); box-sizing: border-box; }
+.lg-dots i.is-seen { background: var(--tg-ink); border-color: var(--tg-ink); }
+.lg-dots i.is-good { background: var(--tg-good); border-color: var(--tg-good); }
+.lg-dots i.is-bad { background: var(--tg-bad); border-color: var(--tg-bad); }
+.lg-dots i.is-now { background: var(--tg-panel); border-color: var(--tg-ink); box-shadow: 0 0 0 2.5px var(--tg-choiceOn); }
+.lg-term { display: flex; align-items: center; gap: 10px; min-height: 30px; flex: none; }
+.lg-term > b { font: 700 24px/1.15 var(--tg-display); color: var(--tg-text); overflow-wrap: anywhere; }
+.lg-term.is-plain > b { font: 600 19px/1.25 var(--tg-body); }
+.lg-say { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--tg-choice); display: grid; place-items: center; cursor: pointer; }
+.lg-say.is-big { width: 54px; height: 54px; background: var(--tg-ink); }
+.lg-hear { display: flex; align-items: center; gap: 12px; flex: none; }
+.lg-mean { font: 14px/1.4 var(--tg-body); color: var(--tg-text); }
+.lg-sentence { font: 15px/1.5 var(--tg-body); color: var(--tg-text); overflow-wrap: anywhere; }
+.lg-sentence b { font-weight: 700; color: var(--tg-ink); }
+.lg-gap { display: inline-block; width: 78px; height: 15px; margin: 0 2px; border-bottom: 2px solid var(--tg-ink); vertical-align: -2px; }
+.lg-trans { margin-top: -5px; font: italic 12.5px/1.45 var(--tg-body); color: var(--tg-muted); }
+.lg-card { display: grid; gap: 7px; padding: 12px 13px 13px; border-radius: 9px; background: var(--tg-choice); flex: none; }
+.lg-card > .lg-trans { margin-top: -3px; }
+.lg-card > .lg-mean { margin: -3px 0 5px; padding-bottom: 9px; border-bottom: 1px solid var(--tg-line); }
+.lg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: none; }
+.lg-list { display: grid; gap: 6px; flex: none; }
+.b-choice.is-good { border-color: var(--tg-good); background: color-mix(in srgb, var(--tg-good) 15%, var(--tg-panel)); }
+.b-choice.is-good > b { color: var(--tg-good); }
+.b-choice.is-bad { border-color: var(--tg-bad); background: var(--tg-badSoft); }
+.b-choice.is-bad > b { color: var(--tg-bad); }
+.b-choice.is-dim { opacity: .5; }
+.lg-keys { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -3px; flex: none; }
+.lg-keys span { min-width: 26px; height: 26px; border-radius: 5px; background: var(--tg-choice); font: 600 13px/26px var(--tg-body); color: var(--tg-text); text-align: center; cursor: pointer; }
+.lg-area { min-height: 70px; padding: 8px 10px; border-radius: 6px; background: var(--tg-choice); border: 1px solid var(--tg-ink); font: 13.5px/1.5 var(--tg-body); color: var(--tg-text); flex: none; }
+.lg-area .caret { display: inline-block; vertical-align: -3px; margin-left: 1px; }
+.lg-verdict { font-weight: 600; }
+.lg-verdict.is-good { color: var(--tg-good); }
+.lg-verdict.is-almost { color: var(--tg-gold); }
+.lg-verdict b { font-weight: 700; }
+.lg-rows { display: grid; gap: 1px; flex: none; }
+.lg-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; column-gap: 8px; padding: 6px 0; border-top: 1px solid var(--tg-line); font: 13px/1.3 var(--tg-body); }
+.lg-row:first-child { border-top: 0; }
+.lg-mark { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--tg-panel); }
+.lg-mark.is-good { background: var(--tg-good); }
+.lg-mark.is-bad { background: var(--tg-bad); }
+.lg-mark.is-seen { background: var(--tg-ink); }
+.lg-row b { font-weight: 700; color: var(--tg-text); }
+.lg-row em { font-style: normal; font-size: 12px; color: var(--tg-muted); white-space: nowrap; }
+.lg-fixed del { color: var(--tg-bad); text-decoration: line-through; }
+.lg-fixed ins { color: var(--tg-good); font-weight: 700; text-decoration: none; }
+.lg-bar { display: flex; gap: 2px; height: 8px; flex: none; }
+.lg-bar i { display: block; height: 100%; border-radius: 2px; }
+.lg-bar .k, .lg-legend .k { background: var(--tg-good); }
+.lg-bar .c, .lg-legend .c { background: var(--tg-ink); }
+.lg-bar .f, .lg-legend .f { background: var(--tg-line); }
+.lg-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: -3px; font: 12px/1.35 var(--tg-body); color: var(--tg-muted); flex: none; }
+.lg-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lg-legend i { width: 8px; height: 8px; border-radius: 2px; }
+/* The ladder a word climbs. */
+.lg-ladder { padding: 44px 48px 40px; color: var(--tg-text); font-family: var(--tg-body); }
+.lg-steps { display: flex; align-items: flex-end; gap: 8px; }
+.lg-rung { flex: none; width: 176px; display: flex; flex-direction: column; }
+.lg-rcard { display: grid; gap: 5px; align-content: start; padding: 12px 13px 13px; border-radius: 10px 10px 0 0; background: var(--tg-panel); border: 1px solid var(--tg-line); border-bottom: 0; }
+.lg-rcard > span { font: 700 11px/1.3 var(--tg-body); letter-spacing: .6px; text-transform: uppercase; color: var(--tg-gold); }
+.lg-rcard > b { font: 700 17px/1.2 var(--tg-display); color: var(--tg-text); }
+.lg-rcard > p { margin: 0; min-height: 54px; font: 12.5px/1.45 var(--tg-body); color: var(--tg-muted); }
+.lg-rcard > em { justify-self: start; height: 20px; padding: 0 7px; border-radius: 10px; border: 1px solid var(--tg-ink); font: 600 11px/18px var(--tg-body); font-style: normal; color: var(--tg-ink); white-space: nowrap; }
+.lg-rung > i { display: block; height: calc(14px + var(--n) * 30px); background: var(--tg-ink); opacity: .82; border-radius: 0 0 3px 3px; }
+.lg-rung.is-known .lg-rcard { border-color: var(--tg-good); }
+.lg-rung.is-known .lg-rcard > em { border-color: var(--tg-good); color: var(--tg-good); }
+.lg-rung.is-known > i { background: var(--tg-good); }
+.lg-rules { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 22px; font: 13px/1.5 var(--tg-body); color: var(--tg-muted); }
+.lg-rules b { color: var(--tg-text); font-weight: 600; }
+/* Its documentation. */
+.pdoc .rtab.lg-tab td:first-child { width: 37%; }
+.pdoc .rtab.lg-tab td:nth-child(2) { width: 25%; color: var(--doc-ink); }
+.pdoc .lg-lots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 30px 0 0; }
+.pdoc .lg-lot { border: 1px solid var(--doc-line); border-radius: 12px; padding: 14px 16px 16px; display: grid; gap: 7px; align-content: start; }
+.pdoc .lg-lot > i { font: 600 10.5px/1 var(--ui-font); font-style: normal; letter-spacing: .1em; text-transform: uppercase; color: var(--doc-faint); }
+.pdoc .lg-lot > b { font: 600 15px/1.3 var(--ui-font); color: var(--doc-ink); }
+.pdoc .lg-lot > span { font-size: 12.5px; line-height: 1.5; color: var(--doc-muted); }
+/* end of the languages */
 /* The PDF, opened in the system's reader. */
 .pdfwin { display: inline-flex; flex-direction: column; align-items: center; max-width: 100%; padding: 0 28px 28px; border-radius: 10px; overflow: hidden; background: #3A3E46; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); }
 .pdf-bar { align-self: stretch; margin: 0 -28px; height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; background: #26292F; color: #E6E9EE; font: 500 12.5px/1 var(--ui-font); white-space: nowrap; }
@@ -1225,6 +1304,7 @@ const domainColour = rate => rate >= 0.7 ? 'var(--tg-good)' : rate >= 0.5 ? 'var
 // c: what the controller sends (controller.bubble); u: what the bubble itself holds (picked
 // choices, words typed, hover) and, in the prototype, `live` for clickable parts.
 function bubble(c, u = {}) {
+  if (isLangMode(c.mode)) return langBubble(c, u);
   const L = u.live;
   const tail = u.tailLeft ? ' tail-left' : '';
   if (c.mode === 'quip') {
@@ -3753,6 +3833,301 @@ function miniRulesDoc() {
     + '<span>tagnan/ui/menu.py, TagnanMenu.qml: the button beside the moon</span><span>tagnan/ui/placement.py: the bubble beside him, his nearest corner</span></div>';
 }
 
+// --- Languages (proposal) -------------------------------------------------------------------------
+// Learning a language with him: words kept as cards and asked in ways that get harder, a few at
+// each call. The bubble's new shapes are drawn here with the bubble's own parts; every state
+// below is what the controller would send. Functions, not constants, for what bubble() calls.
+const SRC_LANG = ['tagnan/model.py', 'tagnan/game.py', 'tagnan/progress.py', 'tagnan/prompts', 'tagnan/ui/qml/Bubble.qml'];
+function isLangMode(m) { return ['level', 'meet', 'touch', 'miss', 'bout', 'write', 'corrected', 'words'].includes(m); }
+
+// A bout's touches, one dot each: s a word shown, g right, b missed, n the one asked now.
+function lgDots(dots) {
+  const cls = { s: 'is-seen', g: 'is-good', b: 'is-bad', n: 'is-now' };
+  return `<span class="lg-dots" aria-label="Touch ${dots.replace(/\.+$/, '').length} of ${dots.length}">${dots.split('').map(d => `<i class="${cls[d] || ''}"></i>`).join('')}</span>`;
+}
+function lgSay(big) {
+  return `<span class="lg-say${big ? ' is-big' : ''}" role="button" aria-label="Hear it">${glyph('call', big ? 'var(--tg-panel)' : 'var(--tg-ink)', big ? 26 : 16)}</span>`;
+}
+// **the word** in a sentence, ____ its gap.
+function lgSentence(text) {
+  return esc(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/_{3,}/g, '<i class="lg-gap"></i>');
+}
+function lgChoices(c, u) {
+  const state = i => u.good === i ? ' is-good' : u.bad === i ? ' is-bad' : u.good !== undefined ? ' is-dim' : u.hover === i ? ' is-hover' : '';
+  return `<div class="${c.long ? 'lg-list' : 'lg-grid'}">${c.choices.map((x, i) => `<div class="b-choice${state(i)}"><b>${esc(x.letter)}</b><span>${esc(x.text)}</span></div>`).join('')}</div>`;
+}
+const lgKeys = keys => `<div class="lg-keys" aria-label="The language's letters">${keys.split(' ').map(k => `<span>${esc(k)}</span>`).join('')}</div>`;
+const lgExample = c => `<div class="lg-sentence">${lgSentence(c.example)}</div>${c.translation ? `<div class="lg-trans">${esc(c.translation)}</div>` : ''}`;
+
+function langBubble(c, u = {}) {
+  const P = [];
+  const m = c.mode;
+  const colour = c.tone === 'good' ? 'var(--tg-good)' : c.tone === 'bad' ? 'var(--tg-bad)' : 'var(--tg-text)';
+  P.push(`<div class="b-head" data-m="head"><div class="b-title" style="color:${colour}">${esc(c.title)}</div>`
+    + `${c.dots ? lgDots(c.dots) : c.tag ? `<span class="b-chip">${esc(c.tag)}</span>` : ''}</div>`);
+  if (c.meta) P.push(`<div class="b-meta" data-m="meta">${esc(c.meta)}</div>`);
+  if (m === 'level') {
+    P.push(`<div class="b-para b-14">${esc(c.text)}</div>`);
+    P.push('<div class="b-para b-12 b-semi">Your level:</div>');
+    P.push(`<div class="b-flow">${c.levels.map(x => action(x, { primary: x === c.level })).join('')}</div>`);
+    P.push(`<div class="b-para b-note">Not sure? ${link('Find my level: eight questions')}</div>`);
+    P.push('<div class="b-line"></div><div class="b-para b-12 b-semi">You speak:</div>');
+    P.push(`<div class="b-flow">${c.speaks.map(x => action(x, { primary: x === c.speak })).join('')}</div>`);
+    P.push('<div class="b-para b-note">Meanings and explanations come in it. My own words stay English.</div>');
+    P.push(`<div class="b-row8">${action('Draw up the course', { primary: true })}${action('Cancel')}</div>`);
+  } else if (m === 'meet') {
+    P.push(`<div class="lg-card"><div class="lg-term"><b>${esc(c.term)}</b>${c.voice ? lgSay() : ''}</div><div class="lg-mean">${esc(c.meaning)}</div>`
+      + `${c.example ? lgExample(c) : ''}</div>`);
+    if (c.note) P.push(`<div class="b-para b-note">${esc(c.note)}</div>`);
+    P.push(`<div class="b-bar"><div class="b-links">${link('Later')}${link('I know it already')}</div>${action('Got it', { primary: true })}</div>`);
+  } else if (m === 'touch') {
+    if (c.listen) P.push(`<div class="lg-hear">${lgSay(true)}<span class="b-para b-note">Hear it again</span></div>`);
+    if (c.term) P.push(`<div class="lg-term${c.plain ? ' is-plain' : ''}"><b>${esc(c.term)}</b>${c.voice ? lgSay() : ''}</div>`);
+    if (c.sentence) P.push(`<div class="lg-sentence">${lgSentence(c.sentence)}</div>`);
+    if (c.translation) P.push(`<div class="lg-trans">${esc(c.translation)}</div>`);
+    P.push(`<div class="b-para b-note">${esc(c.ask)}</div>`);
+    if (c.choices) P.push(lgChoices(c, u));
+    if (c.keys) P.push(fieldRow(c.placeholder, { value: u.typed, focus: true, ok: !!u.typed }), lgKeys(c.keys));
+    if (c.verdict) P.push(`<div class="b-para lg-verdict is-${c.verdict.kind}">${lgSentence(c.verdict.text)}</div>`);
+    P.push(`<div class="b-bar" data-m="bar"><div class="b-links">${link('Later')}${link(c.keys ? 'I don’t know' : 'Wrong word? Report it')}</div></div>`);
+  } else if (m === 'miss') {
+    P.push(`<div class="b-para b-14">${lgSentence(c.right)}</div>`);
+    if (c.chosen) P.push(`<div class="b-para">${lgSentence(c.chosen)}</div>`);
+    P.push(`<div class="lg-card">${lgExample(c)}</div>`);
+    P.push(`<div class="b-para b-news">${esc(c.news)}</div>`);
+    P.push(`<div class="b-bar"><div class="b-row8">${action('Next', { primary: true })}${action(c.more || 'Tell me more')}</div>${link('Report')}</div>`);
+  } else if (m === 'bout') {
+    const mark = r => `<i class="lg-mark is-${r.mark}">${glyph(r.mark === 'bad' ? 'cross' : r.mark === 'seen' ? 'focus' : 'check', 'currentColor', 12)}</i>`;
+    P.push(`<div class="lg-rows">${c.rows.map(r => `<div class="lg-row">${mark(r)}<b>${esc(r.term)}</b><em>${esc(r.next)}</em></div>`).join('')}</div>`);
+    if (c.news) P.push(`<div class="b-para b-news">${esc(c.news)}</div>`);
+    P.push(`<div class="b-para b-note">${esc(c.points)}</div>`);
+    P.push(`<div class="b-row8">${action('Got it', { primary: true })}${action('Another bout')}</div>`);
+  } else if (m === 'write') {
+    P.push(`<div class="lg-sentence">${lgSentence(c.sentence)}</div><div class="lg-trans">${esc(c.translation)}</div>`);
+    P.push(`<div class="lg-area">${u.typed ? `<span>${esc(u.typed)}</span><i class="caret"></i>` : `<span class="f-ph">${esc(c.placeholder)}</span>`}</div>`);
+    P.push(lgKeys(c.keys));
+    P.push(`<div class="b-bar"><div class="b-links">${link('Later')}${link('Not today')}</div>${action('Send', { primary: true, ready: !!u.typed })}</div>`);
+  } else if (m === 'corrected') {
+    P.push('<div class="b-para b-12 b-semi">Your sentence, set right:</div>');
+    P.push(`<div class="lg-card"><div class="lg-sentence lg-fixed">${c.fixed.map(x => typeof x === 'string' ? esc(x) : `<del>${esc(x[0])}</del> <ins>${esc(x[1])}</ins>`).join('')}</div></div>`);
+    P.push(`<div class="b-para">${esc(c.why)}</div>`);
+    P.push(`<div class="b-para b-news">${esc(c.news)}</div>`);
+    P.push(`<div class="b-para b-note">${esc(c.points)}</div>`);
+    P.push(`<div class="b-row8">${action('Got it', { primary: true })}${action('Tell me more')}</div>`);
+  } else if (m === 'words') {
+    P.push(`<div class="b-para"><b>${esc(c.points)} points</b> · ${esc(c.next)}</div>`);
+    P.push(`<div class="b-prog"><i style="width:${(c.share * 100).toFixed(1)}%"></i></div>`);
+    P.push(`<div class="b-para b-12 b-semi">${esc(c.course)}</div>`);
+    P.push(`<div class="lg-bar"><i class="k" style="flex:${c.known}"></i><i class="c" style="flex:${c.climbing}"></i><i class="f" style="flex:${c.fresh}"></i></div>`);
+    P.push(`<div class="lg-legend"><span><i class="k"></i>${c.known} known</span><span><i class="c"></i>${c.climbing} on the ladder</span><span><i class="f"></i>${c.fresh} new in store</span></div>`);
+    for (const d of c.chapters) {
+      P.push(`<div class="b-dom"><span class="n">${esc(d.name)}</span><span class="c">${d.known}/${d.of}</span>`
+        + `<i class="t"><i style="width:${(d.known / d.of * 100).toFixed(1)}%;background:var(--tg-good)"></i></i></div>`);
+    }
+    P.push(`<div class="b-para b-news">${esc(c.news)}</div>`);
+    P.push(`<div class="b-para b-note">${esc(c.bank)}</div>`);
+    P.push(`<div class="b-row8">${action('A bout', { primary: true })}${action('Move up to B1')}${action('Close')}</div>`);
+  }
+  return '<div class="tg-bubble" data-m="bubble"><div class="b-shadow"></div><div class="b-tail" data-m="tail"></div><div class="b-panel"></div><div class="b-cover"></div>'
+    + `<div class="b-col" data-m="col">${P.join('')}</div></div>`;
+}
+
+// Spanish at A2, learned by someone who speaks English: the course of every frame below.
+const LG_KEYS = 'á é í ó ú ü ñ ¿ ¡';
+const LG_LEVEL = {
+  mode: 'level', title: 'A language!', text: 'Spanish: I’ll ask you its words and its sentences, in Spanish. Two things before I draw up the course.',
+  levels: ['A1 · Beginner', 'A2 · Elementary', 'B1 · Intermediate', 'B2 · Upper intermediate', 'C1 · Advanced'], level: 'A2 · Elementary',
+  speaks: ['English', 'Français', 'Another…'], speak: 'English',
+};
+const SUBJECT_LANG = { ...SUBJECT };
+const MSG_LANG = {
+  ready: { mode: 'message', title: 'As you wish!', text: 'Your course is ready: Spanish, A2. 1. Everyday life; 2. Food and eating out; 3. Getting around; 4. Work and the office; 5. Talking about the past. Here I’m Inkwell. Your first words in a minute or two.' },
+  noVoice: { mode: 'message', title: 'No Spanish voice', buttons: [{ label: 'Open the settings', primary: true }, { label: 'Not now' }],
+    text: 'This PC has no Spanish voice: Windows offers one in Settings, Time & language, Speech. Until then I ask without my voice.' },
+  kept: { mode: 'message', title: 'Kept!', button: 'Got it',
+    text: 'el plazo: the deadline. «El plazo termina el viernes.» It joins your words in Work and the office: I’ll ask it today.' },
+  pasted: { mode: 'message', title: 'Fresh ink!', buttons: [{ label: 'A bout now', primary: true }, { label: 'Got it' }],
+    text: '42 words for Spanish, in 3 chapters; 2 I already had. I build their questions myself: no brain needed.' },
+};
+const LG_MEET = {
+  mode: 'meet', title: 'A new word', dots: 'n...', meta: 'Spanish A2 · Everyday life', term: 'embarazada', meaning: 'pregnant', voice: true,
+  example: 'Mi hermana está **embarazada** de seis meses.', translation: 'My sister is six months pregnant.',
+  note: 'A false friend: embarrassed is avergonzado.',
+};
+const LG_PICK = {
+  mode: 'touch', title: 'En garde!', dots: 'sn..', meta: 'Spanish A2 · Everyday life', term: 'madrugar', voice: true, ask: 'What does it mean?',
+  choices: ch('to stay up late', 'to get up early', 'to have breakfast', 'to fall asleep'),
+};
+const LG_PICK_RIGHT = { ...LG_PICK, dots: 'sg..', verdict: { kind: 'good', text: 'Touché! «Mañana tengo que **madrugar**.»' } };
+const LG_PICK_FR = { ...LG_PICK, choices: ch('veiller tard', 'se lever tôt', 'prendre le petit-déjeuner', 's’endormir') };
+const LG_GAP = {
+  mode: 'touch', title: 'On your guard!', dots: 'sgn.', meta: 'Spanish A2 · Food and eating out', sentence: '¿Nos trae ____, por favor?',
+  translation: 'Could you bring us the bill, please?', ask: 'Which word goes there?', choices: ch('el cuento', 'la cuenta', 'la cuchara', 'la cocina'),
+};
+const LG_MISS = {
+  mode: 'miss', title: 'Sacrebleu!', tone: 'bad', dots: 'sgb.', right: '**la cuenta**: the bill.', chosen: 'You picked **el cuento**: a tale.',
+  example: '¿Nos trae **la cuenta**, por favor?', translation: 'Could you bring us the bill, please?', news: 'One step down: it comes back tomorrow.',
+};
+const LG_TYPE = {
+  mode: 'touch', title: 'Your turn, musketeer!', dots: 'sgbn', meta: 'Spanish A2 · Getting around', term: 'the station', plain: true,
+  ask: 'In Spanish:', placeholder: 'Type it…', keys: LG_KEYS,
+};
+const LG_ALMOST = { ...LG_TYPE, dots: 'sgbg', verdict: { kind: 'almost', text: 'Touché, all but the accent: **la estación**.' } };
+const LG_END = {
+  mode: 'bout', title: 'Well fought!', dots: 'sgbg',
+  rows: [
+    { term: 'embarazada', mark: 'seen', next: 'met · asked later today' },
+    { term: 'madrugar', mark: 'good', next: 'step 2 · tomorrow' },
+    { term: 'la cuenta', mark: 'bad', next: 'back to step 2 · tomorrow' },
+    { term: 'la estación', mark: 'good', next: 'step 5 · in 21 days' },
+  ],
+  points: '+4 points · 1288 in all',
+};
+const LG_LISTEN = {
+  mode: 'touch', title: 'Listen well!', dots: 'gn..', meta: 'Spanish A2 · Everyday life', listen: true, ask: 'What did I say?', long: true,
+  choices: ch('I haven’t eaten yet.', 'I have already eaten.', 'I never eat at noon.', 'I’m not eating today.'),
+};
+const LG_SENT = {
+  mode: 'question', title: 'Your turn, musketeer!', meta: 'Spanish A2 · Talking about the past', tag: 'Sentence',
+  stem: 'Ayer ____ al mercado con mi hermana.', choices: ch('fui', 'iba', 'voy', 'he ido'), need: 1, hint: '',
+};
+const LG_SENT_WRONG = {
+  mode: 'result', correct: false, title: 'Sacrebleu!',
+  chosen: [{ letter: 'D', text: 'he ido', why: 'the perfect goes with a time not over yet, hoy or esta semana; ayer is over.' }],
+  right: 'A. fui', explanation: 'Ayer names a finished day: one action done in it takes the preterite, fui.', reference: '',
+  points: '−8 points · 1280 in all · streak reset', news: 'This sentence will come back tomorrow, to type.', promoted: false, rank: '', sheet: 'ready',
+};
+const LG_WRITE = {
+  mode: 'write', title: 'Your turn to write', tag: 'Once a day', meta: 'Spanish A2 · In your own words',
+  sentence: '¿Qué hiciste el fin de semana pasado?', translation: 'What did you do last weekend?', placeholder: 'A sentence or two, in Spanish…', keys: LG_KEYS,
+};
+const LG_WRITTEN = 'El sábado fui a la playa con mis amigos y hemos comido una paella.';
+const LG_CORRECTED = {
+  mode: 'corrected', title: 'Well fought!', tone: 'good', meta: 'Spanish A2 · In your own words',
+  fixed: ['El sábado fui a la playa con mis amigos y ', ['hemos comido', 'comimos'], ' una paella.'],
+  why: 'El sábado is over, as ayer is: comimos, the preterite. You had it right with fui, three words earlier.',
+  news: 'Kept for your ladder: comimos, from comer.', points: '+10 points · 1290 in all',
+};
+const LG_WORDS = {
+  mode: 'words', title: 'Cadet', points: 1284, next: '2000 for Musketeer', share: 0.349, course: 'Spanish · A2', known: 212, climbing: 96, fresh: 18,
+  chapters: [
+    { name: '1. Everyday life', known: 58, of: 64 }, { name: '2. Food and eating out', known: 49, of: 60 }, { name: '3. Getting around', known: 44, of: 62 },
+    { name: '4. Work and the office', known: 37, of: 70 }, { name: '5. Talking about the past', known: 24, of: 70 },
+  ],
+  news: 'You hold A2 well: 91 % right this week. B1 whenever you like.', bank: '23 words are due today. Next bout around 15:07.',
+};
+const MENU_LANG = { ...MENU, subject: 'Spanish A2', subjectFull: 'Spanish · A2' };
+const SUGGEST_LANG = [{ label: 'Keep “el plazo”', sub: 'Spanish · I’ll find its meaning', action: 'keep:el plazo' }];
+const LG_MEET_LIST = { mode: 'meet', title: 'A new word', tag: 'Your word', meta: 'Spanish · Work', term: 'el plazo', meaning: 'the deadline',
+  example: '**El plazo** termina el viernes.', translation: '', note: '' };
+
+// The ladder every word climbs: how he asks at each step, and when it comes back once right.
+function langLadderHtml() {
+  const rungs = [
+    ['New', 'He shows it', 'The word, its meaning, an example sentence. No points.', 'the same day'],
+    ['Step 1', 'Its meaning', 'Pick it among four.', 'right: 1 day'],
+    ['Step 2', 'The word', 'Pick it for its meaning.', 'right: 3 days'],
+    ['Step 3', 'In a sentence', 'Fill the gap, among four; or by ear, with his voice.', 'right: 7 days'],
+    ['Step 4', 'Typed', 'From its meaning, no choices.', 'right: 21 days'],
+    ['Step 5', 'Typed in a sentence', 'The gap, no choices.', 'right: known'],
+    ['Known', 'Counted', 'Asked once in a while, to keep it.', 'every 60 days'],
+  ];
+  return `<div class="lg-ladder"><div class="lg-steps">${rungs.map((r, i) => `<div class="lg-rung${i === 6 ? ' is-known' : ''}" style="--n:${i}">`
+    + `<div class="lg-rcard"><span>${r[0]}</span><b>${r[1]}</b><p>${r[2]}</p><em>${r[3]}</em></div><i></i></div>`).join('')}</div>`
+    + '<div class="lg-rules"><span><b>A miss:</b> one step down, back tomorrow.</span><span><b>“I know it already”</b>, on meeting it: straight to step 4.</span>'
+    + '<span><b>The gaps</b> are those of his reviews today: 1, 3, 7 and 21 days.</span></div></div>';
+}
+
+// A word list as one keeps it, and the word it gives.
+function langNoteHtml() {
+  const h = s => `<span class="h">${esc(s)}</span>`, k = s => `<span class="k">${esc(s)}</span>`, m = s => `<span class="m">${esc(s)}</span>`;
+  const word = (a, b) => `${esc(a)} ${k('=')} ${esc(b)}`;
+  const lines = [
+    h('# Spanish'), '', h('## Work'), '',
+    word('la reunión', 'the meeting'), word('el plazo', 'the deadline'), m('  El plazo termina el viernes.'), word('madrugar', 'to get up early'), '',
+    h('## Food'), '', word('la cuenta', 'the bill'), word('la propina', 'the tip'), m('…'),
+  ];
+  return `<div class="tx-note"><div class="tn-bar">${glyph('doc', '#8A8F98', 15)}<span>Spanish.md</span></div><pre>${lines.join('\n')}</pre></div>`;
+}
+function langPairHtml() {
+  return `<div class="tx-pair">${langNoteHtml()}<i class="tx-arrow" aria-hidden="true"></i>${scene(LG_MEET_LIST, {}, 2, 'wink')}</div>`;
+}
+
+function langWhyDoc() {
+  const row = (t, d, need, p, pd) => `<tr><td><b>${t}</b><span>${d}</span></td><td>${need}</td><td><b>${p}</b><span>${pd}</span></td></tr>`;
+  const step = (where, title, text) => `<div class="pipe-step"><span class="pipe-where">${where}</span><b>${title}</b><span>${text}</span></div>`;
+  const lot = (n, title, text) => `<div class="lg-lot"><i>${n}</i><b>${title}</b><span>${text}</span></div>`;
+  return '<div class="eyebrow">Languages · Proposal</div><h2>A language is not a certification</h2>'
+    + '<p class="lead">A certification is understood: a question answered right can be left behind. A language is remembered, and used: a word met once is gone within the week, and picking it among four is not finding it oneself. As he is, Tagnan turns a language into a quiz about it. The proposal: a course he knows to be a language, made of words that come back until they stay.</p>'
+    + `<div class="pipe">${[
+      step('The brain, or a list', 'Twenty words', 'Each a card: the word, its meaning, an example sentence, a note. One call to Claude, or a list of one’s own.'),
+      step('His satchel', 'Cards, not questions', 'He builds every exercise himself from the cards: the choices are his other words. No call.'),
+      step('At each call', 'A bout', 'Four touches, five seconds each: the half-minute of one exam question.'),
+      step('The ladder', 'Harder, further apart', 'Pick, fill the gap, type: each right answer sends the word a step up and further away.'),
+      step('Progress', 'Words known', 'Counted by chapter; his points and ranks as ever.'),
+    ].join('<span class="pipe-arrow" aria-hidden="true"></span>')}</div>`
+    + '<table class="rtab lg-tab"><thead><tr><th>Today, in his code</th><th>What a language asks</th><th>Proposed</th></tr></thead><tbody>'
+    + row('He speaks English only', 'prompts/system.md: “Everything you write is in English.” A Spanish course is a quiz in English about Spanish.',
+      'The language itself, at one’s level.', 'A language course', 'Words and sentences in the language learned, meanings in the one spoken, a level from A1 to C1.')
+    + row('A right answer never comes back', 'progress.after_review: only missed questions are reviewed.',
+      'Each word five or six times, further and further apart.', 'The ladder', 'Every word climbs it, right or wrong, by the gaps he already keeps: 1, 3, 7 and 21 days.')
+    + row('Topics asked lately are avoided', 'game.AVOID_TOPICS: the brain is told not to come back to them.',
+      'The same word, from several sides.', 'Cards, not questions', 'A word is kept with its meaning and an example; he asks it in five ways.')
+    + row('One shape: pick among four', 'model.KINDS: single, multiple.',
+      'Recognising a word, then finding it oneself; hearing it.', 'Pick, fill the gap, type', 'And listen, with his voice. Harder at each step.')
+    + row('One question at each call', 'Twenty a day at the starting pace.',
+      'Many short exposures: a word takes five seconds, not forty.', 'A bout', 'Four touches at each call: about ten new words a day.')
+    + row('His rank sets the level', 'game.DIFFICULTY_BY_GRADE: easy in the inkwell, whoever one is.',
+      'One’s real level, from the first day.', 'A level one chooses', 'Or found in eight questions. His rank stays the reward; he offers the next level when this one holds.')
+    + '</tbody></table>'
+    + '<div class="two" style="margin-top:36px"><div><h3>What he already has for it</h3><ul class="dl">'
+    + '<li><b>Calls scattered through the day.</b> What memory wants: a language suits his way of asking better than an exam does.</li>'
+    + '<li><b>The gaps of his reviews.</b> 1, 3, 7 and 21 days, as they are.</li>'
+    + '<li><b>Catalogues.</b> A word list is the simplest one there is, and he needs no brain to ask it: a language is what he teaches best without Claude.</li>'
+    + '<li><b>A lighter brain.</b> One call writes twenty words, some hundred and twenty touches; ten questions today.</li>'
+    + '</ul></div><div><h3>What is left out</h3><ul class="dl">'
+    + '<li><b>Speaking aloud.</b> An open-plan office, and speech recognition is a heavy dependency.</li>'
+    + '<li><b>Lessons.</b> He stays a companion of thirty seconds: grammar comes one sentence at a time, and its study sheet explains the rule.</li>'
+    + '<li><b>Typing other alphabets.</b> Japanese, Arabic, Russian: choices only, at first.</li>'
+    + '</ul></div></div>'
+    + `<div class="lg-lots">${[
+      lot('Lot 1', 'Words', 'The language course, its level and the language one speaks; cards, the ladder, the bout, typed answers; word lists in his catalogues. No dependency; works without Claude.'),
+      lot('Lot 2', 'Sentences, and his voice', 'The brain’s questions written in the language, for grammar and usage. Listening with the system’s voices, once heard on Windows.'),
+      lot('Lot 3', 'One’s own words', 'A sentence of one’s own a day, set right by the brain; a word kept from what one reads.'),
+    ].join('')}</div>`
+    + '<div class="src"><span>tagnan/model.py: a card beside a question</span><span>tagnan/progress.py: the ladder</span><span>tagnan/game.py: a bout, its exercises</span>'
+    + '<span>tagnan/prompts: words, sentences in the language</span><span>tagnan/catalogue.py: word lists</span><span>tagnan/ui/qml/Bubble.qml: a touch, a typed answer</span></div>';
+}
+
+function langChoicesDoc() {
+  const dec = (n, title, a, b) => `<div class="cat-dec"><h4><i>${n}</i>${title}</h4>`
+    + `<div class="cat-opt is-pick"><b>A · ${a[0]}<span class="pick">recommended</span></b><span>${a[1]}</span></div>`
+    + `<div class="cat-opt"><b>B · ${b[0]}</b><span>${b[1]}</span></div></div>`;
+  return '<div class="eyebrow">Languages · Proposal · Choices</div><h2>What to decide</h2>'
+    + '<p class="lead">Six things are open. A is what the frames of this page draw; each B is the lighter road.</p>'
+    + dec('1', 'What a language course is made of',
+      ['Words on a ladder, and the brain’s sentences', 'The brain writes cards, twenty at a time; he builds the exercises himself and brings each word back until it stays. Grammar and usage stay the brain’s questions, written in the language.'],
+      ['A better prompt only', 'Questions in the language, at one’s level: a day’s work. Still pick-among-four, asked once: nothing comes back, nothing is typed.'])
+    + dec('2', 'How many at each call',
+      ['A bout of four touches', 'A word takes five seconds: four make the half-minute of an exam question. Some sixty touches a day at the starting pace: about ten new words a day.'],
+      ['One at a time, as today', 'Nothing new in his way of asking, but fifteen touches a day: two or three new words a day.'])
+    + dec('3', 'The language one speaks',
+      ['Asked once, for each course', 'Meanings and explanations come in it: French for a French speaker. His own words, titles and buttons, stay English.'],
+      ['English always', 'Nothing to ask. But a French speaker learns Spanish through English, and cannot learn English itself before B1.'])
+    + dec('4', 'How strict on what is typed',
+      ['Lenient, and he says so', 'Capitals and punctuation aside; a missing accent is accepted and shown; the article may be left out. The language’s letters sit under the field, for a keyboard that lacks them.'],
+      ['To the letter', 'As a dictation: fair at C1, discouraging at A2 on a keyboard without ñ.'])
+    + dec('5', 'His voice (lot 2)',
+      ['The system’s voices', 'No dependency, nothing leaves the computer: Windows speaks the sentence to a file and he plays it as he plays his calls (tried here: 0.6 s a sentence). The language’s voice must be installed: this PC has French and English only. To hear before deciding.'],
+      ['No voice', 'Nothing to install; no listening, and one never hears a word. A neural voice online would sound better: a network service, against his rules.'])
+    + dec('6', 'One’s own sentences (lot 3)',
+      ['Once a day, set right by the brain', 'A question in the language, a sentence typed back: the brain corrects it, gives the rule, and the words one lacked join the ladder. One call each, on the quick model.'],
+      ['Not at all', 'Words and sentences only: no call, but nothing one writes oneself.']);
+}
+// --- end of the languages -------------------------------------------------------------------------
+
+
+
 const PAGES = [
   {
     id: 'cover', name: 'Cover', blurb: '', desc: 'The file’s cover and contents.',
@@ -4253,6 +4628,85 @@ const PAGES = [
     ],
   },
   // end of the catalogues
+  // Languages (proposal).
+  {
+    id: 'languages', name: 'Languages (proposal)', blurb: 'Learning a language with him: words that come back until they stay, asked in ways that get harder, four at each call; typed answers, his voice, sentences in the language.',
+    desc: 'A proposal: nothing here is built. Spanish at A2, learned by someone who speaks English.',
+    rows: [
+      [{ id: 's-lang-why', name: 'Languages · the idea, and what to decide', desc: 'Why he teaches a certification well and a language poorly, what a language course would be, in three lots, and the six things to decide.', frames: [
+        docFrame('lang-why', 'A language is not a certification', langWhyDoc, { w: 1240, kind: 'Documentation', cls: 'pdoc', src: SRC_LANG }),
+        docFrame('lang-choices', 'What to decide', langChoicesDoc, { w: 1180, kind: 'Documentation', cls: 'pdoc', src: SRC_LANG }),
+      ] }],
+      [{ id: 's-lang-start', name: 'Starting a language', desc: 'Subject… as ever: he sees that the words name a language, asks one’s level and the language one speaks, then draws up the course.', frames: [
+        shot('lg-subject', 'Subject… · a language', SUBJECT_LANG, { src: SRC_LANG, ui: { course: 'Spanish', coursePreview: { ok: true, text: 'Spanish: a language. I’ll ask your level, then draw up its chapters.' } },
+          notes: ['Nothing new to find: “Spanish”, “l’anglais”, “German for work” in the field one already knows.', 'The brain’s plan says whether the words name a language (prompts/plan.md); without a brain, the list of languages he knows.'] }),
+        shot('lg-level', 'A language!', LG_LEVEL, { src: SRC_LANG, expr: 'happy', tokens: TK.plain,
+          notes: ['The level, by its European name and a plain word. None is picked for one: here A2 was clicked.', 'Find my level: eight questions that climb from A1; two misses in a row stop it.', 'You speak: the system’s language is offered first. Meanings and explanations come in it (decision 3).'] }),
+        shot('lg-ready', 'The course, ready', MSG_LANG.ready, { src: SRC_LANG, expr: 'happy',
+          notes: ['Chapters are themes of that level, and one or two of its grammar.', 'Its own rank, as every course: here he starts from the inkwell.', 'The first twenty words are one call to the brain.'] }),
+        shot('lg-fr', 'For a French speaker', LG_PICK_FR, { src: SRC_LANG, expr: 'ask', tokens: TK.bubble,
+          cap: 'You speak: Français. The meanings come in French; his own words stay English.',
+          notes: ['The same touch as in the bout below, for someone who chose Français.', 'What the brain writes for the learner is in French: meanings, notes, why a sentence was wrong.', 'What Tagnan says himself stays English, as his menus do.'] }),
+      ] }],
+      [{ id: 's-lang-bout', name: 'A bout', desc: 'What a call becomes in a language course: four touches in a row, each a few seconds. Here a new word, one picked right, one missed, one typed.', grid: { cols: 4, gap: [120, 200] },
+        links: [['lb-meet', 'lb-pick', 'Got it'], ['lb-pick', 'lb-right', 'B · right'], ['lb-right', 'lb-gap', '0.8 s later'], ['lb-gap', 'lb-miss', 'A · a miss'],
+          ['lb-miss', 'lb-type', 'Next'], ['lb-type', 'lb-almost', 'Enter'], ['lb-almost', 'lb-end', 'the bout is over']],
+        frames: [
+          shot('lb-meet', 'A new word', LG_MEET, { src: SRC_LANG, expr: 'wink', cell: [1, 1], tokens: TK.bubble,
+            notes: ['He shows a new word before he asks it: the word, its meaning, a sentence it lives in, a note when it has a trap.', 'No points; it is asked later the same day, at step 1.', 'I know it already: straight to step 4, where it is typed. The speaker says it (lot 2).', 'Four dots: the bout’s touches. This one is the first.'] }),
+          shot('lb-pick', 'Step 1 · its meaning', LG_PICK, { src: SRC_LANG, expr: 'ask', cell: [2, 1], tokens: TK.bubble, ui: { hover: 1 },
+            notes: ['The word large, four short choices in two columns: read at a glance.', 'The choices are his other words’ meanings, those of the same chapter first: nothing to write, no call.', 'Later puts the whole bout off, as it puts a question off.'] }),
+          shot('lb-right', 'Right', LG_PICK_RIGHT, { src: SRC_LANG, expr: 'happy', cell: [3, 1], ui: { good: 1 },
+            notes: ['No verdict to close: the choice turns green, the word’s sentence shows, and the next touch comes by itself after 0.8 s.', 'The pointer resting on the bubble holds it, as it holds a message.'] }),
+          shot('lb-gap', 'Step 3 · in a sentence', LG_GAP, { src: SRC_LANG, expr: 'ask', cell: [4, 1], tokens: TK.bubble,
+            notes: ['The card’s own sentence, its word taken out; its translation under it.', 'The other choices are the words of his that look most like it: cuenta, cuento.'] }),
+          shot('lb-miss', 'A miss', LG_MISS, { src: SRC_LANG, expr: 'angry', cell: [4, 2],
+            notes: ['A miss stops the bout until Next: the word, its meaning, its sentence.', 'What one picked is a word of his too: he says what it means.', 'Tell me more asks the brain, as for a question; without a brain, Ask your assistant.', 'One step down, never back to the first.'] }),
+          shot('lb-type', 'Step 4 · typed', LG_TYPE, { src: SRC_LANG, expr: 'ask', cell: [3, 2], tokens: TK.bubble, ui: { typed: 'la estacion' },
+            notes: ['From step 4 on, no choices: the word is found, not recognised.', 'The language’s own letters under the field, for a keyboard that lacks them; Enter sends.', 'I don’t know counts as a miss and shows the word.'] }),
+          shot('lb-almost', 'All but the accent', LG_ALMOST, { src: SRC_LANG, expr: 'happy', cell: [2, 2], ui: { typed: 'la estacion' },
+            notes: ['Capitals and punctuation aside; a missing accent is accepted and shown, in gold (decision 4).', 'The article left out is accepted too; a wrong one is a miss.', 'Compared with the standard library alone (unicodedata).'] }),
+          shot('lb-end', 'The bout, over', LG_END, { src: SRC_LANG, expr: 'happy', cell: [1, 2],
+            notes: ['Each word, where it goes on the ladder and when it comes back.', '+3 a touch, −2 a miss: a bout is worth about one question, so the road to Captain stays as long. To be simulated as the road was (tests/test_rules.py).', 'Closes by itself, as a verdict does.'] }),
+        ] }],
+      [{ id: 's-lang-ladder', name: 'The ladder', desc: 'Where “a missed question comes back” becomes “every word comes back”: six steps, asked harder and further apart.', frames: [
+        { id: 'lang-ladder', name: 'A word’s ladder', kind: 'Languages · the rules', mode: 'follow', cls: 'desk', html: langLadderHtml, src: ['tagnan/progress.py', 'tagnan/game.py'], tokens: ['panel', 'line', 'text', 'muted', 'gold', 'ink', 'good'],
+          notes: ['Today a question answered right is never asked again: only the missed ones are reviewed.', 'In a language course every word climbs, right or wrong; the way he asks follows the step.', 'About six touches to know a word: twenty words, one call to the brain, are some hundred and twenty touches.'],
+          cap: 'New, five steps, known: the gaps are those of his reviews today.' },
+      ] }],
+      [{ id: 's-lang-voice', name: 'His voice · lot 2', desc: 'The system’s own voices say the words: no dependency, nothing leaves the computer. To be heard on Windows before it is decided.', frames: [
+        shot('lv-listen', 'Step 3 · by ear', LG_LISTEN, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'ask', tokens: TK.bubble,
+          cap: 'He has just said: «Todavía no he comido.»',
+          notes: ['He says a card’s sentence as the bubble opens; the button says it again.', 'Only when his sound is on: Silent, and he asks the gap instead.', 'Windows speaks the sentence to a WAV file once, kept in his state folder; he plays it with winsound, as his calls. On a Mac, say.'] }),
+        shot('lv-none', 'No voice for the language', MSG_LANG.noVoice, { src: [...SRC_LANG, 'tagnan/ui/sounds.py'], expr: 'annoyed',
+          notes: ['Checked on this PC on 27 November: French and English voices only.', 'Said once, when the course starts; the speaker and the touches by ear stay away until a voice is there.', 'Adding a voice may need rights one lacks on a company PC.'] }),
+      ] },
+      { id: 's-lang-sentences', name: 'Sentences · lots 2 and 3', desc: 'Grammar and usage: the brain’s questions as today, written in the language. And once a day, a sentence of one’s own, set right by the brain.', frames: [
+        shot('ls-ask', 'A sentence', LG_SENT, { src: SRC_LANG, expr: 'ask',
+          notes: ['The question he asks today, its prompt changed: the stem in the language, at one’s level, on the chapter’s grammar.', 'One call in four is a sentence, the others are bouts.', 'Written ten at a time, as today.'] }),
+        shot('ls-wrong', 'Its verdict', LG_SENT_WRONG, { src: SRC_LANG, expr: 'angry',
+          notes: ['Why the choice was wrong, in the language one speaks.', 'A sentence comes back too: to type, the next time.', 'Study sheet as ever: a rule of grammar is what it draws best.'] }),
+        shot('ls-write', 'Your turn to write', LG_WRITE, { src: SRC_LANG, expr: 'ask', tokens: TK.bubble, ui: { typed: LG_WRITTEN },
+          notes: ['Once a day, or “write” in his menu: a question in the language, on the chapter learned, with one’s own words to find.', 'Not today skips it with no penalty.', 'Needs a brain: without one, the question and one’s answer are copied for one’s assistant.'] }),
+        shot('ls-corrected', 'Set right', LG_CORRECTED, { src: SRC_LANG, expr: 'happy',
+          notes: ['One call to the brain, on the quick model: the sentence corrected, the one rule behind the mistake.', 'What one got wrong joins the ladder as a card.', 'Points for having written, whatever the mistakes.'] }),
+      ] }],
+      [{ id: 's-lang-around', name: 'Around the words', desc: 'His progress in a language, a word kept from what one reads, and a word list of one’s own, with no brain.', frames: [
+        shot('la-progress', 'Progress', LG_WORDS, { src: SRC_LANG, tokens: TK.stats,
+          notes: ['Words, where a certification shows right answers: known, on the ladder, new in store; by chapter, the words known.', 'He offers the next level when this one holds: nine right in ten over a week. Never by himself.', 'Moving up draws new chapters; the words known stay known.'] }),
+        menuShot('la-keep', 'Typed · keep', MENU_LANG, { typed: 'keep el plazo', suggestions: SUGGEST_LANG, current: 0 }, {
+          notes: ['A word met in a mail or a page: “keep”, and the word. With nothing after it, he takes what the clipboard holds.', 'The brain finds its meaning and an example; without a brain, “keep el plazo = the deadline”.'] }),
+        shot('la-kept', 'Kept!', MSG_LANG.kept, { src: SRC_LANG, expr: 'wink',
+          notes: ['One’s own words are the ones that stay.', 'It joins the chapter it fits and starts at the foot of the ladder.'] }),
+        { id: 'la-list', name: 'From a list to words', kind: 'Catalogues · word lists', mode: 'follow', cls: 'desk', html: langPairHtml, src: ['tagnan/catalogue.py'], tokens: TK.bubble,
+          notes: ['A list as one keeps it: “word = meaning”, a line under it for an example; a # title for the language, ## headings for its chapters.', 'A spreadsheet saved as CSV, or a deck exported from a flashcard app as text, are read the same way.', 'He builds the exercises himself: a language course needs no brain at all.'],
+          cap: 'The list on the left, the word it gives on the right.' },
+        shot('la-pasted', 'A list pasted', MSG_LANG.pasted, { src: SRC_LANG, expr: 'happy',
+          notes: ['Paste questions and Import a file… take word lists as they take questions.', 'Words he already has are skipped, as stems are today.'] }),
+      ] }],
+    ],
+  },
+  // end of the languages
 ];
 
 /* The editor around the frames: pages, layers, a canvas to pan and zoom, the inspector. */

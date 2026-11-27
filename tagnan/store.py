@@ -1,4 +1,5 @@
-"""The game's SQLite database: the questions, every answer, the reviews to come, the progress."""
+"""The game's SQLite database: the questions, every answer, the reviews to come, the progress;
+and, for a language course, its words and every touch."""
 
 import json
 import sqlite3
@@ -6,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
 
-from tagnan.model import CONVERTED, Question
+from tagnan.model import CONVERTED, Card, Question
 from tagnan.progress import Progress
 
 SCHEMA = """
@@ -48,6 +49,33 @@ CREATE TABLE IF NOT EXISTS state (
     value TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS answers_by_question ON answers(question_id);
+CREATE TABLE IF NOT EXISTS cards (
+    id INTEGER PRIMARY KEY,
+    exam TEXT NOT NULL,
+    domain INTEGER NOT NULL,
+    term TEXT NOT NULL,
+    meaning TEXT NOT NULL,
+    example TEXT NOT NULL DEFAULT '',
+    translation TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    also TEXT NOT NULL DEFAULT '[]',
+    origin TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL,
+    flagged INTEGER NOT NULL DEFAULT 0,
+    step INTEGER NOT NULL DEFAULT 0,
+    due_at REAL NOT NULL DEFAULT 0,
+    seen_at REAL NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS touches (
+    id INTEGER PRIMARY KEY,
+    card_id INTEGER NOT NULL REFERENCES cards(id),
+    kind TEXT NOT NULL,
+    correct INTEGER NOT NULL,
+    points INTEGER NOT NULL,
+    touched_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cards_by_exam ON cards(exam, flagged, step, due_at);
+CREATE INDEX IF NOT EXISTS touches_by_card ON touches(card_id);
 """
 
 
@@ -191,6 +219,81 @@ class Store:
         )
         return [str(r[0]) for r in rows]
 
+    # --- Words (a language course) ----------------------------------------------------------
+
+    def add_cards(self, exam: str, cards: Iterable[Card], now: float) -> list[int]:
+        ids = []
+        with self._db:
+            for c in cards:
+                cursor = self._db.execute(
+                    "INSERT INTO cards (exam, domain, term, meaning, example, translation, note,"
+                    " also, origin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        exam,
+                        c.domain,
+                        c.term,
+                        c.meaning,
+                        c.example,
+                        c.translation,
+                        c.note,
+                        json.dumps(c.also, ensure_ascii=False),
+                        c.origin,
+                        now,
+                    ),
+                )
+                ids.append(int(cursor.lastrowid or 0))
+        return ids
+
+    def card(self, card_id: int) -> Card:
+        row = self._db.execute("SELECT * FROM cards WHERE id = ?", (card_id,)).fetchone()
+        if row is None:
+            raise KeyError(card_id)
+        return _card(row)
+
+    def cards(self, exam: str) -> list[Card]:
+        """A course's words, in the order they came, but those reported as wrong."""
+        rows = self._db.execute(
+            "SELECT * FROM cards WHERE exam = ? AND flagged = 0 ORDER BY id", (exam,)
+        )
+        return [_card(r) for r in rows]
+
+    def terms(self, exam: str) -> list[str]:
+        """Every word a course was ever given, reported or not: a word brought twice is kept
+        once (tagnan.game)."""
+        rows = self._db.execute("SELECT term FROM cards WHERE exam = ? ORDER BY id", (exam,))
+        return [str(r[0]) for r in rows]
+
+    def move_card(self, card_id: int, step: int, due_at: float, now: float) -> None:
+        """Where a word stands on the ladder once shown or asked, and when it comes back."""
+        with self._db:
+            self._db.execute(
+                "UPDATE cards SET step = ?, due_at = ?, seen_at = ? WHERE id = ?",
+                (step, due_at, now, card_id),
+            )
+
+    def flag_card(self, card_id: int) -> None:
+        """A wrong or badly worded word: never asked again."""
+        with self._db:
+            self._db.execute("UPDATE cards SET flagged = 1 WHERE id = ?", (card_id,))
+
+    def record_touch(self, card_id: int, kind: str, correct: bool, points: int, now: float) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT INTO touches (card_id, kind, correct, points, touched_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (card_id, kind, int(correct), points, now),
+            )
+
+    def touch_stats(self, exam: str, since: float = 0.0) -> dict[int, tuple[int, int]]:
+        """For each chapter: touches answered, right ones; `since`: from then on only."""
+        rows = self._db.execute(
+            "SELECT c.domain, COUNT(*), SUM(t.correct) FROM touches t"
+            " JOIN cards c ON c.id = t.card_id WHERE c.exam = ? AND t.touched_at >= ?"
+            " GROUP BY c.domain",
+            (exam, since),
+        )
+        return {int(r[0]): (int(r[1]), int(r[2] or 0)) for r in rows}
+
     # --- Reviews ----------------------------------------------------------------------------
 
     def due_reviews(self, exam: str, now: float) -> list[Question]:
@@ -279,6 +382,23 @@ class Store:
             (exam, self.lang),
         ).fetchone()
         return int(row[0])
+
+
+def _card(row: sqlite3.Row) -> Card:
+    return Card(
+        id=int(row["id"]),
+        domain=int(row["domain"]),
+        term=str(row["term"]),
+        meaning=str(row["meaning"]),
+        example=str(row["example"]),
+        translation=str(row["translation"]),
+        note=str(row["note"]),
+        also=tuple(json.loads(row["also"])),
+        origin=str(row["origin"]),
+        step=int(row["step"]),
+        due_at=float(row["due_at"]),
+        seen_at=float(row["seen_at"]),
+    )
 
 
 def _question(row: sqlite3.Row) -> Question:

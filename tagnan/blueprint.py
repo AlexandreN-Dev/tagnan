@@ -4,8 +4,8 @@ its blueprint drawn up once by the brain and kept in the database."""
 
 import re
 import tomllib
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,24 @@ class Domain:
 
 
 @dataclass(frozen=True)
+class Language:
+    """What makes a course a language course: its words are asked, not questions about it."""
+
+    learned: str  # the language, in English: "Spanish"
+    speaks: str = ""  # the language one speaks: meanings and explanations come in it
+    level: str = ""  # "A2" (tagnan.language's LEVELS); "" for a word list of one's own
+    first: int = 1  # the first chapter of that level: the ones before are of levels left behind
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "learned": self.learned,
+            "speaks": self.speaks,
+            "level": self.level,
+            "first": self.first,
+        }
+
+
+@dataclass(frozen=True)
 class Blueprint:
     key: str  # e.g. "aif-c01", the file name without extension, or "pottery"
     code: str
@@ -46,6 +64,7 @@ class Blueprint:
     exam: bool = True  # a certification exam, rather than a subject learned for its own sake
     guidance: str = DEFAULT_GUIDANCE  # how the brain writes its questions
     reference: str = DEFAULT_REFERENCE  # what a question's reference points to
+    language: Language | None = None  # a language course: its words, its level
 
     def domain(self, domain_id: int) -> Domain:
         for domain in self.domains:
@@ -61,8 +80,16 @@ class Blueprint:
         """All of it, in words."""
         return "the whole exam" if self.exam else f"all of {self.name}"
 
+    @property
+    def title(self) -> str:
+        """Its name, with its level for a language course: "Spanish A2"."""
+        level = self.language.level if self.language else ""
+        return f"{self.name} {level}" if level else self.name
+
     def to_dict(self) -> dict[str, Any]:
+        language = {"language": self.language.to_dict()} if self.language else {}
         return {
+            **language,
             "key": self.key,
             "code": self.code,
             "name": self.name,
@@ -114,6 +141,16 @@ def from_dict(data: Mapping[str, Any], key: str = "", where: str = "blueprint") 
         raise ValueError(f"{where}: two domains with the same id")
     if not name:
         raise ValueError(f"{where}: no name")
+    spoken = data.get("language")
+    language = None
+    if isinstance(spoken, Mapping):
+        first = spoken.get("first")
+        language = Language(
+            learned=" ".join(str(spoken.get("learned") or name).split())[:40],
+            speaks=" ".join(str(spoken.get("speaks") or "").split())[:40],
+            level=" ".join(str(spoken.get("level") or "").split())[:4],
+            first=first if isinstance(first, int) and first in {d.id for d in domains} else 1,
+        )
     return Blueprint(
         key=str(key or data.get("key") or slug(code)),
         code=code,
@@ -124,6 +161,58 @@ def from_dict(data: Mapping[str, Any], key: str = "", where: str = "blueprint") 
         exam=bool(data.get("exam", True)),
         guidance=" ".join(str(data.get("guidance") or DEFAULT_GUIDANCE).split()),
         reference=" ".join(str(data.get("reference") or DEFAULT_REFERENCE).split()),
+        language=language,
+    )
+
+
+# How the brain writes for a language course, whatever the language.
+LANGUAGE_GUIDANCE = (
+    "You choose the words a learner of that level meets and needs most, the commonest first, and"
+    " example sentences a native speaker would say, short and natural. If you are not sure of a"
+    " word, its gender or its use, choose another."
+)
+
+
+def language_course(
+    learned: str, speaks: str, level: str, chapters: Sequence[tuple[str, str]]
+) -> Blueprint:
+    """A language course from its chapters, each a name and what its words are about."""
+    if not chapters:
+        raise ValueError("a language course needs chapters")
+    return Blueprint(
+        key=slug(learned),
+        code=learned,
+        name=learned,
+        kinds=("single",),
+        services=(),
+        domains=_chapters(chapters, 1),
+        exam=False,
+        guidance=LANGUAGE_GUIDANCE,
+        language=Language(learned, speaks, level),
+    )
+
+
+def raise_level(bp: Blueprint, level: str, chapters: Sequence[tuple[str, str]]) -> Blueprint:
+    """The same course a level up: its new chapters after the ones it has, whose words stay."""
+    if bp.language is None or not chapters:
+        raise ValueError("not a language course, or no chapters")
+    first = max(d.id for d in bp.domains) + 1
+    return replace(
+        bp,
+        domains=(*bp.domains, *_chapters(chapters, first)),
+        language=replace(bp.language, level=level, first=first),
+    )
+
+
+def _chapters(chapters: Sequence[tuple[str, str]], first: int) -> tuple[Domain, ...]:
+    return tuple(
+        Domain(
+            id=i,
+            name=" ".join(name.split()),
+            weight=1.0,
+            tasks=(Task(f"{i}.1", " ".join(name.split()), " ".join(about.split())),),
+        )
+        for i, (name, about) in enumerate(chapters, first)
     )
 
 

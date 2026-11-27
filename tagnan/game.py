@@ -6,15 +6,18 @@ import random
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any
 
 from tagnan import blueprint as blueprints
+from tagnan import language, words
 from tagnan import progress as rules
 from tagnan.blueprint import Blueprint
-from tagnan.model import TYPED, Question, parse_question
+from tagnan.model import TYPED, Card, Question, parse_card, parse_question
 from tagnan.progress import Progress
 from tagnan.store import Store
 from tagnan.subject import Subject, from_key
+from tagnan.words import Slot, Touch, Touched
 
 # Ask the brain for a new batch below this many fresh questions; a batch takes a minute or two.
 LOW_WATER = 5
@@ -26,6 +29,14 @@ MULTIPLE_SHARE_BY_GRADE = (0.0, 0.1, 0.15, 0.2, 0.25, 0.3)
 REVIEW_SHARE = 0.5  # when reviews are due, half the questions are reviews
 AVOID_TOPICS = 60
 PUT_AWAY = "courses put away"  # setting: the keys of the courses no longer offered
+# A language course: its words are written twenty at a time, when fewer than eight new ones are
+# left; one call to the brain is some hundred and twenty touches.
+LOW_WORDS = 8
+WORDS_BATCH = 20
+AVOID_WORDS = 300  # the words of other chapters the brain is told it has, the latest
+# He offers the next level when this one holds: nine touches right in ten over a week.
+LEVEL_UP_TOUCHES, LEVEL_UP_RATE = 80, 0.9
+WEEK = 7 * rules.DAY
 
 
 @dataclass(frozen=True)
@@ -180,7 +191,160 @@ class Game:
         return [q for q in self.store.fresh(self.exam) if subject.covers(q)]
 
     def fresh_count(self) -> int:
-        return len(self.fresh())
+        """What he has left to ask for the first time, on the subject: questions, or the words
+        of a language course."""
+        return self.new_words() if self.is_language else len(self.fresh())
+
+    # --- A language course: its words -------------------------------------------------------
+
+    @property
+    def is_language(self) -> bool:
+        """The course learned now is a language: he asks its words, a bout at a call."""
+        return self.blueprint.language is not None
+
+    def words(self) -> list[Card]:
+        """The course's words, on the subject: all of it, or one of its chapters."""
+        domain = self.subject.domain
+        return [c for c in self.store.cards(self.exam) if domain is None or c.domain == domain]
+
+    def new_words(self) -> int:
+        return sum(1 for c in self.words() if c.step == rules.NEW)
+
+    def next_bout(self, now: float) -> list[Slot]:
+        """The words a call asks (tagnan.words.plan): each built into a touch at its turn."""
+        return words.plan(self.words(), now)
+
+    def touch(self, slot: Slot) -> Touch:
+        """A word of a bout as it stands now: shown if it is new, asked otherwise."""
+        card = self.store.card(slot.card_id)
+        if card.step == rules.NEW:
+            return Touch(card, words.MEET)
+        return words.build(card, self.store.cards(self.exam), self._rng, slot.early)
+
+    def meet(self, card: Card, now: float, known: bool = False) -> Card:
+        """A new word shown: it is asked a little later; known already, where it is typed."""
+        if card.id is None:
+            raise ValueError("word not in the database")
+        self.store.move_card(card.id, rules.SKIP_TO if known else 1, now + rules.SOON, now)
+        return self.store.card(card.id)
+
+    def answer_touch(
+        self, touch: Touch, now: float, picked: int | None = None, typed: str = ""
+    ) -> Touched:
+        """What a choice picked or a word typed makes of a touch: points, and the word's step.
+        Right ahead of its time, the word stays where it was."""
+        card = touch.card
+        if card.id is None:
+            raise ValueError("word not in the database")
+        if touch.kind in words.TYPED:
+            also = card.also if touch.kind == words.TYPE else ()
+            remark = language.check(typed, touch.expected, also)
+        else:
+            remark = language.RIGHT if picked == touch.answer else language.WRONG
+        correct = remark != language.WRONG
+        before = self.progress
+        after, delta = rules.after_touch_points(before, correct)
+        now_at = self.store.card(card.id)
+        moved = not (correct and touch.early)
+        step, due_at = now_at.step, now_at.due_at
+        if moved:
+            step = rules.after_touch(now_at.step, correct)
+            due_at = rules.ladder_due(step, correct, now)
+        self.store.move_card(card.id, step, due_at, now)
+        self.store.record_touch(card.id, touch.kind, correct, delta, now)
+        self.store.save_progress(self.exam, after)
+        return Touched(
+            touch, correct, remark, picked, typed, delta, before, after, step, due_at, moved
+        )
+
+    def needs_words(self) -> bool:
+        return self.new_words() < LOW_WORDS
+
+    def words_request(self, count: int = WORDS_BATCH) -> dict[str, Any]:
+        """What to ask the brain for: words for the chapter one keeps to, else for the two
+        chapters of one's level that have the fewest, and the words he already has."""
+        bp = self.blueprint
+        cards = self.store.cards(self.exam)
+        held = Counter(c.domain for c in cards)
+        first = bp.language.first if bp.language else 1
+        if self.subject.domain is not None:
+            chapters = [self.subject.domain]
+        else:
+            level = [d.id for d in bp.domains if d.id >= first] or [d.id for d in bp.domains]
+            chapters = sorted(level, key=lambda d: (held[d], d))[:2]
+        share, extra = divmod(count, len(chapters))
+        theirs = [c.term for c in cards if c.domain in chapters]
+        others = [c.term for c in cards if c.domain not in chapters][-AVOID_WORDS:]
+        return {
+            "exam": self.exam,
+            "course": bp.to_dict(),
+            "chapters": [
+                {"id": d, "count": share + (1 if i < extra else 0)} for i, d in enumerate(chapters)
+            ],
+            "avoid": [*theirs, *others],
+        }
+
+    def add_cards(
+        self, bp: Blueprint, raw: Sequence[Mapping[str, Any]], now: float, origin: str = ""
+    ) -> Added:
+        """Words from the brain or from a list (tagnan.catalogue): each checked, the good ones
+        kept, but those the course already has, even reported ones."""
+        known = {language.fold(term) for term in self.store.terms(bp.key)}
+        kept: list[Card] = []
+        already = 0
+        rejected = []
+        for number, data in enumerate(raw, 1):
+            try:
+                if data.get("problem"):
+                    raise ValueError(str(data["problem"]))
+                card = parse_card(data, bp)
+            except ValueError as error:
+                rejected.append((number, str(error)))
+                continue
+            term = language.fold(card.term)
+            if term in known:
+                already += 1
+                continue
+            known.add(term)
+            kept.append(replace(card, origin=origin))
+        return Added(self.store.add_cards(bp.key, kept, now), already, rejected)
+
+    def word_counts(self, now: float) -> dict[str, Any]:
+        """Where a language course's words stand: known, on the ladder, new in store; due by
+        tonight; and, chapter by chapter of one's level, the words known."""
+        bp = self.blueprint
+        cards = self.store.cards(self.exam)
+        first = bp.language.first if bp.language else 1
+        tonight = datetime.fromtimestamp(now).replace(hour=23, minute=59, second=59).timestamp()
+        return {
+            "known": sum(1 for c in cards if c.step >= rules.KNOWN),
+            "climbing": sum(1 for c in cards if rules.NEW < c.step < rules.KNOWN),
+            "fresh": sum(1 for c in cards if c.step == rules.NEW),
+            "due": sum(1 for c in cards if c.step > rules.NEW and c.due_at <= tonight),
+            "chapters": [
+                {
+                    "id": d.id,
+                    "name": d.name,
+                    "known": sum(1 for c in cards if c.domain == d.id and c.step >= rules.KNOWN),
+                    "of": sum(1 for c in cards if c.domain == d.id),
+                }
+                for d in bp.domains
+                if d.id >= first or any(c.domain == d.id for c in cards)
+            ],
+        }
+
+    def level_up(self, now: float) -> str:
+        """The level he may offer next ("B1"), once this one holds: nine touches right in ten
+        over the last week; "" otherwise."""
+        spoken = self.blueprint.language
+        if spoken is None:
+            return ""
+        week = self.store.touch_stats(self.exam, now - WEEK)
+        answered = sum(n for n, _ in week.values())
+        right = sum(r for _, r in week.values())
+        if answered < LEVEL_UP_TOUCHES or right < LEVEL_UP_RATE * answered:
+            return ""
+        return language.next_level(spoken.level)
 
     # --- Asking -----------------------------------------------------------------------------
 
@@ -343,7 +507,13 @@ class Game:
         """What the stats show: grade, points, streaks, accuracy by domain, the bank."""
         p = self.progress
         subject = self.subject
-        stats = self.store.domain_stats(self.exam)
+        # A language course counts its touches, and its words still to show or on the ladder.
+        cards = self.store.cards(self.exam) if self.is_language else []
+        stats = (
+            self.store.touch_stats(self.exam)
+            if self.is_language
+            else self.store.domain_stats(self.exam)
+        )
         answered = sum(n for n, _ in stats.values())
         right = sum(r for _, r in stats.values())
         return {
@@ -369,7 +539,9 @@ class Game:
             "course": self.blueprint.name,
             "topic": self.topic(),
             "fresh": self.fresh_count(),
-            "reviews": self.store.reviews_pending(self.exam),
+            "reviews": sum(1 for c in cards if rules.NEW < c.step < rules.KNOWN)
+            if self.is_language
+            else self.store.reviews_pending(self.exam),
         }
 
 

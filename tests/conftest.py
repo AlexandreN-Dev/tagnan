@@ -144,6 +144,47 @@ def sheet_data(**changes: Any) -> dict[str, Any]:
     return data
 
 
+def spanish() -> Blueprint:
+    """A language course as the brain's chapters make it (blueprint.language_course)."""
+    return blueprint.language_course(
+        "Spanish",
+        "English",
+        "A2",
+        [
+            ("Everyday life", "the day's routine, the home, the family"),
+            ("Food and eating out", "meals, the restaurant, the market"),
+        ],
+    )
+
+
+# Words as the brain writes them (brain.words): term, meaning, example, translation, chapter.
+WORDS = (
+    ("madrugar", "to get up early", "Mañana tengo que **madrugar**.", "I must rise early.", 1),
+    ("trasnochar", "to stay up late", "No me gusta **trasnochar**.", "I dislike late nights.", 1),
+    ("desayunar", "to have breakfast", "Suelo **desayunar** a las ocho.", "Breakfast at 8.", 1),
+    ("la estación", "the station", "¿Dónde está **la estación**?", "Where is the station?", 1),
+    ("la cuenta", "the bill", "¿Nos trae **la cuenta**, por favor?", "The bill, please?", 2),
+    ("el cuento", "the tale", "Me contó **el cuento** entero.", "He told me the whole tale.", 2),
+    ("la cuchara", "the spoon", "Falta **la cuchara**.", "The spoon is missing.", 2),
+    ("la cocina", "the kitchen", "Comemos en **la cocina**.", "We eat in the kitchen.", 2),
+)
+
+
+def word_data(index: int = 0, **changes: Any) -> dict[str, Any]:
+    term, meaning, example, translation, chapter = WORDS[index]
+    data: dict[str, Any] = {
+        "chapter": chapter,
+        "term": term,
+        "meaning": meaning,
+        "example": example,
+        "translation": translation,
+        "note": "",
+        "also": [],
+    }
+    data.update(changes)
+    return data
+
+
 @pytest.fixture
 def store() -> Store:
     return Store(":memory:")
@@ -152,3 +193,13 @@ def store() -> Store:
 @pytest.fixture
 def game(store: Store, bp: Blueprint) -> Game:
     return Game(store, bp, random.Random(7))
+
+
+@pytest.fixture
+def lingo(game: Game) -> Game:
+    """The game on a Spanish course, its eight words in store."""
+    course = spanish()
+    game.set_course(course)
+    added = game.add_cards(course, [word_data(i) for i in range(len(WORDS))], 0.0)
+    assert len(added.ids) == len(WORDS)
+    return game

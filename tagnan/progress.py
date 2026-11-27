@@ -100,3 +100,46 @@ def after_review(box: int | None, correct: bool) -> int | None:
 
 def due_at(box: int, now: float) -> float:
     return now + REVIEW_DAYS[box] * DAY
+
+
+# The ladder, in a language course: every word climbs it, right or wrong. Shown first (NEW), it
+# is then asked in ways that get harder (tagnan.game's kinds), further and further apart, until
+# it is KNOWN. A right answer sends it a step up, a miss a step down and back the next day.
+NEW, KNOWN = 0, 6
+SOON = 20 * 60.0  # a word just shown is asked a little later the same day
+# Days before a word comes back once it has reached a step: his reviews' gaps, then a long one
+# to keep a known word.
+LADDER_DAYS = {2: 1, 3: 3, 4: 7, 5: 21, KNOWN: 60}
+SKIP_TO = 4  # "I know it already", on meeting a word: straight to where it is typed
+# A touch is a few seconds: four of them, a bout, are worth about one question, so that the road
+# to Captain stays as long (tests/test_rules.py).
+TOUCH_RIGHT, TOUCH_WRONG = 3, -2
+
+
+def after_touch(step: int, correct: bool) -> int:
+    """The step a word stands on once asked."""
+    if correct:
+        return min(KNOWN, step + 1)
+    return max(1, step - 1)
+
+
+def ladder_due(step: int, correct: bool, now: float) -> float:
+    """When a word comes back, on the step it has just reached."""
+    if not correct:
+        return now + DAY
+    return now + LADDER_DAYS.get(step, 1) * DAY
+
+
+def after_touch_points(progress: Progress, correct: bool) -> tuple[Progress, int]:
+    """The new progress and the points won (or lost) by a touch: no bonus for a streak, which
+    four touches a call would swell."""
+    streak = progress.streak + 1 if correct else 0
+    points = max(0, progress.points + (TOUCH_RIGHT if correct else TOUCH_WRONG))
+    updated = replace(
+        progress,
+        points=points,
+        streak=streak,
+        best_streak=max(progress.best_streak, streak),
+        grade=grade_for(points, progress.grade),
+    )
+    return updated, points - progress.points
